@@ -3,6 +3,6 @@
 public enum Role
 {
     Employee = 0 ,
-    Manger = 1,
+    Manager = 1,
     HR  = 2,
 }
