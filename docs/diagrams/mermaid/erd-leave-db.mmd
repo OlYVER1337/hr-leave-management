@@ -1,0 +1,37 @@
+erDiagram
+  LEAVE_REQUESTS ||--o{ LEAVE_REQUEST_HISTORIES : "ghi lịch sử"
+  LEAVE_BALANCES {
+    guid Id PK
+    guid EmployeeId "tham chiếu HR_DB"
+    int LeaveTypeId "tham chiếu HR_DB"
+    int Year "UK cùng EmployeeId, LeaveTypeId"
+    decimal Entitled
+    decimal Used
+    decimal Pending
+    binary RowVersion
+  }
+  LEAVE_REQUESTS {
+    guid Id PK
+    guid EmployeeId "tham chiếu HR_DB"
+    guid ApproverId "tham chiếu HR_DB"
+    int DepartmentId "snapshot lúc tạo đơn"
+    int LeaveTypeId "tham chiếu HR_DB"
+    date StartDate
+    date EndDate
+    decimal TotalDays
+    string Reason
+    string Status "Pending, Approved, Rejected, Cancelled"
+    datetime CreatedAtUtc
+    datetime DecidedAtUtc
+    binary RowVersion
+  }
+  LEAVE_REQUEST_HISTORIES {
+    guid Id PK
+    guid LeaveRequestId FK
+    guid ActorId "tham chiếu HR_DB"
+    string Action
+    string FromStatus
+    string ToStatus
+    string Note
+    datetime CreatedAtUtc
+  }

@@ -1,0 +1,13 @@
+flowchart TB
+  U["Trình duyệt<br/>Employee / Manager / HR"] -->|HTTP| W["Web React + Nginx :3000"]
+  W -->|"/hr-api/*"| HR["HR Service :8081<br/>auth, employees, departments,<br/>leave-types, policies, holidays"]
+  W -->|"/leave-api/*"| LV["Leave Service :8082<br/>leave-requests, balances,<br/>calendar, reports"]
+  LV -->|"REST + JWT, timeout/retry<br/>tra cứu nhân viên, loại phép,<br/>chính sách, ngày lễ"| HR
+  HR --> HRDB[("HR_DB")]
+  LV --> LVDB[("Leave_DB")]
+  HR -.->|"cache loại phép,<br/>chính sách, ngày lễ"| R[("Redis<br/>cache đọc, có fallback")]
+  LV -.->|"cache dữ liệu tra cứu,<br/>thống kê"| R
+  subgraph SQL["SQL Server container (2 database riêng)"]
+    HRDB
+    LVDB
+  end

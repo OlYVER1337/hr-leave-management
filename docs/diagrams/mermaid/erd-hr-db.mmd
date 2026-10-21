@@ -1,0 +1,39 @@
+erDiagram
+  DEPARTMENTS ||--o{ EMPLOYEES : "có"
+  EMPLOYEES |o--o{ EMPLOYEES : "quản lý (ManagerId)"
+  LEAVE_TYPES ||--o{ LEAVE_POLICIES : "định nghĩa"
+  DEPARTMENTS {
+    int Id PK
+    string Name UK
+  }
+  EMPLOYEES {
+    guid Id PK
+    string Code UK
+    string FullName
+    string Email UK
+    string PasswordHash
+    string Role "Employee, Manager, HR"
+    date HireDate
+    bool IsActive
+    int DepartmentId FK
+    guid ManagerId FK "null nếu là cấp cao nhất"
+  }
+  LEAVE_TYPES {
+    int Id PK
+    string Code UK "ANNUAL, SICK, UNPAID"
+    string Name
+    bool IsPaid
+    bool DeductsBalance
+    bool IsActive
+  }
+  LEAVE_POLICIES {
+    int Id PK
+    int LeaveTypeId FK
+    int Year "UK cùng LeaveTypeId"
+    decimal DaysPerYear
+  }
+  HOLIDAYS {
+    int Id PK
+    date HolidayDate UK
+    string Name
+  }

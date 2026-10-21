@@ -1,0 +1,32 @@
+sequenceDiagram
+  autonumber
+  actor M as Người duyệt (Manager / HR)
+  participant W as React (Nginx)
+  participant LV as Leave Service
+  participant DB as Leave_DB
+  M->>W: Mở trang phê duyệt
+  W->>LV: GET /leave-api/leave-requests/pending-approval
+  LV->>DB: Đơn có ApproverId = người dùng, Status = Pending
+  DB-->>LV: Danh sách đơn
+  LV-->>W: 200 danh sách đơn
+  M->>W: Bấm Duyệt hoặc Từ chối
+  W->>LV: POST /leave-requests/{id}/approve (hoặc reject)
+  LV->>DB: BEGIN TRANSACTION
+  LV->>DB: Đọc đơn và LeaveBalance (RowVersion)
+  alt Không phải người duyệt hợp lệ
+    LV->>DB: ROLLBACK
+    LV-->>W: 403 Forbidden
+  else Đơn không còn Pending (đã xử lý hoặc đã hủy)
+    LV->>DB: ROLLBACK
+    LV-->>W: 409 Conflict
+  else Hợp lệ
+    alt Duyệt
+      LV->>DB: Status = Approved, Balance: Pending giảm n, Used tăng n
+    else Từ chối
+      LV->>DB: Status = Rejected, Balance: Pending giảm n
+    end
+    LV->>DB: INSERT LeaveRequestHistory (ai, hành động, thời điểm UTC)
+    LV->>DB: COMMIT (kiểm tra RowVersion)
+    LV-->>W: 200 OK
+  end
+  Note over LV,DB: Employee hủy đơn Pending của mình: Status = Cancelled,<br/>Balance: Pending giảm n, ghi lịch sử tương tự.

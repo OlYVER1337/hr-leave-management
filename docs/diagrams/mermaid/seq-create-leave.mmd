@@ -1,0 +1,37 @@
+sequenceDiagram
+  autonumber
+  actor E as Employee
+  participant W as React (Nginx)
+  participant LV as Leave Service
+  participant R as Redis
+  participant HR as HR Service
+  participant DB as Leave_DB
+  E->>W: Chọn loại nghỉ, từ ngày, đến ngày, lý do
+  W->>LV: POST /leave-api/leave-requests (Bearer JWT)
+  LV->>LV: Xác thực JWT, kiểm tra đầu vào (ngày kết thúc >= bắt đầu)
+  LV->>HR: GET /employees/{id} (timeout, retry)
+  HR-->>LV: ManagerId, DepartmentId, IsActive
+  opt HR Service lỗi hoặc quá timeout
+    LV-->>W: 503 Dịch vụ tạm thời không khả dụng
+  end
+  LV->>R: Lấy loại phép, chính sách, ngày lễ
+  opt Cache miss hoặc Redis không khả dụng
+    LV->>HR: GET /leave-types, /leave-policies, /holidays
+    HR-->>LV: Dữ liệu tra cứu
+    LV->>R: Ghi cache kèm TTL (bỏ qua nếu Redis lỗi)
+  end
+  LV->>LV: Tính TotalDays (thứ Hai đến thứ Sáu, trừ ngày lễ)
+  LV->>DB: BEGIN TRANSACTION, khóa theo EmployeeId
+  LV->>DB: Kiểm tra trùng ngày với đơn Pending/Approved
+  LV->>DB: Đọc LeaveBalance (RowVersion)
+  alt Trùng ngày, vượt số dư hoặc xung đột RowVersion
+    LV->>DB: ROLLBACK
+    LV-->>W: 409 / 422 kèm thông báo lỗi
+  else Hợp lệ
+    LV->>DB: INSERT LeaveRequest (Pending, ApproverId)
+    LV->>DB: UPDATE LeaveBalance: Pending += TotalDays
+    LV->>DB: INSERT LeaveRequestHistory (Created)
+    LV->>DB: COMMIT
+    LV-->>W: 201 Created
+  end
+  W-->>E: Hiển thị thông báo thành công hoặc lỗi

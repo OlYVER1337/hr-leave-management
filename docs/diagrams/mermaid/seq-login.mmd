@@ -1,0 +1,14 @@
+sequenceDiagram
+  autonumber
+  actor U as Người dùng
+  participant W as React (Nginx)
+  participant HR as HR Service
+  participant DB as HR_DB
+  U->>W: Nhập email, mật khẩu
+  W->>HR: POST /hr-api/auth/login
+  HR->>DB: Tìm Employee theo Email (IsActive = true)
+  DB-->>HR: Employee + PasswordHash
+  HR->>HR: Kiểm tra mật khẩu, tạo JWT (id, role)
+  HR-->>W: 200 accessToken + role
+  W->>W: Lưu token, điều hướng theo role
+  Note over W,HR: Các request sau gửi Authorization: Bearer token.<br/>Leave Service tự xác thực JWT bằng cùng khóa ký,<br/>không gọi lại HR Service.
