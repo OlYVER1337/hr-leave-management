@@ -1,0 +1,101 @@
+name: hr-leave
+
+x-dotnet-service: &dotnet-service
+  restart: unless-stopped
+  environment: &dotnet-env
+    ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+    Redis__ConnectionString: redis:6379
+    # Đặt CACHE_ENABLED=false để chạy kịch bản Redis OFF khi load test
+    Cache__Enabled: ${CACHE_ENABLED:-true}
+    Jwt__Key: ${JWT_KEY}
+    Jwt__Issuer: hr-leave
+    Jwt__Audience: hr-leave-clients
+  healthcheck:
+    test: ["CMD", "curl", "-fs", "http://localhost:8080/health"]
+    interval: 10s
+    timeout: 5s
+    retries: 10
+    start_period: 20s
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${SA_PASSWORD}
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqldata:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q \"SELECT 1\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  hr-service:
+    <<: *dotnet-service
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    build:
+      context: ./src/hr-service
+      dockerfile: ../../docker/dotnet.Dockerfile
+      args:
+        API_PROJECT: HrService.Api/HrService.Api.csproj
+        API_DLL: HrService.Api.dll
+    environment:
+      <<: *dotnet-env
+      ConnectionStrings__Default: Server=sqlserver;Database=HR_DB;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True
+    ports:
+      - "8081:8080"   # Swagger/debug trực tiếp: http://localhost:8081/openapi/v1.json
+
+  leave-service:
+    <<: *dotnet-service
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      hr-service:
+        condition: service_healthy
+    build:
+      context: ./src/leave-service
+      dockerfile: ../../docker/dotnet.Dockerfile
+      args:
+        API_PROJECT: LeaveService.Api/LeaveService.Api.csproj
+        API_DLL: LeaveService.Api.dll
+    environment:
+      <<: *dotnet-env
+      ConnectionStrings__Default: Server=sqlserver;Database=Leave_DB;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True
+      Services__Hr: http://hr-service:8080
+    ports:
+      - "8082:8080"
+
+  web:
+    build:
+      context: ./src/web
+    depends_on:
+      - hr-service
+      - leave-service
+    ports:
+      - "3000:80"
+
+volumes:
+  sqldata:
+  redisdata:
