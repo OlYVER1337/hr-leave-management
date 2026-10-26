@@ -1,4 +1,6 @@
+using HrService.Application.Abstractions;
 using HrService.Infrastructure.Persistence;
+using HrService.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -9,6 +11,9 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, string connectionString)
     {
         services.AddDbContext<HrDbContext>(o => o.UseSqlServer(connectionString));
+        services.AddScoped<IDepratmentRepositoty, DepartmentRepository>();
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
+
         return services;
     }
 }
