@@ -1,3 +1,4 @@
+using HrService.Api.Middleware;
 using HrService.Application.Services;
 using HrService.Infrastructure;
 
@@ -13,6 +14,8 @@ builder.Services.AddScoped<DepartmentService>();
 builder.Services.AddInfrastructure(connectionString);
 
 var app = builder.Build();
+
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
