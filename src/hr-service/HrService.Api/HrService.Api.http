@@ -1,32 +1,27 @@
-@HrService.Api_HostAddress = http://localhost:5258
+@host = http://localhost:5258
 
-### Check API health
-GET {{HrService.Api_HostAddress}}/health
-Accept: application/json
-
-### List departments
-GET {{HrService.Api_HostAddress}}/api/v1/departments
-Accept: application/json
-
-### Get department by ID
-GET {{HrService.Api_HostAddress}}/api/v1/departments/1
-Accept: application/json
-
-### Create a department
-POST {{HrService.Api_HostAddress}}/api/v1/departments
-Content-Type: application/json; charset=utf-8
+### 1. Tạo phòng ban (POST)
+# @name create
+POST {{host}}/api/v1/departments
+Content-Type: application/json
 
 {
-  "name": "Kế toán"
+  "name": "Kỹ thuật"
 }
 
-### Update department ID 2
-PUT {{HrService.Api_HostAddress}}/api/v1/departments/2
-Content-Type: application/json; charset=utf-8
+### 2. Xem danh sách (GET)
+GET {{host}}/api/v1/departments
+
+### 3. Xem một phòng ban theo id (GET)
+GET {{host}}/api/v1/departments/{{create.response.body.id}}
+
+### 4. Sửa tên (PUT) - dùng id vừa tạo ở mục 1
+PUT {{host}}/api/v1/departments/{{create.response.body.id}}
+Content-Type: application/json
 
 {
-  "name": "HR & Admin"
+  "name": "Công nghệ thông tin"
 }
 
-### Delete department ID 2 (only succeeds when it has no employees)
-DELETE {{HrService.Api_HostAddress}}/api/v1/departments/2
+### 5. Xóa (DELETE)
+DELETE {{host}}/api/v1/departments/{{create.response.body.id}}
