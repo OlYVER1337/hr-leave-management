@@ -7,7 +7,7 @@ x-dotnet-service: &dotnet-service
     Redis__ConnectionString: redis:6379
     # Đặt CACHE_ENABLED=false để chạy kịch bản Redis OFF khi load test
     Cache__Enabled: ${CACHE_ENABLED:-true}
-    Jwt__Key: ${JWT_KEY}
+    Jwt__SigningKey: ${JWT_KEY}
     Jwt__Issuer: hr-leave
     Jwt__Audience: hr-leave-clients
   healthcheck:
@@ -61,6 +61,12 @@ services:
         API_DLL: HrService.Api.dll
     environment:
       <<: *dotnet-env
+      InitialHr__Enabled: ${INITIAL_HR_ENABLED:-false}
+      InitialHr__Email: ${INITIAL_HR_EMAIL:-}
+      InitialHr__Password: ${INITIAL_HR_PASSWORD:-}
+      InitialHr__FullName: ${INITIAL_HR_FULL_NAME:-}
+      InitialHr__Code: ${INITIAL_HR_CODE:-}
+      InitialHr__DepartmentName: ${INITIAL_HR_DEPARTMENT_NAME:-HR}
       ConnectionStrings__Default: Server=sqlserver;Database=HR_DB;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True
     ports:
       - "8081:8080"   # Swagger/debug trực tiếp: http://localhost:8081/openapi/v1.json
