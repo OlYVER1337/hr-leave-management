@@ -2,7 +2,9 @@ using HrService.Api.Middleware;
 using HrService.Application.Services;
 using HrService.Infrastructure.Authentication;
 using HrService.Infrastructure;
+using HrService.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;
 using System.Text;
@@ -16,6 +18,7 @@ builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks();
 builder.Services.AddScoped<DepartmentService>();
+builder.Services.AddScoped<EmployeeService>();
 builder.Services.AddScoped<AuthenticationService>();
 builder.Services.AddInfrastructure(connectionString);
 
@@ -46,8 +49,14 @@ var app = builder.Build();
 
 await using (var scope = app.Services.CreateAsyncScope())
 {
+    var dbContext = scope.ServiceProvider.GetRequiredService<HrDbContext>();
+    await dbContext.Database.MigrateAsync();
+
     var initialHrSeeder = scope.ServiceProvider.GetRequiredService<InitialHrSeeder>();
     await initialHrSeeder.SeedAsync();
+
+    var demoDataSeeder = scope.ServiceProvider.GetRequiredService<DemoDataSeeder>();
+    await demoDataSeeder.SeedAsync();
 }
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();

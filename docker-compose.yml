@@ -67,6 +67,17 @@ services:
       InitialHr__FullName: ${INITIAL_HR_FULL_NAME:-}
       InitialHr__Code: ${INITIAL_HR_CODE:-}
       InitialHr__DepartmentName: ${INITIAL_HR_DEPARTMENT_NAME:-HR}
+      DemoData__Enabled: ${DEMO_DATA_ENABLED:-false}
+      DemoData__DepartmentName: ${DEMO_DATA_DEPARTMENT_NAME:-Demo}
+      DemoData__SickDaysPerYear: ${DEMO_DATA_SICK_DAYS_PER_YEAR:-10}
+      DemoData__Manager__Email: ${DEMO_MANAGER_EMAIL:-}
+      DemoData__Manager__Password: ${DEMO_MANAGER_PASSWORD:-}
+      DemoData__Manager__FullName: ${DEMO_MANAGER_FULL_NAME:-}
+      DemoData__Manager__Code: ${DEMO_MANAGER_CODE:-}
+      DemoData__Employee__Email: ${DEMO_EMPLOYEE_EMAIL:-}
+      DemoData__Employee__Password: ${DEMO_EMPLOYEE_PASSWORD:-}
+      DemoData__Employee__FullName: ${DEMO_EMPLOYEE_FULL_NAME:-}
+      DemoData__Employee__Code: ${DEMO_EMPLOYEE_CODE:-}
       ConnectionStrings__Default: Server=sqlserver;Database=HR_DB;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True
     ports:
       - "8081:8080"   # Swagger/debug trực tiếp: http://localhost:8081/openapi/v1.json
