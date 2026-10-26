@@ -1,6 +1,6 @@
 using HrService.Api.Dtos;
+using HrService.Application.Dtos;
 using HrService.Application.Services;
-using HrService.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HrService.Api.Controllers;
@@ -14,7 +14,7 @@ public sealed class DepartmentsController(DepartmentService departmentService) :
         CancellationToken cancellationToken)
     {
         var departments = await departmentService.GetAllAsync(cancellationToken);
-        return Ok(departments.Select(ToResponse));
+        return Ok(departments);
     }
 
     [HttpGet("{id:int}")]
@@ -23,28 +23,27 @@ public sealed class DepartmentsController(DepartmentService departmentService) :
         CancellationToken cancellationToken)
     {
         var department = await departmentService.GetByIdAsync(id, cancellationToken);
-        return Ok(ToResponse(department));
+        return Ok(department);
     }
 
     [HttpPost]
     public async Task<ActionResult<DepartmentResponse>> Create(
-        [FromBody] CreateDepartmentRequest request,
+        [FromBody] DepartmentRequest request,
         CancellationToken cancellationToken)
     {
         var department = await departmentService.CreateAsync(request.Name, cancellationToken);
-        var response = ToResponse(department);
 
-        return CreatedAtAction(nameof(GetById), new { id = department.Id }, response);
+        return CreatedAtAction(nameof(GetById), new { id = department.Id }, department);
     }
 
     [HttpPut("{id:int}")]
     public async Task<ActionResult<DepartmentResponse>> Update(
         int id,
-        [FromBody] UpdateDepartmentRequest request,
+        [FromBody] DepartmentRequest request,
         CancellationToken cancellationToken)
     {
         var department = await departmentService.UpdateAsync(id, request.Name, cancellationToken);
-        return Ok(ToResponse(department));
+        return Ok(department);
     }
 
     [HttpDelete("{id:int}")]
@@ -53,7 +52,4 @@ public sealed class DepartmentsController(DepartmentService departmentService) :
         await departmentService.DeleteAsync(id, cancellationToken);
         return NoContent();
     }
-
-    private static DepartmentResponse ToResponse(Department department) =>
-        new(department.Id, department.Name);
 }

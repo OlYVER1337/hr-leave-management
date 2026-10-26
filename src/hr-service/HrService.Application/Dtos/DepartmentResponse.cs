@@ -1,3 +1,3 @@
-namespace HrService.Api.Dtos;
+namespace HrService.Application.Dtos;
 
 public sealed record DepartmentResponse(int Id, string Name);

@@ -1,6 +1,32 @@
-@IdentityService.Api_HostAddress = http://localhost:5258
+@HrService.Api_HostAddress = http://localhost:5258
 
-GET {{IdentityService.Api_HostAddress}}/weatherforecast/
+### Check API health
+GET {{HrService.Api_HostAddress}}/health
 Accept: application/json
 
-###
+### List departments
+GET {{HrService.Api_HostAddress}}/api/v1/departments
+Accept: application/json
+
+### Get department by ID
+GET {{HrService.Api_HostAddress}}/api/v1/departments/1
+Accept: application/json
+
+### Create a department
+POST {{HrService.Api_HostAddress}}/api/v1/departments
+Content-Type: application/json; charset=utf-8
+
+{
+  "name": "Kế toán"
+}
+
+### Update department ID 2
+PUT {{HrService.Api_HostAddress}}/api/v1/departments/2
+Content-Type: application/json; charset=utf-8
+
+{
+  "name": "HR & Admin"
+}
+
+### Delete department ID 2 (only succeeds when it has no employees)
+DELETE {{HrService.Api_HostAddress}}/api/v1/departments/2

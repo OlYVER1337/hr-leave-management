@@ -1,4 +1,3 @@
-using System.Globalization;
 using HrService.Application.Common;
 using Microsoft.AspNetCore.Mvc;
 
@@ -17,6 +16,11 @@ public sealed class ExceptionHandlingMiddleware(
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
             logger.LogDebug("Request was cancelled by the client.");
+            if (!context.Response.HasStarted)
+            {
+                context.Response.Clear();
+                context.Response.StatusCode = 499;
+            }
         }
         catch (Exception exception)
         {
@@ -34,16 +38,18 @@ public sealed class ExceptionHandlingMiddleware(
             else
             {
                 logger.LogWarning(
-                    exception,
-                    "Request failed with status code {StatusCode}.",
-                    statusCode);
+                    "Request failed with status code {StatusCode}: {ErrorCode} - {Detail}",
+                    statusCode,
+                    problem.Title,
+                    problem.Detail);
             }
 
             context.Response.Clear();
             context.Response.StatusCode = statusCode;
-            context.Response.ContentType = "application/problem+json";
             await context.Response.WriteAsJsonAsync(
                 problem,
+                options: null,
+                contentType: "application/problem+json",
                 cancellationToken: context.RequestAborted);
         }
     }
@@ -52,18 +58,21 @@ public sealed class ExceptionHandlingMiddleware(
     {
         if (exception is RequestValidationException validationException)
         {
-            var statusCode = GetStatusCode(validationException, StatusCodes.Status422UnprocessableEntity);
-            return (statusCode, new ValidationProblemDetails(
-                validationException.Errors.ToDictionary(error => error.Key, error => error.Value))
+            var statusCode = validationException.StatusCode;
+            var problem = new ProblemDetails
             {
                 Title = validationException.Code,
+                Detail = validationException.Message,
                 Status = statusCode
-            });
+            };
+            problem.Extensions["errors"] = validationException.Errors;
+
+            return (statusCode, problem);
         }
 
         if (exception is AppException appException)
         {
-            var statusCode = GetStatusCode(appException, StatusCodes.Status500InternalServerError);
+            var statusCode = appException.StatusCode;
             return (statusCode, new ProblemDetails
             {
                 Title = appException.Code,
@@ -79,12 +88,4 @@ public sealed class ExceptionHandlingMiddleware(
         });
     }
 
-    private static int GetStatusCode(AppException exception, int fallbackStatusCode) =>
-        int.TryParse(
-            exception.StatusCode,
-            NumberStyles.None,
-            CultureInfo.InvariantCulture,
-            out var statusCode)
-            ? statusCode
-            : fallbackStatusCode;
 }

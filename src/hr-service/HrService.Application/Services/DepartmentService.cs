@@ -1,37 +1,38 @@
 using HrService.Application.Abstractions;
 using HrService.Application.Common;
+using HrService.Application.Dtos;
 using HrService.Domain.Entities;
 
 namespace HrService.Application.Services;
 
 public sealed class DepartmentService(
-    IDepratmentRepositoty departmentRepository,
+    IDepartmentRepository departmentRepository,
     IUnitOfWork unitOfWork)
 {
     private const int MaxNameLength = 100;
 
-    public async Task<IReadOnlyList<Department>> GetAllAsync(
+    public async Task<IReadOnlyList<DepartmentResponse>> GetAllAsync(
         CancellationToken cancellationToken = default)
     {
-        return await departmentRepository.ListAsync(cancellationToken);
+        var departments = await departmentRepository.ListAsync(cancellationToken);
+        return departments.Select(ToResponse).ToArray();
     }
 
-    public async Task<Department> GetByIdAsync(
+    public async Task<DepartmentResponse> GetByIdAsync(
         int id,
         CancellationToken cancellationToken = default)
     {
-        var department = await departmentRepository.GetByIdAsync(id, cancellationToken);
-
-        return department ?? throw new NotFoundException($"Department with id '{id}' was not found.");
+        var department = await GetDepartmentEntityAsync(id, cancellationToken);
+        return ToResponse(department);
     }
 
-    public async Task<Department> CreateAsync(
+    public async Task<DepartmentResponse> CreateAsync(
         string name,
         CancellationToken cancellationToken = default)
     {
         var normalizedName = NormalizeName(name);
 
-        if (await departmentRepository.ExistByNameAsync(
+        if (await departmentRepository.ExistsByNameAsync(
                 normalizedName,
                 excludeId: null,
                 cancellationToken))
@@ -43,18 +44,18 @@ public sealed class DepartmentService(
         departmentRepository.Add(department);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return department;
+        return ToResponse(department);
     }
 
-    public async Task<Department> UpdateAsync(
+    public async Task<DepartmentResponse> UpdateAsync(
         int id,
         string name,
         CancellationToken cancellationToken = default)
     {
-        var department = await GetByIdAsync(id, cancellationToken);
+        var department = await GetDepartmentEntityAsync(id, cancellationToken);
         var normalizedName = NormalizeName(name);
 
-        if (await departmentRepository.ExistByNameAsync(
+        if (await departmentRepository.ExistsByNameAsync(
                 normalizedName,
                 excludeId: id,
                 cancellationToken))
@@ -65,14 +66,14 @@ public sealed class DepartmentService(
         department.Name = normalizedName;
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return department;
+        return ToResponse(department);
     }
 
     public async Task DeleteAsync(
         int id,
         CancellationToken cancellationToken = default)
     {
-        var department = await GetByIdAsync(id, cancellationToken);
+        var department = await GetDepartmentEntityAsync(id, cancellationToken);
 
         if (await departmentRepository.HasEmployeesAsync(id, cancellationToken))
         {
@@ -104,4 +105,15 @@ public sealed class DepartmentService(
 
         return normalizedName;
     }
+
+    private async Task<Department> GetDepartmentEntityAsync(
+        int id,
+        CancellationToken cancellationToken)
+    {
+        var department = await departmentRepository.GetByIdAsync(id, cancellationToken);
+        return department ?? throw new NotFoundException($"Department with id '{id}' was not found.");
+    }
+
+    private static DepartmentResponse ToResponse(Department department) =>
+        new(department.Id, department.Name);
 }

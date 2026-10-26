@@ -14,7 +14,7 @@ public sealed class ValidationErrors
         list.Add(message);
     }
 
-    public void ThrowAnyThing()
+    public void ThrowIfAny()
     {
         if (HasErrors)
         {

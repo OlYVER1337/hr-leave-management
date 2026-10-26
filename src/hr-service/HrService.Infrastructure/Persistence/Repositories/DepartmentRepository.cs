@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HrService.Infrastructure.Persistence.Repositories;
 
-public sealed class DepartmentRepository(HrDbContext dbContext) : IDepratmentRepositoty
+public sealed class DepartmentRepository(HrDbContext dbContext) : IDepartmentRepository
 {
     public async Task<Department?> GetByIdAsync(int id, CancellationToken ct = default)
     {
@@ -20,7 +20,7 @@ public sealed class DepartmentRepository(HrDbContext dbContext) : IDepratmentRep
             .ToListAsync(ct);
     }
 
-    public async Task<bool> ExistByNameAsync(
+    public async Task<bool> ExistsByNameAsync(
         string name,
         int? excludeId,
         CancellationToken ct = default)
