@@ -15,5 +15,5 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         return services;
-    }
+    }  
 }
