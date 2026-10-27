@@ -27,10 +27,10 @@ public sealed class DepartmentService(
     }
 
     public async Task<DepartmentResponse> CreateAsync(
-        string name,
+        DepartmentRequest request,
         CancellationToken cancellationToken = default)
     {
-        var normalizedName = NormalizeName(name);
+        var normalizedName = NormalizeName(request.Name);
 
         if (await departmentRepository.ExistsByNameAsync(
                 normalizedName,
@@ -49,11 +49,11 @@ public sealed class DepartmentService(
 
     public async Task<DepartmentResponse> UpdateAsync(
         int id,
-        string name,
+        DepartmentRequest request,
         CancellationToken cancellationToken = default)
     {
         var department = await GetDepartmentEntityAsync(id, cancellationToken);
-        var normalizedName = NormalizeName(name);
+        var normalizedName = NormalizeName(request.Name);
 
         if (await departmentRepository.ExistsByNameAsync(
                 normalizedName,

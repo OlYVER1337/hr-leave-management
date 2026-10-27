@@ -1,0 +1,165 @@
+using HrService.Application.Abstractions;
+using HrService.Application.Common;
+using HrService.Application.Dtos;
+using HrService.Application.Services;
+using HrService.Domain.Entities;
+using Moq;
+using Xunit;
+
+namespace HrService.Tests;
+
+public sealed class LeaveCatalogServiceTests
+{
+    [Fact]
+    public async Task GetLeaveTypesAsync_CachesAllTypesAndFiltersInactiveForRegularList()
+    {
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var cache = new InMemoryLeaveCatalogCache();
+        repository
+            .Setup(item => item.ListLeaveTypesAsync(true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+            [
+                new LeaveType { Id = 1, Code = "ANNUAL", Name = "Annual", IsActive = true },
+                new LeaveType { Id = 2, Code = "OLD", Name = "Old", IsActive = false }
+            ]);
+        var service = CreateService(repository, cache);
+
+        var activeTypes = await service.GetLeaveTypesAsync(includeInactive: false);
+        var allTypes = await service.GetLeaveTypesAsync(includeInactive: true);
+
+        Assert.Single(activeTypes);
+        Assert.Equal("ANNUAL", activeTypes[0].Code);
+        Assert.Equal(2, allTypes.Count);
+        repository.Verify(
+            item => item.ListLeaveTypesAsync(true, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task CreateLeaveTypeAsync_NormalizesCodeAndInvalidatesCacheAfterSave()
+    {
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var cache = new InMemoryLeaveCatalogCache();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        var events = new List<string>();
+        LeaveType? addedLeaveType = null;
+        repository
+            .Setup(item => item.ExistsLeaveTypeCodeAsync(
+                "PERSONAL",
+                null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        repository
+            .Setup(item => item.Add(It.IsAny<LeaveType>()))
+            .Callback<LeaveType>(leaveType =>
+            {
+                addedLeaveType = leaveType;
+                events.Add("add");
+            });
+        unitOfWork
+            .Setup(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .Callback(() => events.Add("save"))
+            .ReturnsAsync(1);
+        cache.Removed += key => events.Add($"remove:{key}");
+        var service = CreateService(repository, cache, unitOfWork);
+
+        var result = await service.CreateLeaveTypeAsync(
+            new CreateLeaveTypeRequest(" personal ", " Personal ", true, true));
+
+        Assert.Equal("PERSONAL", result.Code);
+        Assert.True(result.IsActive);
+        Assert.NotNull(addedLeaveType);
+        Assert.Equal("Personal", addedLeaveType.Name);
+        Assert.Equal(
+            new[] { "add", "save", "remove:hr:catalog:leave-types" },
+            events);
+    }
+
+    [Theory]
+    [InlineData(366.2)]
+    [InlineData(1.25)]
+    [InlineData(-0.1)]
+    public async Task CreateLeavePolicyAsync_RejectsInvalidDays(decimal days)
+    {
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        var service = CreateService(repository, new InMemoryLeaveCatalogCache(), unitOfWork);
+
+        await Assert.ThrowsAsync<RequestValidationException>(
+            () => service.CreateLeavePolicyAsync(new LeavePolicyRequest(1, 2026, days)));
+        repository.Verify(
+            item => item.GetLeaveTypeForUpdateByIdAsync(
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+        unitOfWork.Verify(
+            item => item.SaveChangesAsync(It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task GetHolidaysAsync_FiltersCachedResultsByRequestedRange()
+    {
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var cache = new InMemoryLeaveCatalogCache();
+        repository
+            .Setup(item => item.ListHolidaysAsync(
+                null,
+                null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+            [
+                new Holiday { Id = 1, HolidayDate = new DateOnly(2026, 1, 1), Name = "New Year" },
+                new Holiday { Id = 2, HolidayDate = new DateOnly(2026, 12, 25), Name = "Holiday" }
+            ]);
+        var service = CreateService(repository, cache);
+
+        var result = await service.GetHolidaysAsync(
+            new DateOnly(2026, 12, 1),
+            new DateOnly(2026, 12, 31));
+
+        var holiday = Assert.Single(result);
+        Assert.Equal(2, holiday.Id);
+        repository.Verify(
+            item => item.ListHolidaysAsync(null, null, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    private static LeaveCatalogService CreateService(
+        Mock<ILeaveCatalogRepository> repository,
+        ILeaveCatalogCache cache,
+        Mock<IUnitOfWork>? unitOfWork = null) =>
+        new(repository.Object, cache, (unitOfWork ?? new Mock<IUnitOfWork>()).Object);
+
+    private sealed class InMemoryLeaveCatalogCache : ILeaveCatalogCache
+    {
+        private readonly Dictionary<string, object> _values = new();
+
+        public event Action<string>? Removed;
+
+        public Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(
+                _values.TryGetValue(key, out var value) && value is T typed
+                    ? (T?)typed
+                    : default);
+        }
+
+        public Task SetAsync<T>(string key, T value, CancellationToken cancellationToken = default)
+        {
+            if (value is not null)
+            {
+                _values[key] = value;
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task RemoveAsync(string key, CancellationToken cancellationToken = default)
+        {
+            _values.Remove(key);
+            Removed?.Invoke(key);
+            return Task.CompletedTask;
+        }
+    }
+}

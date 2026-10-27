@@ -1,4 +1,3 @@
-using HrService.Api.Dtos;
 using HrService.Application.Dtos;
 using HrService.Application.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -34,7 +33,7 @@ public sealed class DepartmentsController(DepartmentService departmentService) :
         [FromBody] DepartmentRequest request,
         CancellationToken cancellationToken)
     {
-        var department = await departmentService.CreateAsync(request.Name, cancellationToken);
+        var department = await departmentService.CreateAsync(request, cancellationToken);
 
         return CreatedAtAction(nameof(GetById), new { id = department.Id }, department);
     }
@@ -46,7 +45,7 @@ public sealed class DepartmentsController(DepartmentService departmentService) :
         [FromBody] DepartmentRequest request,
         CancellationToken cancellationToken)
     {
-        var department = await departmentService.UpdateAsync(id, request.Name, cancellationToken);
+        var department = await departmentService.UpdateAsync(id, request, cancellationToken);
         return Ok(department);
     }
 

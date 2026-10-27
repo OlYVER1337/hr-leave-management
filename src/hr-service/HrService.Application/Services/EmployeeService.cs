@@ -33,6 +33,31 @@ public sealed class EmployeeService(
             : ToResponse(employee);
     }
 
+    public async Task<EmployeeLookupResponse> GetLookupAsync(
+        Guid id,
+        Guid requesterId,
+        bool requesterIsHr,
+        CancellationToken cancellationToken = default)
+    {
+        if (!requesterIsHr &&
+            requesterId != id &&
+            !await employeeRepository.IsDirectManagerOfAsync(requesterId, id, cancellationToken))
+        {
+            throw new ForbiddenException();
+        }
+
+        var employee = await GetByIdAsync(id, cancellationToken);
+        return ToLookupResponse(employee);
+    }
+
+    public async Task<IReadOnlyList<EmployeeLookupResponse>> GetTeamLookupAsync(
+        Guid managerId,
+        CancellationToken cancellationToken = default)
+    {
+        var employees = await GetTeamAsync(managerId, cancellationToken);
+        return employees.Select(ToLookupResponse).ToArray();
+    }
+
     public async Task<IReadOnlyList<EmployeeResponse>> GetTeamAsync(
         Guid managerId,
         CancellationToken cancellationToken = default)
@@ -325,4 +350,14 @@ public sealed class EmployeeService(
             employee.Department?.Name ?? string.Empty,
             employee.ManagerId,
             employee.Manager?.FullName);
+
+    private static EmployeeLookupResponse ToLookupResponse(EmployeeResponse employee) =>
+        new(
+            employee.Id,
+            employee.Code,
+            employee.FullName,
+            employee.Role,
+            employee.IsActive,
+            employee.DepartmentId,
+            employee.ManagerId);
 }

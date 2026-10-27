@@ -25,6 +25,18 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
             .FirstOrDefaultAsync(employee => employee.Id == id, cancellationToken);
     }
 
+    public Task<bool> IsDirectManagerOfAsync(
+        Guid managerId,
+        Guid employeeId,
+        CancellationToken cancellationToken = default)
+    {
+        return dbContext.Employees
+            .AsNoTracking()
+            .AnyAsync(
+                employee => employee.Id == employeeId && employee.ManagerId == managerId,
+                cancellationToken);
+    }
+
     public Task<Employee?> GetForUpdateByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         return dbContext.Employees

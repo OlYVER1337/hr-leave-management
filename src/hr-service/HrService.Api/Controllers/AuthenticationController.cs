@@ -1,4 +1,3 @@
-using HrService.Api.Dtos;
 using HrService.Application.Dtos;
 using HrService.Application.Services;
 using Microsoft.AspNetCore.Authorization;

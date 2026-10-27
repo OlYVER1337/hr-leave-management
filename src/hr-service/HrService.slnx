@@ -3,4 +3,5 @@
   <Project Path="HrService.Application/HrService.Application.csproj" />
   <Project Path="HrService.Domain/HrService.Domain.csproj" />
   <Project Path="HrService.Infrastructure/HrService.Infrastructure.csproj" />
+  <Project Path="HrService.Tests/HrService.Tests.csproj" />
 </Solution>
