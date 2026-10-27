@@ -1,4 +1,5 @@
 namespace HrService.Application.Common;
+
 public abstract class AppException(string code, string message, int statusCode) : Exception(message)
 {
     public string Code { get; } = code;

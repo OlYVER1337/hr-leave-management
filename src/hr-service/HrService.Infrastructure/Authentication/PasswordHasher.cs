@@ -4,9 +4,14 @@ using Microsoft.AspNetCore.Identity;
 
 namespace HrService.Infrastructure.Authentication;
 
-public sealed class PasswordHashVerifier : IPasswordHashVerifier
+public sealed class PasswordHasher : IPasswordHasher
 {
-    private readonly PasswordHasher<Employee> _passwordHasher = new();
+    private readonly Microsoft.AspNetCore.Identity.PasswordHasher<Employee> _passwordHasher = new();
+
+    public string Hash(Employee employee, string password)
+    {
+        return _passwordHasher.HashPassword(employee, password);
+    }
 
     public bool Verify(Employee employee, string password)
     {

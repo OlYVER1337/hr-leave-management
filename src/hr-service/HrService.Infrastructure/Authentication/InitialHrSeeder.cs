@@ -1,6 +1,6 @@
 using HrService.Domain.Entities;
 using HrService.Infrastructure.Persistence;
-using Microsoft.AspNetCore.Identity;
+using HrService.Application.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -9,6 +9,8 @@ namespace HrService.Infrastructure.Authentication;
 
 public sealed class InitialHrSeeder(
     HrDbContext dbContext,
+    IPasswordHasher passwordHasher,
+    TimeProvider timeProvider,
     IOptions<InitialHrOptions> options,
     ILogger<InitialHrSeeder> logger)
 {
@@ -20,7 +22,7 @@ public sealed class InitialHrSeeder(
             return;
         }
 
-        var email = seedOptions.Email.Trim();
+        var email = seedOptions.Email.Trim().ToLowerInvariant();
         if (await dbContext.Employees.AnyAsync(employee => employee.Email == email, cancellationToken))
         {
             logger.LogInformation("Initial HR account already exists; no account changes were made.");
@@ -49,12 +51,11 @@ public sealed class InitialHrSeeder(
             FullName = seedOptions.FullName.Trim(),
             Email = email,
             Role = Role.HR,
-            HireDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            HireDate = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime),
             IsActive = true,
             Department = department
         };
-        employee.PasswordHash = new PasswordHasher<Employee>()
-            .HashPassword(employee, seedOptions.Password);
+        employee.PasswordHash = passwordHasher.Hash(employee, seedOptions.Password);
 
         dbContext.Employees.Add(employee);
         await dbContext.SaveChangesAsync(cancellationToken);

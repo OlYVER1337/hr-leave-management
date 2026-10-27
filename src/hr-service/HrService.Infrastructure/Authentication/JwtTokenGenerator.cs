@@ -9,18 +9,20 @@ using System.Text;
 
 namespace HrService.Infrastructure.Authentication;
 
-public sealed class JwtTokenGenerator(IOptions<JwtOptions> options) : IJwtTokenGenerator
+public sealed class JwtTokenGenerator(
+    IOptions<JwtOptions> options,
+    TimeProvider timeProvider) : IJwtTokenGenerator
 {
     private readonly JwtOptions _jwtOptions = options.Value;
 
     public AuthenticationResponse GenerateToken(Employee employee)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = timeProvider.GetUtcNow();
         var expiresAtUtc = now.AddMinutes(_jwtOptions.AccessTokenMinutes);
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Sub, employee.Id.ToString()),
-            new Claim(JwtRegisteredClaimNames.GivenName, employee.FullName),
+            new Claim(JwtRegisteredClaimNames.Name, employee.FullName),
             new Claim(JwtRegisteredClaimNames.Email, employee.Email),
             new Claim(ClaimTypes.Role, employee.Role.ToString()),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())

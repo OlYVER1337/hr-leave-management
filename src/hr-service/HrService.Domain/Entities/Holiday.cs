@@ -1,4 +1,5 @@
 namespace HrService.Domain.Entities;
+
 public class Holiday
 {
     public int Id { get; set; }

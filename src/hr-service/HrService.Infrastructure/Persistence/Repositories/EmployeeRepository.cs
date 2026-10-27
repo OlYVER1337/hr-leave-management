@@ -16,6 +16,17 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
             .ToListAsync(cancellationToken);
     }
 
+    public Task<Employee?> GetActiveByEmailAsync(
+        string normalizedEmail,
+        CancellationToken cancellationToken = default)
+    {
+        return dbContext.Employees
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                employee => employee.Email == normalizedEmail && employee.IsActive,
+                cancellationToken);
+    }
+
     public Task<bool> ExistsByCodeAsync(string code, CancellationToken cancellationToken = default)
     {
         return dbContext.Employees
@@ -28,14 +39,6 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
         return dbContext.Employees
             .AsNoTracking()
             .AnyAsync(employee => employee.Email == email, cancellationToken);
-    }
-
-    public Task<Department?> GetDepartmentByIdAsync(
-        int departmentId,
-        CancellationToken cancellationToken = default)
-    {
-        return dbContext.Departments
-            .FirstOrDefaultAsync(department => department.Id == departmentId, cancellationToken);
     }
 
     public Task<Employee?> GetActiveManagerByIdAsync(

@@ -5,8 +5,8 @@ using HrService.Application.Dtos;
 namespace HrService.Application.Services;
 
 public sealed class AuthenticationService(
-    IAuthenticationRepository authenticationRepository,
-    IPasswordHashVerifier passwordHashVerifier,
+    IEmployeeRepository employeeRepository,
+    IPasswordHasher passwordHasher,
     IJwtTokenGenerator jwtTokenGenerator)
 {
     private const string InvalidCredentialsMessage = "Invalid email or password.";
@@ -21,11 +21,12 @@ public sealed class AuthenticationService(
             throw new UnauthorizedException(InvalidCredentialsMessage);
         }
 
-        var employee = await authenticationRepository.FindActiveByEmailAsync(
-            email.Trim(),
+        var normalizedEmail = email.Trim().ToLowerInvariant();
+        var employee = await employeeRepository.GetActiveByEmailAsync(
+            normalizedEmail,
             cancellationToken);
 
-        if (employee is null || !passwordHashVerifier.Verify(employee, password))
+        if (employee is null || !passwordHasher.Verify(employee, password))
         {
             throw new UnauthorizedException(InvalidCredentialsMessage);
         }

@@ -1,6 +1,6 @@
+using HrService.Application.Abstractions;
 using HrService.Domain.Entities;
 using HrService.Infrastructure.Persistence;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -9,6 +9,8 @@ namespace HrService.Infrastructure.Authentication;
 
 public sealed class DemoDataSeeder(
     HrDbContext dbContext,
+    IPasswordHasher passwordHasher,
+    TimeProvider timeProvider,
     IOptions<DemoDataOptions> options,
     ILogger<DemoDataSeeder> logger)
 {
@@ -57,7 +59,7 @@ public sealed class DemoDataSeeder(
         Employee? manager,
         CancellationToken cancellationToken)
     {
-        var email = account.Email.Trim();
+        var email = account.Email.Trim().ToLowerInvariant();
         var existingEmployee = await dbContext.Employees
             .FirstOrDefaultAsync(employee => employee.Email == email, cancellationToken);
 
@@ -84,13 +86,12 @@ public sealed class DemoDataSeeder(
             FullName = account.FullName.Trim(),
             Email = email,
             Role = role,
-            HireDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            HireDate = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime),
             IsActive = true,
             Department = department,
             Manager = manager
         };
-        employee.PasswordHash = new PasswordHasher<Employee>()
-            .HashPassword(employee, account.Password);
+        employee.PasswordHash = passwordHasher.Hash(employee, account.Password);
 
         dbContext.Employees.Add(employee);
         return employee;
@@ -106,7 +107,7 @@ public sealed class DemoDataSeeder(
             new LeaveTypeSeed("SICK", "Nghỉ ốm", IsPaid: true, DeductsBalance: true, DaysPerYear: sickDaysPerYear),
             new LeaveTypeSeed("UNPAID", "Nghỉ không lương", IsPaid: false, DeductsBalance: false, DaysPerYear: null)
         };
-        var year = DateOnly.FromDateTime(DateTime.UtcNow).Year;
+        var year = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime).Year;
 
         foreach (var seed in leaveTypes)
         {

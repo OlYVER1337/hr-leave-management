@@ -8,10 +8,12 @@ namespace HrService.Application.Services;
 
 public sealed class EmployeeService(
     IEmployeeRepository employeeRepository,
-    IPasswordHashGenerator passwordHashGenerator,
+    IDepartmentRepository departmentRepository,
+    IPasswordHasher passwordHasher,
     IUnitOfWork unitOfWork)
 {
     private const int MinimumPasswordLength = 12;
+    private const int MaximumPasswordLength = 128;
 
     public async Task<IReadOnlyList<EmployeeResponse>> GetAllAsync(
         CancellationToken cancellationToken = default)
@@ -40,7 +42,7 @@ public sealed class EmployeeService(
     {
         var code = request.Code?.Trim();
         var fullName = request.FullName?.Trim();
-        var email = request.Email?.Trim();
+        var email = request.Email?.Trim().ToLowerInvariant();
         var roleName = request.Role?.Trim();
         var password = request.Password;
         var errors = new ValidationErrors();
@@ -60,9 +62,13 @@ public sealed class EmployeeService(
             errors.Add("email", "A valid email of at most 200 characters is required.");
         }
 
-        if (string.IsNullOrEmpty(password) || password.Length < MinimumPasswordLength)
+        if (string.IsNullOrEmpty(password) ||
+            password.Length < MinimumPasswordLength ||
+            password.Length > MaximumPasswordLength)
         {
-            errors.Add("password", $"Password must contain at least {MinimumPasswordLength} characters.");
+            errors.Add(
+                "password",
+                $"Password must contain between {MinimumPasswordLength} and {MaximumPasswordLength} characters.");
         }
 
         if (!Enum.TryParse<Role>(roleName, ignoreCase: true, out var role) || !Enum.IsDefined(role))
@@ -87,7 +93,7 @@ public sealed class EmployeeService(
             throw new ConflictException($"Email '{email}' is already in use.");
         }
 
-        var department = await employeeRepository.GetDepartmentByIdAsync(
+        var department = await departmentRepository.GetByIdAsync(
             request.DepartmentId,
             cancellationToken);
         if (department is null)
@@ -121,7 +127,7 @@ public sealed class EmployeeService(
             Department = department,
             Manager = manager
         };
-        employee.PasswordHash = passwordHashGenerator.Hash(employee, password!);
+        employee.PasswordHash = passwordHasher.Hash(employee, password!);
 
         employeeRepository.Add(employee);
         await unitOfWork.SaveChangesAsync(cancellationToken);

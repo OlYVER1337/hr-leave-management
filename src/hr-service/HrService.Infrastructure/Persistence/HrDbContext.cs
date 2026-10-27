@@ -2,13 +2,14 @@ using HrService.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace HrService.Infrastructure.Persistence;
+
 public class HrDbContext(DbContextOptions<HrDbContext> options) : DbContext(options)
 {
     // khai báo bảng (mỗi DbSet là một bảng trong database) 
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<Employee> Employees => Set<Employee>();
-    public DbSet<LeaveType> LeaveTypes => Set<LeaveType>();          
-    public DbSet<LeavePolicy> LeavePolicies => Set<LeavePolicy>();   
+    public DbSet<LeaveType> LeaveTypes => Set<LeaveType>();
+    public DbSet<LeavePolicy> LeavePolicies => Set<LeavePolicy>();
     public DbSet<Holiday> Holidays => Set<Holiday>();
 
     // cấu hình chi tiết từng bảng (độ dài, unique, khóa ngoại) 
@@ -51,8 +52,8 @@ public class HrDbContext(DbContextOptions<HrDbContext> options) : DbContext(opti
         });
         b.Entity<Holiday>(e =>
 {
-            e.HasIndex(x => x.HolidayDate).IsUnique();
-            e.Property(x => x.Name).HasMaxLength(150).IsRequired();
-        });
+    e.HasIndex(x => x.HolidayDate).IsUnique();
+    e.Property(x => x.Name).HasMaxLength(150).IsRequired();
+});
     }
 }

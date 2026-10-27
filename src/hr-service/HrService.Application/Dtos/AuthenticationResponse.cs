@@ -1,6 +1,6 @@
 namespace HrService.Application.Dtos;
 
-public sealed record  AuthenticationResponse(
+public sealed record AuthenticationResponse(
     string AccessToken,
     DateTimeOffset ExpiresAtUtc,
     string FullName,

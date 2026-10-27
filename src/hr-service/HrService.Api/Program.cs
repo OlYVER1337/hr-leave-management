@@ -4,7 +4,6 @@ using HrService.Infrastructure.Authentication;
 using HrService.Infrastructure;
 using HrService.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;
 using System.Text;
@@ -47,17 +46,7 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-await using (var scope = app.Services.CreateAsyncScope())
-{
-    var dbContext = scope.ServiceProvider.GetRequiredService<HrDbContext>();
-    await dbContext.Database.MigrateAsync();
-
-    var initialHrSeeder = scope.ServiceProvider.GetRequiredService<InitialHrSeeder>();
-    await initialHrSeeder.SeedAsync();
-
-    var demoDataSeeder = scope.ServiceProvider.GetRequiredService<DemoDataSeeder>();
-    await demoDataSeeder.SeedAsync();
-}
+await app.Services.GetRequiredService<DatabaseInitializer>().InitializeAsync();
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseAuthentication();
