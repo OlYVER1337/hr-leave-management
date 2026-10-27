@@ -183,7 +183,9 @@ public sealed class EmployeeService(
             Role = role,
             HireDate = request.HireDate,
             IsActive = true,
+            DepartmentId = department.Id,
             Department = department,
+            ManagerId = manager?.Id,
             Manager = manager
         };
         employee.PasswordHash = passwordHasher.Hash(employee, password!);
@@ -279,7 +281,9 @@ public sealed class EmployeeService(
         employee.Email = email!;
         employee.Role = role;
         employee.HireDate = request.HireDate;
+        employee.DepartmentId = department.Id;
         employee.Department = department;
+        employee.ManagerId = manager?.Id;
         employee.Manager = manager;
 
         await unitOfWork.SaveChangesAsync(cancellationToken);

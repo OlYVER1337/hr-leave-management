@@ -2,8 +2,7 @@
 
 ## HR Service
 
-- Thêm rate limiting cho đăng nhập để giảm nguy cơ dò mật khẩu.
-- Bổ sung unit test cho các nghiệp vụ HR còn lại và integration test cho đăng nhập, phân quyền, database và Redis.
+- Bổ sung unit test cho các nghiệp vụ HR còn lại.
 
 ## Leave Service và giao diện
 

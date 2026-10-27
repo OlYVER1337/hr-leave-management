@@ -80,7 +80,7 @@ services:
       DemoData__Employee__Code: ${DEMO_EMPLOYEE_CODE:-}
       ConnectionStrings__Default: Server=sqlserver;Database=HR_DB;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True
     ports:
-      - "8081:8080"   # Swagger/debug trực tiếp: http://localhost:8081/openapi/v1.json
+      - "127.0.0.1:8081:8080"   # Chỉ truy cập HR API trực tiếp từ máy host để debug.
 
   leave-service:
     <<: *dotnet-service
