@@ -63,9 +63,9 @@ public sealed class DemoDataOptionsValidator : IValidateOptions<DemoDataOptions>
         }
 
         if (string.IsNullOrWhiteSpace(account.Password) ||
-            account.Password.Length is < 12 or > 128)
+            account.Password.Length is < 12 or > 30)
         {
-            failures.Add($"DemoData:{role}:Password must contain between 12 and 128 characters.");
+            failures.Add($"DemoData:{role}:Password must contain between 12 and 30 characters.");
         }
 
         if (string.IsNullOrWhiteSpace(account.FullName) || account.FullName.Trim().Length > 150)

@@ -3,7 +3,6 @@
 ## HR Service
 
 - Thêm rate limiting cho đăng nhập để giảm nguy cơ dò mật khẩu.
-- Hoàn thiện API nhân viên: xem chi tiết, cập nhật, vô hiệu hóa, đặt lại mật khẩu, `/me`, `/me/team` và đổi mật khẩu.
 - Thêm API loại nghỉ, chính sách và ngày lễ.
 - Thêm API tra cứu nhân viên/phạm vi quản lý cho Leave Service.
 - Thêm Redis cache cho loại nghỉ, chính sách và ngày lễ; bảo đảm hệ thống vẫn chạy khi Redis không khả dụng.

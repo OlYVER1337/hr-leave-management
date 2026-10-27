@@ -19,9 +19,9 @@ public sealed class InitialHrOptionsValidator : IValidateOptions<InitialHrOption
         }
 
         if (string.IsNullOrWhiteSpace(options.Password) ||
-            options.Password.Length is < 12 or > 128)
+            options.Password.Length is < 12 or > 30)
         {
-            failures.Add("InitialHr:Password must contain between 12 and 128 characters.");
+            failures.Add("InitialHr:Password must contain between 12 and 30 characters.");
         }
 
         if (string.IsNullOrWhiteSpace(options.FullName) || options.FullName.Trim().Length > 150)

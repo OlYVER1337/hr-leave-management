@@ -16,6 +16,23 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
             .ToListAsync(cancellationToken);
     }
 
+    public Task<Employee?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return dbContext.Employees
+            .AsNoTracking()
+            .Include(employee => employee.Department)
+            .Include(employee => employee.Manager)
+            .FirstOrDefaultAsync(employee => employee.Id == id, cancellationToken);
+    }
+
+    public Task<Employee?> GetForUpdateByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return dbContext.Employees
+            .Include(employee => employee.Department)
+            .Include(employee => employee.Manager)
+            .FirstOrDefaultAsync(employee => employee.Id == id, cancellationToken);
+    }
+
     public Task<Employee?> GetActiveByEmailAsync(
         string normalizedEmail,
         CancellationToken cancellationToken = default)
@@ -27,18 +44,38 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
                 cancellationToken);
     }
 
-    public Task<bool> ExistsByCodeAsync(string code, CancellationToken cancellationToken = default)
+    public Task<bool> ExistsByCodeAsync(
+        string code,
+        Guid? excludeEmployeeId = null,
+        CancellationToken cancellationToken = default)
     {
-        return dbContext.Employees
+        var query = dbContext.Employees
             .AsNoTracking()
-            .AnyAsync(employee => employee.Code == code, cancellationToken);
+            .Where(employee => employee.Code == code);
+
+        if (excludeEmployeeId.HasValue)
+        {
+            query = query.Where(employee => employee.Id != excludeEmployeeId.Value);
+        }
+
+        return query.AnyAsync(cancellationToken);
     }
 
-    public Task<bool> ExistsByEmailAsync(string email, CancellationToken cancellationToken = default)
+    public Task<bool> ExistsByEmailAsync(
+        string email,
+        Guid? excludeEmployeeId = null,
+        CancellationToken cancellationToken = default)
     {
-        return dbContext.Employees
+        var query = dbContext.Employees
             .AsNoTracking()
-            .AnyAsync(employee => employee.Email == email, cancellationToken);
+            .Where(employee => employee.Email == email);
+
+        if (excludeEmployeeId.HasValue)
+        {
+            query = query.Where(employee => employee.Id != excludeEmployeeId.Value);
+        }
+
+        return query.AnyAsync(cancellationToken);
     }
 
     public Task<Employee?> GetActiveManagerByIdAsync(
@@ -50,6 +87,28 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
             .FirstOrDefaultAsync(
                 employee => employee.Id == managerId && employee.Role == Role.Manager && employee.IsActive,
                 cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Employee>> GetDirectReportsAsync(
+        Guid managerId,
+        CancellationToken cancellationToken = default)
+    {
+        return await dbContext.Employees
+            .AsNoTracking()
+            .Include(employee => employee.Department)
+            .Include(employee => employee.Manager)
+            .Where(employee => employee.ManagerId == managerId && employee.IsActive)
+            .OrderBy(employee => employee.FullName)
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<bool> HasDirectReportsAsync(
+        Guid managerId,
+        CancellationToken cancellationToken = default)
+    {
+        return dbContext.Employees
+            .AsNoTracking()
+            .AnyAsync(employee => employee.ManagerId == managerId, cancellationToken);
     }
 
     public void Add(Employee employee)
