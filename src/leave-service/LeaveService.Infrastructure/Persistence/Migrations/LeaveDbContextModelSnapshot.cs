@@ -160,6 +160,23 @@ namespace LeaveService.Infrastructure.Persistence.Migrations
                     b.ToTable("LeaveRequestHistories");
                 });
 
+            modelBuilder.Entity("LeaveService.Domain.Entities.LeaveRequestYearAllocation", b =>
+                {
+                    b.Property<Guid>("LeaveRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Days")
+                        .HasPrecision(6, 1)
+                        .HasColumnType("decimal(6,1)");
+
+                    b.HasKey("LeaveRequestId", "Year");
+
+                    b.ToTable("LeaveRequestYearAllocations");
+                });
+
             modelBuilder.Entity("LeaveService.Domain.Entities.LeaveRequestHistory", b =>
                 {
                     b.HasOne("LeaveService.Domain.Entities.LeaveRequest", "LeaveRequest")
@@ -171,9 +188,22 @@ namespace LeaveService.Infrastructure.Persistence.Migrations
                     b.Navigation("LeaveRequest");
                 });
 
+            modelBuilder.Entity("LeaveService.Domain.Entities.LeaveRequestYearAllocation", b =>
+                {
+                    b.HasOne("LeaveService.Domain.Entities.LeaveRequest", "LeaveRequest")
+                        .WithMany("YearAllocations")
+                        .HasForeignKey("LeaveRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("LeaveRequest");
+                });
+
             modelBuilder.Entity("LeaveService.Domain.Entities.LeaveRequest", b =>
                 {
                     b.Navigation("Histories");
+
+                    b.Navigation("YearAllocations");
                 });
 #pragma warning restore 612, 618
         }

@@ -10,6 +10,17 @@ All endpoints require the bearer token issued by HR Service:
 - `POST /api/v1/leave-requests` submits a request for the authenticated employee.
 - `GET /api/v1/leave-requests/mine` lists that employee's requests.
 - `GET /api/v1/leave-requests/{id}` returns one of that employee's requests.
+- `POST /api/v1/leave-requests/{id}/cancel` cancels that employee's pending request.
+- `GET /api/v1/leave-requests/pending-approval` lists requests assigned to the
+  authenticated manager; HR can list all pending requests.
+- `POST /api/v1/leave-requests/{id}/approve` and
+  `POST /api/v1/leave-requests/{id}/reject` accept `{"note":"..."}` and decide
+  a pending request. Managers can only decide requests assigned to them; HR
+  can decide any pending request.
+- `POST /api/v1/leave-requests/{id}/cancel` accepts `{"note":"..."}` and only
+  the owner can cancel their own pending request.
+- `GET /api/v1/leave-balances/mine?year=2026` returns the authenticated
+  employee's balance for the requested year.
 
 Example request:
 
@@ -33,8 +44,10 @@ invalid inputs return `422 Unprocessable Entity`.
 The API is exposed through Nginx under `/leave-api/`; for example,
 `/leave-api/api/v1/leave-requests/mine`.
 
-Approval, rejection, cancellation, and manager/HR request queues are not
-implemented in this first slice.
+Decisions, cancellation, balance updates, and history are committed atomically.
+The year and requested days allocated to that year are stored with each request,
+so later approval/rejection releases the exact pending reservation even if the
+HR holiday catalog changes.
 
 ## Tests
 

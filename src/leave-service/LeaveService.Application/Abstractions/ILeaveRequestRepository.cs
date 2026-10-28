@@ -18,6 +18,41 @@ public interface ILeaveRequestRepository
         Guid employeeId,
         Guid requestId,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>>
+        ListPendingAsync(Guid? approverId, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>>
+        ListVisibleAsync(
+            Guid employeeId,
+            bool isHr,
+            bool calendarOnly,
+            DateOnly? from,
+            DateOnly? to,
+            CancellationToken cancellationToken = default);
+
+    Task<LeaveRequest?> GetForDecisionAsync(Guid requestId, CancellationToken cancellationToken = default);
+
+    Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> TransitionAsync(
+        Guid requestId,
+        Guid actorId,
+        bool isHr,
+        LeaveRequestStatus status,
+        string? note,
+        DateTime decidedAtUtc,
+        CancellationToken cancellationToken = default);
+
+    Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> CancelAsync(
+        Guid employeeId,
+        Guid requestId,
+        string? note,
+        DateTime cancelledAtUtc,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<LeaveBalance>> ListBalancesAsync(
+        Guid employeeId,
+        int year,
+        CancellationToken cancellationToken = default);
 }
 
 public interface ILeaveHrClient

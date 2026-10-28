@@ -16,4 +16,6 @@ public sealed class LeaveRequest
     public DateTime? DecidedAtUtc { get; set; }
     public byte[] RowVersion { get; set; } = [];
     public ICollection<LeaveRequestHistory> Histories { get; set; } = new List<LeaveRequestHistory>();
+    public ICollection<LeaveRequestYearAllocation> YearAllocations { get; set; } =
+        new List<LeaveRequestYearAllocation>();
 }

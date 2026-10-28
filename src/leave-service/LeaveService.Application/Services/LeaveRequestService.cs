@@ -18,7 +18,7 @@ public sealed class LeaveRequestService(
         CreateLeaveRequest request,
         CancellationToken cancellationToken = default)
     {
-        ValidateRequest(request);
+        ValidateRequest(request, DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime));
         var employee = await hrClient.GetEmployeeAsync(
             employeeId,
             authorization,
@@ -51,7 +51,7 @@ public sealed class LeaveRequestService(
         var allocations = new List<AnnualLeaveAllocation>();
         if (leaveType.DeductsBalance)
         {
-            foreach (var (year, days) in daysByYear)
+            foreach (var (year, days) in daysByYear.Where(_ => leaveType.DeductsBalance))
             {
                 var policies = await hrClient.GetLeavePoliciesAsync(
                     year,
@@ -115,6 +115,129 @@ public sealed class LeaveRequestService(
         return ToResponse(result.Request, result.Balances);
     }
 
+    public async Task<IReadOnlyList<LeaveRequestResponse>> GetPendingAsync(
+        Guid actorId,
+        bool isHr,
+        CancellationToken cancellationToken = default)
+    {
+        var requests = await repository.ListPendingAsync(
+            isHr ? null : actorId,
+            cancellationToken);
+        return requests.Select(item => ToResponse(item.Request, item.Balances)).ToArray();
+    }
+
+    public async Task<IReadOnlyList<LeaveRequestResponse>> GetVisibleAsync(
+        Guid employeeId,
+        bool isHr,
+        bool calendarOnly,
+        DateOnly? from,
+        DateOnly? to,
+        CancellationToken cancellationToken = default)
+    {
+        if (from.HasValue && to.HasValue && from.Value > to.Value)
+        {
+            throw Invalid("from", "The start date must not be later than the end date.");
+        }
+
+        var requests = await repository.ListVisibleAsync(
+            employeeId,
+            isHr,
+            calendarOnly,
+            from,
+            to,
+            cancellationToken);
+        return requests.Select(item => ToResponse(item.Request, item.Balances)).ToArray();
+    }
+
+    public async Task<IReadOnlyList<LeaveBalanceResponse>> GetBalancesAsync(
+        Guid employeeId,
+        int year,
+        CancellationToken cancellationToken = default)
+    {
+        if (year is < 1900 or > 9998)
+        {
+            throw Invalid("year", "Year must be between 1900 and 9998.");
+        }
+
+        var balances = await repository.ListBalancesAsync(employeeId, year, cancellationToken);
+        return balances.Select(balance => new LeaveBalanceResponse(
+            balance.LeaveTypeId,
+            balance.Year,
+            balance.Entitled,
+            balance.Used,
+            balance.Pending,
+            balance.Entitled - balance.Used - balance.Pending)).ToArray();
+    }
+
+    public async Task<LeaveRequestResponse> DecideAsync(
+        Guid actorId,
+        string authorization,
+        Guid requestId,
+        bool approve,
+        bool isHr,
+        string? note,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await repository.GetForDecisionAsync(requestId, cancellationToken)
+            ?? throw new LeaveNotFoundException($"Leave request with id '{requestId}' was not found.");
+        EnsurePending(request);
+        if (!isHr)
+        {
+            if (request.ApproverId != actorId)
+            {
+                throw new LeaveForbiddenException("Only the assigned manager or HR can decide this request.");
+            }
+
+            await hrClient.GetEmployeeAsync(request.EmployeeId, authorization, cancellationToken);
+        }
+
+        ValidateNote(note);
+        var result = await repository.TransitionAsync(
+            requestId,
+            actorId,
+            isHr,
+            approve ? LeaveRequestStatus.Approved : LeaveRequestStatus.Rejected,
+            NormalizeNote(note),
+            timeProvider.GetUtcNow().UtcDateTime,
+            cancellationToken);
+        return ToResponse(result.Request, result.Balances);
+    }
+
+    public async Task<LeaveRequestResponse> CancelAsync(
+        Guid employeeId,
+        Guid requestId,
+        string? note,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateNote(note);
+        var result = await repository.CancelAsync(
+            employeeId,
+            requestId,
+            NormalizeNote(note),
+            timeProvider.GetUtcNow().UtcDateTime,
+            cancellationToken);
+        return ToResponse(result.Request, result.Balances);
+    }
+
+    private static void EnsurePending(LeaveRequest request)
+    {
+        if (request.Status != LeaveRequestStatus.Pending)
+        {
+            throw new LeaveConflictException("Only pending leave requests can be decided.");
+        }
+    }
+
+    private static void ValidateNote(string? note)
+    {
+        if (note?.Trim().Length > MaximumReasonLength)
+        {
+            throw Invalid("note", $"Note must be at most {MaximumReasonLength} characters.");
+        }
+    }
+
+    private static string? NormalizeNote(string? note) =>
+        string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+
     private static Dictionary<int, decimal> CalculateDaysByYear(
         DateOnly startDate,
         DateOnly endDate,
@@ -142,7 +265,7 @@ public sealed class LeaveRequestService(
         return result;
     }
 
-    private static void ValidateRequest(CreateLeaveRequest request)
+    private void ValidateRequest(CreateLeaveRequest request, DateOnly today)
     {
         var errors = new Dictionary<string, string[]>();
         if (request.LeaveTypeId <= 0)
@@ -153,6 +276,11 @@ public sealed class LeaveRequestService(
         if (request.EndDate < request.StartDate)
         {
             errors["endDate"] = ["End date must be on or after start date."];
+        }
+
+        if (request.StartDate < today)
+        {
+            errors["startDate"] = ["Start date must be today or later."];
         }
 
         if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length > MaximumReasonLength)

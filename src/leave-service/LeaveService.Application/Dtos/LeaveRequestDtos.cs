@@ -8,6 +8,10 @@ public sealed record CreateLeaveRequest(
     DateOnly EndDate,
     string Reason);
 
+public sealed record LeaveDecisionRequest(string? Note);
+
+public sealed record CancelLeaveRequest(string? Note);
+
 public sealed record LeaveBalanceResponse(
     int LeaveTypeId,
     int Year,

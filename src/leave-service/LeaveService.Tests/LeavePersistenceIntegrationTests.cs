@@ -161,6 +161,226 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
         Assert.Equal(2m, balance.Pending);
         Assert.Equal(1, await verifyContext.LeaveRequests.CountAsync(item => item.EmployeeId == employeeId));
     }
+
+    [LeaveSqlFact]
+    public async Task TransitionAsync_UpdatesBalancesAndHistoryForApprovalRejectionAndCancellation()
+    {
+        async Task<LeaveRequest> CreateRequestAsync(Guid employeeId, Guid approverId, int day)
+        {
+            var request = new LeaveRequest
+            {
+                EmployeeId = employeeId,
+                ApproverId = approverId,
+                DepartmentId = 3,
+                LeaveTypeId = 2,
+                StartDate = new DateOnly(2026, 12, day),
+                EndDate = new DateOnly(2026, 12, day + 1),
+                TotalDays = 2m,
+                Reason = "Decision integration test",
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            await using var context = _fixture.CreateContext();
+            await new LeaveRequestRepository(context).CreateAsync(
+                request,
+                [new AnnualLeaveAllocation(2026, 2m, 5m)],
+                new LeaveRequestHistory
+                {
+                    LeaveRequestId = request.Id,
+                    ActorId = employeeId,
+                    Action = "Created",
+                    ToStatus = LeaveRequestStatus.Pending,
+                    CreatedAtUtc = request.CreatedAtUtc
+                });
+            return request;
+        }
+
+        var approvedEmployee = Guid.NewGuid();
+        var approvedManager = Guid.NewGuid();
+        var approvedRequest = await CreateRequestAsync(approvedEmployee, approvedManager, 1);
+        await using (var pendingContext = _fixture.CreateContext())
+        {
+            var repository = new LeaveRequestRepository(pendingContext);
+            var managerQueue = await repository.ListPendingAsync(approvedManager);
+            Assert.Contains(managerQueue, item => item.Request.Id == approvedRequest.Id);
+            await Assert.ThrowsAsync<LeaveForbiddenException>(() => repository.TransitionAsync(
+                approvedRequest.Id,
+                Guid.NewGuid(),
+                isHr: false,
+                LeaveRequestStatus.Approved,
+                null,
+                DateTime.UtcNow));
+        }
+
+        await using (var context = _fixture.CreateContext())
+        {
+            var result = await new LeaveRequestRepository(context).TransitionAsync(
+                approvedRequest.Id,
+                approvedManager,
+                isHr: false,
+                LeaveRequestStatus.Approved,
+                "Approved by manager",
+                DateTime.UtcNow);
+            Assert.Equal(LeaveRequestStatus.Approved, result.Request.Status);
+            Assert.Equal(0m, result.Balances.Single().Pending);
+            Assert.Equal(2m, result.Balances.Single().Used);
+        }
+
+        var rejectedEmployee = Guid.NewGuid();
+        var rejectedManager = Guid.NewGuid();
+        var rejectedRequest = await CreateRequestAsync(rejectedEmployee, rejectedManager, 5);
+        await using (var context = _fixture.CreateContext())
+        {
+            var result = await new LeaveRequestRepository(context).TransitionAsync(
+                rejectedRequest.Id,
+                rejectedManager,
+                isHr: false,
+                LeaveRequestStatus.Rejected,
+                "Not enough coverage",
+                DateTime.UtcNow);
+            Assert.Equal(LeaveRequestStatus.Rejected, result.Request.Status);
+            Assert.Equal(0m, result.Balances.Single().Pending);
+            Assert.Equal(0m, result.Balances.Single().Used);
+        }
+
+        var cancelledEmployee = Guid.NewGuid();
+        var cancelledRequest = await CreateRequestAsync(cancelledEmployee, Guid.NewGuid(), 9);
+        await using (var context = _fixture.CreateContext())
+        {
+            var result = await new LeaveRequestRepository(context).CancelAsync(
+                cancelledEmployee,
+                cancelledRequest.Id,
+                "Changed plans",
+                DateTime.UtcNow);
+            Assert.Equal(LeaveRequestStatus.Cancelled, result.Request.Status);
+            Assert.Equal(0m, result.Balances.Single().Pending);
+            Assert.Equal(0m, result.Balances.Single().Used);
+
+            await Assert.ThrowsAsync<LeaveConflictException>(() =>
+                new LeaveRequestRepository(context).CancelAsync(
+                    cancelledEmployee,
+                    cancelledRequest.Id,
+                    null,
+                    DateTime.UtcNow));
+        }
+
+        await using var verifyContext = _fixture.CreateContext();
+        var histories = await verifyContext.LeaveRequestHistories
+            .Where(item =>
+                item.LeaveRequestId == approvedRequest.Id ||
+                item.LeaveRequestId == rejectedRequest.Id ||
+                item.LeaveRequestId == cancelledRequest.Id)
+            .OrderBy(item => item.CreatedAtUtc)
+            .ToArrayAsync();
+        Assert.Equal(6, histories.Length);
+        Assert.Contains(histories, item =>
+            item.LeaveRequestId == approvedRequest.Id &&
+            item.Action == "Approved" &&
+            item.FromStatus == LeaveRequestStatus.Pending &&
+            item.ToStatus == LeaveRequestStatus.Approved);
+        Assert.Contains(histories, item =>
+            item.LeaveRequestId == rejectedRequest.Id &&
+            item.Action == "Rejected" &&
+            item.ToStatus == LeaveRequestStatus.Rejected);
+        Assert.Contains(histories, item =>
+            item.LeaveRequestId == cancelledRequest.Id &&
+            item.Action == "Cancelled" &&
+            item.ActorId == cancelledEmployee);
+
+        var persistedRequests = await verifyContext.LeaveRequests
+            .Where(item =>
+                item.Id == approvedRequest.Id ||
+                item.Id == rejectedRequest.Id ||
+                item.Id == cancelledRequest.Id)
+            .ToDictionaryAsync(item => item.Id);
+        Assert.Equal(LeaveRequestStatus.Approved, persistedRequests[approvedRequest.Id].Status);
+        Assert.Equal(LeaveRequestStatus.Rejected, persistedRequests[rejectedRequest.Id].Status);
+        Assert.Equal(LeaveRequestStatus.Cancelled, persistedRequests[cancelledRequest.Id].Status);
+
+        var persistedBalances = await verifyContext.LeaveBalances
+            .Where(item =>
+                item.EmployeeId == approvedEmployee ||
+                item.EmployeeId == rejectedEmployee ||
+                item.EmployeeId == cancelledEmployee)
+            .ToDictionaryAsync(item => item.EmployeeId);
+        Assert.Equal(2m, persistedBalances[approvedEmployee].Used);
+        Assert.Equal(0m, persistedBalances[approvedEmployee].Pending);
+        Assert.Equal(0m, persistedBalances[rejectedEmployee].Used);
+        Assert.Equal(0m, persistedBalances[rejectedEmployee].Pending);
+        Assert.Equal(0m, persistedBalances[cancelledEmployee].Used);
+        Assert.Equal(0m, persistedBalances[cancelledEmployee].Pending);
+    }
+
+    [LeaveSqlFact]
+    public async Task TransitionAsync_ConcurrentApprovalAndRejectionApplyOnlyOneDecision()
+    {
+        var employeeId = Guid.NewGuid();
+        var managerId = Guid.NewGuid();
+        var request = new LeaveRequest
+        {
+            EmployeeId = employeeId,
+            ApproverId = managerId,
+            DepartmentId = 3,
+            LeaveTypeId = 2,
+            StartDate = new DateOnly(2026, 12, 21),
+            EndDate = new DateOnly(2026, 12, 22),
+            TotalDays = 2m,
+            Reason = "Concurrent decision test",
+            CreatedAtUtc = DateTime.UtcNow
+        };
+        await using (var context = _fixture.CreateContext())
+        {
+            await new LeaveRequestRepository(context).CreateAsync(
+                request,
+                [new AnnualLeaveAllocation(2026, 2m, 5m)],
+                new LeaveRequestHistory
+                {
+                    LeaveRequestId = request.Id,
+                    ActorId = employeeId,
+                    Action = "Created",
+                    ToStatus = LeaveRequestStatus.Pending,
+                    CreatedAtUtc = request.CreatedAtUtc
+                });
+        }
+
+        async Task<bool> TryTransitionAsync(LeaveRequestStatus status)
+        {
+            await using var context = _fixture.CreateContext();
+            try
+            {
+                await new LeaveRequestRepository(context).TransitionAsync(
+                    request.Id,
+                    managerId,
+                    isHr: false,
+                    status,
+                    null,
+                    DateTime.UtcNow);
+                return true;
+            }
+            catch (LeaveConflictException)
+            {
+                return false;
+            }
+        }
+
+        var results = await Task.WhenAll(
+            TryTransitionAsync(LeaveRequestStatus.Approved),
+            TryTransitionAsync(LeaveRequestStatus.Rejected));
+
+        Assert.Single(results, transitioned => transitioned);
+        Assert.Single(results, transitioned => !transitioned);
+
+        await using var verifyContext = _fixture.CreateContext();
+        var savedRequest = await verifyContext.LeaveRequests.SingleAsync(item => item.Id == request.Id);
+        var balance = await verifyContext.LeaveBalances.SingleAsync(item => item.EmployeeId == employeeId);
+        Assert.True(savedRequest.Status is LeaveRequestStatus.Approved or LeaveRequestStatus.Rejected);
+        Assert.Equal(0m, balance.Pending);
+        Assert.Equal(
+            savedRequest.Status == LeaveRequestStatus.Approved ? 2m : 0m,
+            balance.Used);
+        Assert.Equal(
+            2,
+            await verifyContext.LeaveRequestHistories.CountAsync(item => item.LeaveRequestId == request.Id));
+    }
 }
 
 public sealed class LeaveSqlFactAttribute : FactAttribute
