@@ -76,6 +76,24 @@ public sealed class LeaveCatalogServiceTests
     }
 
     [Fact]
+    public async Task CreateLeaveTypeAsync_RejectsPaidUnpaidType()
+    {
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        var service = CreateService(repository, new InMemoryLeaveCatalogCache(), unitOfWork);
+
+        var exception = await Assert.ThrowsAsync<RequestValidationException>(
+            () => service.CreateLeaveTypeAsync(
+                new CreateLeaveTypeRequest("unpaid", "Unpaid leave", true, false)));
+
+        Assert.Contains("isPaid", exception.Errors.Keys);
+        repository.Verify(item => item.Add(It.IsAny<LeaveType>()), Times.Never);
+        unitOfWork.Verify(
+            item => item.SaveChangesAsync(It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
     public async Task UpdateLeaveTypeAsync_UpdatesMutableFieldsAndInvalidatesRelatedCachesAfterSave()
     {
         var leaveType = new LeaveType
@@ -115,6 +133,40 @@ public sealed class LeaveCatalogServiceTests
                 "remove:hr:catalog:leave-policies"
             },
             events);
+    }
+
+    [Fact]
+    public async Task UpdateLeaveTypeAsync_RejectsChangingUnpaidTypeToPaid()
+    {
+        var leaveType = new LeaveType
+        {
+            Id = 3,
+            Code = "UNPAID",
+            Name = "Unpaid leave",
+            IsPaid = false,
+            DeductsBalance = false,
+            IsActive = true
+        };
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        repository
+            .Setup(item => item.GetLeaveTypeForUpdateByIdAsync(3, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(leaveType);
+        var service = CreateService(
+            repository,
+            new InMemoryLeaveCatalogCache(),
+            unitOfWork);
+
+        var exception = await Assert.ThrowsAsync<RequestValidationException>(
+            () => service.UpdateLeaveTypeAsync(
+                3,
+                new UpdateLeaveTypeRequest("Unpaid leave", true, false, true)));
+
+        Assert.Contains("isPaid", exception.Errors.Keys);
+        Assert.False(leaveType.IsPaid);
+        unitOfWork.Verify(
+            item => item.SaveChangesAsync(It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     [Theory]
@@ -275,6 +327,34 @@ public sealed class LeaveCatalogServiceTests
         Assert.Equal("Updated holiday", result.Name);
         Assert.Equal(
             new[] { "save", "remove:hr:catalog:holidays" },
+            events);
+    }
+
+    [Fact]
+    public async Task DeleteHolidayAsync_RemovesEntryAndInvalidatesCacheAfterSave()
+    {
+        var holiday = new Holiday { Id = 3, HolidayDate = new DateOnly(2026, 12, 25), Name = "Holiday" };
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var cache = new InMemoryLeaveCatalogCache();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        var events = new List<string>();
+        repository
+            .Setup(item => item.GetHolidayForUpdateByIdAsync(3, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(holiday);
+        repository
+            .Setup(item => item.Remove(holiday))
+            .Callback(() => events.Add("remove"));
+        unitOfWork
+            .Setup(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .Callback(() => events.Add("save"))
+            .ReturnsAsync(1);
+        cache.Removed += key => events.Add($"cache:{key}");
+        var service = CreateService(repository, cache, unitOfWork);
+
+        await service.DeleteHolidayAsync(3);
+
+        Assert.Equal(
+            new[] { "remove", "save", "cache:hr:catalog:holidays" },
             events);
     }
 
