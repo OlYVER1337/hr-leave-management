@@ -34,4 +34,5 @@ public interface ILeaveCatalogRepository
     void Add(LeaveType leaveType);
     void Add(LeavePolicy leavePolicy);
     void Add(Holiday holiday);
+    void Remove(Holiday holiday);
 }

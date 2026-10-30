@@ -49,4 +49,12 @@ public sealed class HolidaysController(LeaveCatalogService catalogService) : Con
         var holiday = await catalogService.UpdateHolidayAsync(id, request, cancellationToken);
         return Ok(holiday);
     }
+
+    [Authorize(Roles = "HR")]
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
+    {
+        await catalogService.DeleteHolidayAsync(id, cancellationToken);
+        return NoContent();
+    }
 }

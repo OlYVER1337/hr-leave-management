@@ -57,6 +57,11 @@ public sealed class LeaveCatalogService(
         CancellationToken cancellationToken = default)
     {
         var (code, name) = ValidateLeaveType(request.Code, request.Name);
+        if (code == "UNPAID" && request.IsPaid)
+        {
+            throw Problems.Invalid("isPaid", "The UNPAID leave type cannot be paid.");
+        }
+
         if (await repository.ExistsLeaveTypeCodeAsync(code, cancellationToken: cancellationToken))
         {
             throw new ConflictException($"Leave type code '{code}' is already in use.");
@@ -84,6 +89,10 @@ public sealed class LeaveCatalogService(
         var leaveType = await repository.GetLeaveTypeForUpdateByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException($"Leave type with id '{id}' was not found.");
         var name = ValidateLeaveTypeName(request.Name);
+        if (leaveType.Code == "UNPAID" && request.IsPaid)
+        {
+            throw Problems.Invalid("isPaid", "The UNPAID leave type cannot be paid.");
+        }
 
         leaveType.Name = name;
         leaveType.IsPaid = request.IsPaid;
@@ -295,6 +304,17 @@ public sealed class LeaveCatalogService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await cache.RemoveAsync(HolidaysCacheKey, cancellationToken);
         return ToResponse(holiday);
+    }
+
+    public async Task DeleteHolidayAsync(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        var holiday = await repository.GetHolidayForUpdateByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException($"Holiday with id '{id}' was not found.");
+        repository.Remove(holiday);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await cache.RemoveAsync(HolidaysCacheKey, cancellationToken);
     }
 
     private async Task<IReadOnlyList<T>> GetCachedListAsync<T>(
