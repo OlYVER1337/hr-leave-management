@@ -350,4 +350,4 @@ docker compose down -v
 
 ## Tài liệu liên quan
 
-Các sơ đồ kiến trúc, ERD và sequence diagram nằm trong thư mục [`docs/`](docs/). Danh sách công việc và phần còn lại cần triển khai được ghi trong [`docs/BACKLOG.md`](docs/BACKLOG.md).
+Các sơ đồ kiến trúc, ERD và sequence diagram nằm trong thư mục [`docs/`](docs/). 
