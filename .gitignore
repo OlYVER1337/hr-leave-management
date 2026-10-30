@@ -59,3 +59,4 @@ docker-compose.override.yml
 *.7z
 *.rar
 *.zip
+.fake

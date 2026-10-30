@@ -107,9 +107,13 @@ services:
   web:
     build:
       context: ./src/web
+      args:
+        VITE_DEMO_MODE: ${VITE_DEMO_MODE:-false}
     depends_on:
-      - hr-service
-      - leave-service
+      hr-service:
+        condition: service_healthy
+      leave-service:
+        condition: service_healthy
     ports:
       - "3000:80"
 
