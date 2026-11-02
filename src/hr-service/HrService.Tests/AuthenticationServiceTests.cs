@@ -13,6 +13,7 @@ public sealed class AuthenticationServiceTests
     [Fact]
     public async Task AuthenticateAsync_NormalizesEmailAndReturnsToken()
     {
+        var now = new DateTimeOffset(2026, 11, 2, 8, 0, 0, TimeSpan.Zero);
         var employee = new Employee
         {
             Email = "employee@example.com",
@@ -28,6 +29,7 @@ public sealed class AuthenticationServiceTests
             employee.Role.ToString());
         var repository = new Mock<IEmployeeRepository>();
         var refreshTokenRepository = new Mock<IRefreshTokenRepository>();
+        RefreshToken? persistedRefreshToken = null;
         var unitOfWork = new Mock<IUnitOfWork>();
         var passwordHasher = new Mock<IPasswordHasher>();
         var tokenGenerator = new Mock<IJwtTokenGenerator>();
@@ -45,6 +47,7 @@ public sealed class AuthenticationServiceTests
             .Setup(item => item.Add(It.IsAny<RefreshToken>()))
             .Callback<RefreshToken>(token =>
             {
+                persistedRefreshToken = token;
                 Assert.Equal(employee.Id, token.EmployeeId);
                 Assert.NotEqual("opaque-refresh-token", token.TokenHash);
             });
@@ -58,7 +61,7 @@ public sealed class AuthenticationServiceTests
             tokenGenerator.Object,
             refreshTokenRepository.Object,
             unitOfWork.Object,
-            TimeProvider.System);
+            new FixedTimeProvider(now));
 
         var result = await service.AuthenticateAsync(
             "  EMPLOYEE@EXAMPLE.COM ",
@@ -66,6 +69,8 @@ public sealed class AuthenticationServiceTests
 
         Assert.Same(response, result.Response);
         Assert.Equal(86, result.RefreshToken.Length);
+        Assert.Equal(now.AddDays(15).UtcDateTime, persistedRefreshToken?.ExpiresAtUtc);
+        Assert.Equal(now.AddDays(15), result.RefreshTokenExpiresAtUtc);
         repository.Verify(
             item => item.GetActiveByEmailAsync(
                 "employee@example.com",
@@ -142,6 +147,7 @@ public sealed class AuthenticationServiceTests
     [Fact]
     public async Task RefreshAsync_RotatesPersistedTokenAndIssuesNewAccessToken()
     {
+        var now = new DateTimeOffset(2026, 11, 2, 9, 0, 0, TimeSpan.Zero);
         var employee = new Employee
         {
             Email = "employee@example.com",
@@ -179,7 +185,7 @@ public sealed class AuthenticationServiceTests
             tokenGenerator.Object,
             refreshTokenRepository.Object,
             Mock.Of<IUnitOfWork>(),
-            TimeProvider.System);
+            new FixedTimeProvider(now));
 
         var result = await service.RefreshAsync("old-refresh-token");
 
@@ -188,6 +194,8 @@ public sealed class AuthenticationServiceTests
         Assert.NotNull(replacement);
         Assert.Equal(employee.Id, replacement.EmployeeId);
         Assert.NotEqual(result.RefreshToken, replacement.TokenHash);
+        Assert.Equal(now.AddDays(15).UtcDateTime, replacement.ExpiresAtUtc);
+        Assert.Equal(now.AddDays(15), result.RefreshTokenExpiresAtUtc);
         tokenGenerator.Verify(item => item.GenerateToken(employee), Times.Once);
     }
 
@@ -221,5 +229,10 @@ public sealed class AuthenticationServiceTests
                 It.IsAny<DateTime>(),
                 It.IsAny<CancellationToken>()),
             Times.Once);
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
     }
 }

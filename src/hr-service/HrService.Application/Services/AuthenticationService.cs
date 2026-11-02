@@ -16,7 +16,7 @@ public sealed class AuthenticationService(
     TimeProvider timeProvider)
 {
     private const string InvalidCredentialsMessage = "Invalid email or password.";
-    public static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(7);
+    public static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromDays(15);
 
     public async Task<AuthenticationSession> AuthenticateAsync(
         string email,
