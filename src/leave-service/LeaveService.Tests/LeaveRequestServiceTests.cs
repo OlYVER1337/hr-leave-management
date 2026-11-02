@@ -167,6 +167,35 @@ public sealed class LeaveRequestServiceTests
             Times.Never);
     }
 
+    [Fact]
+    public async Task CreateAsync_DoesNotPersistWhenHrServiceIsUnavailable()
+    {
+        var employeeId = Guid.NewGuid();
+        var repository = new Mock<ILeaveRequestRepository>();
+        var hrClient = new Mock<ILeaveHrClient>();
+        hrClient
+            .Setup(item => item.GetEmployeeAsync(employeeId, "Bearer test", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new DependencyUnavailableException("HR service"));
+        var service = new LeaveRequestService(
+            repository.Object,
+            hrClient.Object,
+            new FixedTimeProvider(new DateTimeOffset(2026, 10, 27, 0, 0, 0, TimeSpan.Zero)));
+
+        await Assert.ThrowsAsync<DependencyUnavailableException>(() =>
+            service.CreateAsync(
+                employeeId,
+                "Bearer test",
+                new CreateLeaveRequest(4, new DateOnly(2026, 10, 28), new DateOnly(2026, 10, 28), "reason")));
+
+        repository.Verify(
+            item => item.CreateAsync(
+                It.IsAny<LeaveRequest>(),
+                It.IsAny<IReadOnlyList<AnnualLeaveAllocation>>(),
+                It.IsAny<LeaveRequestHistory>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
     [Theory]
     [InlineData(true, LeaveRequestStatus.Approved)]
     [InlineData(false, LeaveRequestStatus.Rejected)]
