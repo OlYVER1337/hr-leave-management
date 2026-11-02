@@ -34,7 +34,7 @@ public sealed class HrServiceClient(HttpClient httpClient) : ILeaveHrClient
         string authorization,
         CancellationToken cancellationToken = default) =>
         GetRequiredAsync<HrLeaveType>(
-            $"/api/v1/leave-types/{leaveTypeId}",
+            $"/api/v1/leave-types/{leaveTypeId}?authoritative=true",
             authorization,
             "leave type",
             cancellationToken);
@@ -44,7 +44,7 @@ public sealed class HrServiceClient(HttpClient httpClient) : ILeaveHrClient
         string authorization,
         CancellationToken cancellationToken = default) =>
         await GetRequiredAsync<HrLeavePolicy[]>(
-            $"/api/v1/leave-policies?year={year}",
+            $"/api/v1/leave-policies?year={year}&authoritative=true",
             authorization,
             "leave policies",
             cancellationToken);
@@ -55,7 +55,7 @@ public sealed class HrServiceClient(HttpClient httpClient) : ILeaveHrClient
         string authorization,
         CancellationToken cancellationToken = default) =>
         await GetRequiredAsync<HrHoliday[]>(
-            $"/api/v1/holidays?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}",
+            $"/api/v1/holidays?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}&authoritative=true",
             authorization,
             "holidays",
             cancellationToken);

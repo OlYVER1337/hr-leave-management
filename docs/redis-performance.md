@@ -35,6 +35,8 @@ số dư, hai quyết định phê duyệt/từ chối cạnh tranh và thay đ�
 Cả sáu kiểm thử persistence/concurrency của Leave Service đều pass với SQL Server.
 Kiểm thử tích hợp SQL/Redis của HR Service cũng pass. Unit test xác nhận Redis
 timeout vẫn fallback về SQL và truy vấn authoritative không đọc cache.
+Leave Service thêm `authoritative=true` khi gọi HR để lấy loại nghỉ, chính sách
+theo năm và ngày lễ; kiểm thử client xác nhận chính xác query string này được gửi.
 
 Đã kiểm tra outage trên Compose project cô lập `hrfault`: khi dừng Redis, ba
 endpoint danh mục vẫn trả HTTP 200 nhờ fallback SQL; lượt smoke test 10 giây có
