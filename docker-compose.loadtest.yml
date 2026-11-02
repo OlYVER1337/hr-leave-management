@@ -1,0 +1,34 @@
+services:
+  sqlserver:
+    ports: !override
+      - "127.0.0.1:11433:1433"
+
+  redis:
+    ports: !override
+      - "127.0.0.1:16379:6379"
+
+  hr-service:
+    ports: !override
+      - "127.0.0.1:18081:8080"
+    environment:
+      Jwt__AccessTokenMinutes: ${LOADTEST_ACCESS_TOKEN_MINUTES:-30}
+
+  leave-service:
+    ports: !override
+      - "127.0.0.1:18082:8080"
+
+  web:
+    ports: !override
+      - "127.0.0.1:13000:80"
+
+  k6:
+    image: grafana/k6:latest
+    profiles:
+      - loadtest
+    entrypoint: ["k6"]
+    environment:
+      HR_BASE_URL: http://hr-service:8080
+      HR_EMAIL: ${INITIAL_HR_EMAIL}
+      HR_PASSWORD: ${INITIAL_HR_PASSWORD}
+    volumes:
+      - ./scripts/load-test:/scripts:ro
