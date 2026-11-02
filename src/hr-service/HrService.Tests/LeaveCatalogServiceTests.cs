@@ -291,6 +291,67 @@ public sealed class LeaveCatalogServiceTests
     }
 
     [Fact]
+    public async Task GetAuthoritativeLeavePoliciesAsync_UsesSqlInsteadOfCachedPolicy()
+    {
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var cache = new Mock<ILeaveCatalogCache>();
+        repository
+            .Setup(item => item.ListLeavePoliciesAsync(2026, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+            [
+                new LeavePolicy
+                {
+                    Id = 42,
+                    LeaveTypeId = 3,
+                    LeaveType = new LeaveType { Id = 3, Code = "ANNUAL", Name = "Annual", IsActive = true },
+                    Year = 2026,
+                    DaysPerYear = 18m
+                }
+            ]);
+        var service = CreateService(repository, cache.Object);
+
+        var policy = Assert.Single(await service.GetAuthoritativeLeavePoliciesAsync(2026));
+
+        Assert.Equal(18m, policy.DaysPerYear);
+        repository.Verify(
+            item => item.ListLeavePoliciesAsync(2026, It.IsAny<CancellationToken>()),
+            Times.Once);
+        cache.Verify(
+            item => item.GetAsync<LeavePolicyResponse[]>(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task GetAuthoritativeHolidaysAsync_QueriesSqlForRequestedRangeWithoutCache()
+    {
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var cache = new Mock<ILeaveCatalogCache>();
+        repository
+            .Setup(item => item.ListHolidaysAsync(
+                new DateOnly(2026, 12, 1),
+                new DateOnly(2026, 12, 31),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+            [
+                new Holiday { Id = 8, HolidayDate = new DateOnly(2026, 12, 25), Name = "Holiday" }
+            ]);
+        var service = CreateService(repository, cache.Object);
+
+        var holiday = Assert.Single(await service.GetAuthoritativeHolidaysAsync(
+            new DateOnly(2026, 12, 1),
+            new DateOnly(2026, 12, 31)));
+
+        Assert.Equal(8, holiday.Id);
+        cache.Verify(
+            item => item.GetAsync<HolidayResponse[]>(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
     public async Task UpdateHolidayAsync_UpdatesEntryAndInvalidatesCacheAfterSave()
     {
         var holiday = new Holiday

@@ -13,6 +13,7 @@ public sealed class LeaveTypesController(LeaveCatalogService catalogService) : C
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<LeaveTypeResponse>>> GetAll(
         [FromQuery] bool includeInactive,
+        [FromQuery] bool authoritative,
         CancellationToken cancellationToken)
     {
         if (includeInactive && !User.IsInRole("HR"))
@@ -20,16 +21,21 @@ public sealed class LeaveTypesController(LeaveCatalogService catalogService) : C
             return Forbid();
         }
 
-        var leaveTypes = await catalogService.GetLeaveTypesAsync(includeInactive, cancellationToken);
+        var leaveTypes = authoritative
+            ? await catalogService.GetAuthoritativeLeaveTypesAsync(includeInactive, cancellationToken)
+            : await catalogService.GetLeaveTypesAsync(includeInactive, cancellationToken);
         return Ok(leaveTypes);
     }
 
     [HttpGet("{id:int}")]
     public async Task<ActionResult<LeaveTypeResponse>> GetById(
         int id,
+        [FromQuery] bool authoritative,
         CancellationToken cancellationToken)
     {
-        var leaveType = await catalogService.GetLeaveTypeByIdAsync(id, cancellationToken);
+        var leaveType = authoritative
+            ? await catalogService.GetAuthoritativeLeaveTypeByIdAsync(id, cancellationToken)
+            : await catalogService.GetLeaveTypeByIdAsync(id, cancellationToken);
         return Ok(leaveType);
     }
 

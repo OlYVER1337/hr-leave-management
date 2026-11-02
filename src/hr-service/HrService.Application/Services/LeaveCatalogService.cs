@@ -34,6 +34,14 @@ public sealed class LeaveCatalogService(
             : leaveTypes.Where(leaveType => leaveType.IsActive).ToArray();
     }
 
+    public async Task<IReadOnlyList<LeaveTypeResponse>> GetAuthoritativeLeaveTypesAsync(
+        bool includeInactive,
+        CancellationToken cancellationToken = default)
+    {
+        var entities = await repository.ListLeaveTypesAsync(includeInactive, cancellationToken);
+        return entities.Select(ToResponse).ToArray();
+    }
+
     public async Task<LeaveTypeResponse> GetLeaveTypeByIdAsync(
         int id,
         CancellationToken cancellationToken = default)
@@ -50,6 +58,15 @@ public sealed class LeaveCatalogService(
             cancellationToken)).FirstOrDefault(item => item.Id == id)
             ?? throw new NotFoundException($"Leave type with id '{id}' was not found.");
         return leaveType;
+    }
+
+    public async Task<LeaveTypeResponse> GetAuthoritativeLeaveTypeByIdAsync(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        var leaveType = await repository.GetLeaveTypeByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException($"Leave type with id '{id}' was not found.");
+        return ToResponse(leaveType);
     }
 
     public async Task<LeaveTypeResponse> CreateLeaveTypeAsync(
@@ -142,6 +159,24 @@ public sealed class LeaveCatalogService(
             cancellationToken)).FirstOrDefault(item => item.Id == id)
             ?? throw new NotFoundException($"Leave policy with id '{id}' was not found.");
         return policy;
+    }
+
+    public async Task<IReadOnlyList<LeavePolicyResponse>> GetAuthoritativeLeavePoliciesAsync(
+        int? year,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateYear(year);
+        var policies = await repository.ListLeavePoliciesAsync(year, cancellationToken);
+        return policies.Select(ToResponse).ToArray();
+    }
+
+    public async Task<LeavePolicyResponse> GetAuthoritativeLeavePolicyByIdAsync(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        var policy = await repository.GetLeavePolicyForUpdateByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException($"Leave policy with id '{id}' was not found.");
+        return ToResponse(policy);
     }
 
     public async Task<LeavePolicyResponse> CreateLeavePolicyAsync(
@@ -265,6 +300,29 @@ public sealed class LeaveCatalogService(
             cancellationToken)).FirstOrDefault(item => item.Id == id)
             ?? throw new NotFoundException($"Holiday with id '{id}' was not found.");
         return holiday;
+    }
+
+    public async Task<IReadOnlyList<HolidayResponse>> GetAuthoritativeHolidaysAsync(
+        DateOnly? from,
+        DateOnly? to,
+        CancellationToken cancellationToken = default)
+    {
+        if (from.HasValue && to.HasValue && from.Value > to.Value)
+        {
+            throw Problems.Invalid("from", "The start date must not be later than the end date.");
+        }
+
+        var holidays = await repository.ListHolidaysAsync(from, to, cancellationToken);
+        return holidays.Select(ToResponse).ToArray();
+    }
+
+    public async Task<HolidayResponse> GetAuthoritativeHolidayByIdAsync(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        var holiday = await repository.GetHolidayForUpdateByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException($"Holiday with id '{id}' was not found.");
+        return ToResponse(holiday);
     }
 
     public async Task<HolidayResponse> CreateHolidayAsync(

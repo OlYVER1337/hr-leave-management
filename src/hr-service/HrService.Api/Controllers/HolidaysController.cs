@@ -14,18 +14,24 @@ public sealed class HolidaysController(LeaveCatalogService catalogService) : Con
     public async Task<ActionResult<IReadOnlyList<HolidayResponse>>> GetAll(
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
+        [FromQuery] bool authoritative,
         CancellationToken cancellationToken)
     {
-        var holidays = await catalogService.GetHolidaysAsync(from, to, cancellationToken);
+        var holidays = authoritative
+            ? await catalogService.GetAuthoritativeHolidaysAsync(from, to, cancellationToken)
+            : await catalogService.GetHolidaysAsync(from, to, cancellationToken);
         return Ok(holidays);
     }
 
     [HttpGet("{id:int}")]
     public async Task<ActionResult<HolidayResponse>> GetById(
         int id,
+        [FromQuery] bool authoritative,
         CancellationToken cancellationToken)
     {
-        var holiday = await catalogService.GetHolidayByIdAsync(id, cancellationToken);
+        var holiday = authoritative
+            ? await catalogService.GetAuthoritativeHolidayByIdAsync(id, cancellationToken)
+            : await catalogService.GetHolidayByIdAsync(id, cancellationToken);
         return Ok(holiday);
     }
 
