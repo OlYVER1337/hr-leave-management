@@ -11,6 +11,7 @@ public sealed class LeaveRequestService(
     TimeProvider timeProvider)
 {
     private const int MaximumReasonLength = 1000;
+    private const int MaximumRangeDays = 366;
 
     public async Task<LeaveRequestResponse> CreateAsync(
         Guid employeeId,
@@ -117,11 +118,21 @@ public sealed class LeaveRequestService(
 
     public async Task<IReadOnlyList<LeaveRequestResponse>> GetPendingAsync(
         Guid actorId,
+        string authorization,
         bool isHr,
         CancellationToken cancellationToken = default)
     {
-        var requests = await repository.ListPendingAsync(
-            isHr ? null : actorId,
+        if (isHr)
+        {
+            var all = await repository.ListPendingAsync(null, cancellationToken);
+            return all.Select(item => ToResponse(item.Request, item.Balances)).ToArray();
+        }
+
+        // The manager's queue is derived from the *current* reporting lines in HR, not from the
+        // approver snapshot stored on each request, so it stays correct after a reassignment.
+        var team = await hrClient.GetTeamAsync(actorId, authorization, cancellationToken);
+        var requests = await repository.ListPendingByEmployeesAsync(
+            team.Select(member => member.Id).ToArray(),
             cancellationToken);
         return requests.Select(item => ToResponse(item.Request, item.Balances)).ToArray();
     }
@@ -181,14 +192,23 @@ public sealed class LeaveRequestService(
         var request = await repository.GetForDecisionAsync(requestId, cancellationToken)
             ?? throw new LeaveNotFoundException($"Leave request with id '{requestId}' was not found.");
         EnsurePending(request);
+        if (request.EmployeeId == actorId)
+        {
+            throw new LeaveForbiddenException("You cannot approve or reject your own leave request.");
+        }
+
+        Guid? verifiedApproverId = null;
         if (!isHr)
         {
-            if (request.ApproverId != actorId)
+            // HR is the source of truth for reporting lines. It also answers 403 when the caller
+            // may not look this employee up, which we surface as Forbidden.
+            var employee = await hrClient.GetEmployeeAsync(request.EmployeeId, authorization, cancellationToken);
+            if (employee.ManagerId != actorId)
             {
                 throw new LeaveForbiddenException("Only the assigned manager or HR can decide this request.");
             }
 
-            await hrClient.GetEmployeeAsync(request.EmployeeId, authorization, cancellationToken);
+            verifiedApproverId = employee.ManagerId;
         }
 
         ValidateNote(note);
@@ -199,6 +219,7 @@ public sealed class LeaveRequestService(
             approve ? LeaveRequestStatus.Approved : LeaveRequestStatus.Rejected,
             NormalizeNote(note),
             timeProvider.GetUtcNow().UtcDateTime,
+            verifiedApproverId,
             cancellationToken);
         return ToResponse(result.Request, result.Balances);
     }
@@ -276,6 +297,12 @@ public sealed class LeaveRequestService(
         if (request.EndDate < request.StartDate)
         {
             errors["endDate"] = ["End date must be on or after start date."];
+        }
+
+        if (request.EndDate >= request.StartDate &&
+            request.EndDate.DayNumber - request.StartDate.DayNumber + 1 > MaximumRangeDays)
+        {
+            errors["endDate"] = [$"A leave request cannot span more than {MaximumRangeDays} days."];
         }
 
         if (request.StartDate < today)

@@ -31,6 +31,11 @@ public interface ILeaveRequestRepository
             DateOnly? to,
             CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>>
+        ListPendingByEmployeesAsync(
+            IReadOnlyCollection<Guid> employeeIds,
+            CancellationToken cancellationToken = default);
+
     Task<LeaveRequest?> GetForDecisionAsync(Guid requestId, CancellationToken cancellationToken = default);
 
     Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> TransitionAsync(
@@ -40,6 +45,7 @@ public interface ILeaveRequestRepository
         LeaveRequestStatus status,
         string? note,
         DateTime decidedAtUtc,
+        Guid? verifiedApproverId = null,
         CancellationToken cancellationToken = default);
 
     Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> CancelAsync(
@@ -59,6 +65,11 @@ public interface ILeaveHrClient
 {
     Task<HrEmployeeSnapshot> GetEmployeeAsync(
         Guid employeeId,
+        string authorization,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<HrEmployeeSnapshot>> GetTeamAsync(
+        Guid managerId,
         string authorization,
         CancellationToken cancellationToken = default);
 

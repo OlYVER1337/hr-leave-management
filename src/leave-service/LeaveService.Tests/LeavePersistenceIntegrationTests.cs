@@ -311,6 +311,107 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
     }
 
     [LeaveSqlFact]
+    public async Task CreateAsync_ManyConcurrentOverlappingRequestsForSameEmployeeCreateExactlyOne()
+    {
+        var employeeId = Guid.NewGuid();
+        const int attempts = 12;
+
+        async Task<bool> TryCreateAsync()
+        {
+            await using var context = _fixture.CreateContext();
+            var request = new LeaveRequest
+            {
+                EmployeeId = employeeId,
+                DepartmentId = 3,
+                LeaveTypeId = 2,
+                StartDate = new DateOnly(2026, 11, 9),
+                EndDate = new DateOnly(2026, 11, 10),
+                TotalDays = 2m,
+                Reason = "Stress overlap test",
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            try
+            {
+                await new LeaveRequestRepository(context).CreateAsync(
+                    request,
+                    [new AnnualLeaveAllocation(2026, 2m, 30m)],
+                    new LeaveRequestHistory
+                    {
+                        LeaveRequestId = request.Id,
+                        ActorId = employeeId,
+                        Action = "Created",
+                        ToStatus = LeaveRequestStatus.Pending,
+                        CreatedAtUtc = request.CreatedAtUtc
+                    });
+                return true;
+            }
+            catch (LeaveConflictException)
+            {
+                return false;
+            }
+        }
+
+        var results = await Task.WhenAll(Enumerable.Range(0, attempts).Select(_ => TryCreateAsync()));
+
+        Assert.Single(results, created => created);
+
+        await using var verifyContext = _fixture.CreateContext();
+        var balance = await verifyContext.LeaveBalances.SingleAsync(item => item.EmployeeId == employeeId);
+        Assert.Equal(2m, balance.Pending);
+        Assert.Equal(1, await verifyContext.LeaveRequests.CountAsync(item => item.EmployeeId == employeeId));
+        Assert.Equal(1, await verifyContext.LeaveRequestHistories.CountAsync(
+            item => verifyContext.LeaveRequests.Any(r => r.Id == item.LeaveRequestId && r.EmployeeId == employeeId)));
+    }
+
+    [LeaveSqlFact]
+    public async Task TransitionAsync_UsesVerifiedApproverWhenStoredSnapshotIsStale()
+    {
+        var employeeId = Guid.NewGuid();
+        var oldManagerId = Guid.NewGuid();
+        var newManagerId = Guid.NewGuid();
+        var request = new LeaveRequest
+        {
+            EmployeeId = employeeId,
+            ApproverId = oldManagerId,
+            DepartmentId = 3,
+            LeaveTypeId = 2,
+            StartDate = new DateOnly(2026, 12, 14),
+            EndDate = new DateOnly(2026, 12, 15),
+            TotalDays = 2m,
+            Reason = "Stale approver test",
+            CreatedAtUtc = DateTime.UtcNow
+        };
+        await using (var context = _fixture.CreateContext())
+        {
+            await new LeaveRequestRepository(context).CreateAsync(
+                request,
+                [new AnnualLeaveAllocation(2026, 2m, 5m)],
+                new LeaveRequestHistory
+                {
+                    LeaveRequestId = request.Id,
+                    ActorId = employeeId,
+                    Action = "Created",
+                    ToStatus = LeaveRequestStatus.Pending,
+                    CreatedAtUtc = request.CreatedAtUtc
+                });
+        }
+
+        await using (var context = _fixture.CreateContext())
+        {
+            var result = await new LeaveRequestRepository(context).TransitionAsync(
+                request.Id,
+                newManagerId,
+                isHr: false,
+                LeaveRequestStatus.Approved,
+                null,
+                DateTime.UtcNow,
+                verifiedApproverId: newManagerId);
+            Assert.Equal(LeaveRequestStatus.Approved, result.Request.Status);
+            Assert.Equal(newManagerId, result.Request.ApproverId);
+        }
+    }
+
+    [LeaveSqlFact]
     public async Task TransitionAsync_ConcurrentApprovalAndRejectionApplyOnlyOneDecision()
     {
         var employeeId = Guid.NewGuid();

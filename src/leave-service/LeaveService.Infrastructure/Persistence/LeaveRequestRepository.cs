@@ -10,88 +10,123 @@ namespace LeaveService.Infrastructure.Persistence;
 
 public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveRequestRepository
 {
-    public async Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> CreateAsync(
+    private async Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> CreateOnceAsync(
         LeaveRequest request,
         IReadOnlyList<AnnualLeaveAllocation> allocations,
         LeaveRequestHistory history,
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            await using var transaction = await context.Database.BeginTransactionAsync(
-                IsolationLevel.Serializable,
-                cancellationToken);
+        await using var transaction = await context.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
 
-            var overlaps = await context.LeaveRequests.AnyAsync(
+        var overlaps = await context.LeaveRequests.AnyAsync(
+            item => item.EmployeeId == request.EmployeeId &&
+                    (item.Status == LeaveRequestStatus.Pending ||
+                     item.Status == LeaveRequestStatus.Approved) &&
+                    item.StartDate <= request.EndDate &&
+                    item.EndDate >= request.StartDate,
+            cancellationToken);
+        if (overlaps)
+        {
+            throw new LeaveConflictException("The requested dates overlap another pending or approved leave request.");
+        }
+
+        // A retry re-adds the same entity graph; make sure allocations are not duplicated.
+        request.YearAllocations.Clear();
+
+        var balances = new List<LeaveBalance>();
+        foreach (var allocation in allocations)
+        {
+            var balance = await context.LeaveBalances.SingleOrDefaultAsync(
                 item => item.EmployeeId == request.EmployeeId &&
-                        (item.Status == LeaveRequestStatus.Pending ||
-                         item.Status == LeaveRequestStatus.Approved) &&
-                        item.StartDate <= request.EndDate &&
-                        item.EndDate >= request.StartDate,
+                        item.LeaveTypeId == request.LeaveTypeId &&
+                        item.Year == allocation.Year,
                 cancellationToken);
-            if (overlaps)
+
+            if (balance is null)
             {
-                throw new LeaveConflictException("The requested dates overlap another pending or approved leave request.");
-            }
-
-            var balances = new List<LeaveBalance>();
-            foreach (var allocation in allocations)
-            {
-                var balance = await context.LeaveBalances.SingleOrDefaultAsync(
-                    item => item.EmployeeId == request.EmployeeId &&
-                            item.LeaveTypeId == request.LeaveTypeId &&
-                            item.Year == allocation.Year,
-                    cancellationToken);
-
-                if (balance is null)
+                balance = new LeaveBalance
                 {
-                    balance = new LeaveBalance
-                    {
-                        EmployeeId = request.EmployeeId,
-                        LeaveTypeId = request.LeaveTypeId,
-                        Year = allocation.Year,
-                        Entitled = allocation.Entitled
-                    };
-                    context.LeaveBalances.Add(balance);
-                }
-
-                var available = balance.Entitled - balance.Used - balance.Pending;
-                if (allocation.Days > available)
-                {
-                    throw new LeaveConflictException(
-                        $"Insufficient leave balance for {allocation.Year}. Available: {available:0.0}; requested: {allocation.Days:0.0}.");
-                }
-
-                balance.Pending += allocation.Days;
-                balances.Add(balance);
-            }
-
-            context.LeaveRequests.Add(request);
-            foreach (var allocation in allocations)
-            {
-                request.YearAllocations.Add(new LeaveRequestYearAllocation
-                {
-                    LeaveRequestId = request.Id,
+                    EmployeeId = request.EmployeeId,
+                    LeaveTypeId = request.LeaveTypeId,
                     Year = allocation.Year,
-                    Days = allocation.Days
-                });
+                    Entitled = allocation.Entitled
+                };
+                context.LeaveBalances.Add(balance);
             }
 
-            history.LeaveRequestId = request.Id;
-            context.LeaveRequestHistories.Add(history);
-            await context.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-            return (request, balances);
+            var available = balance.Entitled - balance.Used - balance.Pending;
+            if (allocation.Days > available)
+            {
+                throw new LeaveConflictException(
+                    $"Insufficient leave balance for {allocation.Year}. Available: {available:0.0}; requested: {allocation.Days:0.0}.");
+            }
+
+            balance.Pending += allocation.Days;
+            balances.Add(balance);
         }
-        catch (DbUpdateConcurrencyException)
+
+        context.LeaveRequests.Add(request);
+        foreach (var allocation in allocations)
         {
-            throw new LeaveConflictException("Leave balance changed concurrently; retry the request.");
+            request.YearAllocations.Add(new LeaveRequestYearAllocation
+            {
+                LeaveRequestId = request.Id,
+                Year = allocation.Year,
+                Days = allocation.Days
+            });
         }
-        catch (Exception exception) when (IsConcurrentWriteConflict(exception))
-        {
-            throw new LeaveConflictException("Leave request conflicts with another concurrent update; retry the request.");
-        }
+
+        history.LeaveRequestId = request.Id;
+        context.LeaveRequestHistories.Add(history);
+        await context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return (request, balances);
     }
+
+    public Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> CreateAsync(
+        LeaveRequest request,
+        IReadOnlyList<AnnualLeaveAllocation> allocations,
+        LeaveRequestHistory history,
+        CancellationToken cancellationToken = default) =>
+        ExecuteWithRetryAsync(
+            () => CreateOnceAsync(request, allocations, history, cancellationToken),
+            "Leave request conflicts with another concurrent update; retry the request.",
+            cancellationToken);
+
+    public Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> TransitionAsync(
+        Guid requestId,
+        Guid actorId,
+        bool isHr,
+        LeaveRequestStatus status,
+        string? note,
+        DateTime decidedAtUtc,
+        Guid? verifiedApproverId = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (status is not (LeaveRequestStatus.Approved or LeaveRequestStatus.Rejected))
+        {
+            throw new ArgumentOutOfRangeException(nameof(status), "A decision must approve or reject the request.");
+        }
+
+        return ExecuteWithRetryAsync(
+            () => TransitionOnceAsync(
+                requestId, actorId, isHr, status, note, decidedAtUtc, verifiedApproverId, cancellationToken),
+            "Leave request changed concurrently; retry the decision.",
+            cancellationToken);
+    }
+
+    public Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> CancelAsync(
+        Guid employeeId,
+        Guid requestId,
+        string? note,
+        DateTime cancelledAtUtc,
+        CancellationToken cancellationToken = default) =>
+        ExecuteWithRetryAsync(
+            () => CancelOnceAsync(employeeId, requestId, note, cancelledAtUtc, cancellationToken),
+            "Leave request changed concurrently; retry the cancellation.",
+            cancellationToken);
 
     public async Task<IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>>
         ListByEmployeeAsync(Guid employeeId, CancellationToken cancellationToken = default)
@@ -213,6 +248,26 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
         return await WithBalancesAsync(requests, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>>
+        ListPendingByEmployeesAsync(
+            IReadOnlyCollection<Guid> employeeIds,
+            CancellationToken cancellationToken = default)
+    {
+        if (employeeIds.Count == 0)
+        {
+            return [];
+        }
+
+        var ids = employeeIds.ToArray();
+        var requests = await context.LeaveRequests
+            .AsNoTracking()
+            .Include(item => item.YearAllocations)
+            .Where(item => item.Status == LeaveRequestStatus.Pending && ids.Contains(item.EmployeeId))
+            .OrderBy(item => item.CreatedAtUtc)
+            .ToArrayAsync(cancellationToken);
+        return await WithBalancesAsync(requests, cancellationToken);
+    }
+
     public Task<LeaveRequest?> GetForDecisionAsync(
         Guid requestId,
         CancellationToken cancellationToken = default) =>
@@ -220,114 +275,96 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
             .AsNoTracking()
             .SingleOrDefaultAsync(item => item.Id == requestId, cancellationToken);
 
-    public async Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> TransitionAsync(
+    private async Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> TransitionOnceAsync(
         Guid requestId,
         Guid actorId,
         bool isHr,
         LeaveRequestStatus status,
         string? note,
         DateTime decidedAtUtc,
-        CancellationToken cancellationToken = default)
+        Guid? verifiedApproverId,
+        CancellationToken cancellationToken)
     {
-        if (status is not (LeaveRequestStatus.Approved or LeaveRequestStatus.Rejected))
+        await using var transaction = await context.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+        var request = await context.LeaveRequests
+            .Include(item => item.YearAllocations)
+            .SingleOrDefaultAsync(item => item.Id == requestId, cancellationToken)
+            ?? throw new LeaveNotFoundException($"Leave request with id '{requestId}' was not found.");
+        EnsurePending(request);
+        if (!isHr)
         {
-            throw new ArgumentOutOfRangeException(nameof(status), "A decision must approve or reject the request.");
-        }
-
-        try
-        {
-            await using var transaction = await context.Database.BeginTransactionAsync(
-                IsolationLevel.Serializable,
-                cancellationToken);
-            var request = await context.LeaveRequests
-                .Include(item => item.YearAllocations)
-                .SingleOrDefaultAsync(item => item.Id == requestId, cancellationToken)
-                ?? throw new LeaveNotFoundException($"Leave request with id '{requestId}' was not found.");
-            EnsurePending(request);
-            if (!isHr && request.ApproverId != actorId)
+            // The approver is the employee's current manager according to HR; the stored value
+            // is only a snapshot taken at creation time and may be stale after a reassignment.
+            var currentApproverId = verifiedApproverId ?? request.ApproverId;
+            if (currentApproverId != actorId)
             {
                 throw new LeaveForbiddenException("Only the assigned manager or HR can decide this request.");
             }
 
-            var balances = await UpdateBalancesAsync(
-                request,
-                approve: status == LeaveRequestStatus.Approved,
-                cancellationToken);
-            var previousStatus = request.Status;
-            request.Status = status;
-            request.DecidedAtUtc = decidedAtUtc;
-            context.LeaveRequestHistories.Add(new LeaveRequestHistory
-            {
-                LeaveRequestId = request.Id,
-                ActorId = actorId,
-                Action = status == LeaveRequestStatus.Approved ? "Approved" : "Rejected",
-                FromStatus = previousStatus,
-                ToStatus = status,
-                Note = note,
-                CreatedAtUtc = decidedAtUtc
-            });
+            request.ApproverId = currentApproverId;
+        }
 
-            await context.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-            return (request, balances);
-        }
-        catch (DbUpdateConcurrencyException)
+        var balances = await UpdateBalancesAsync(
+            request,
+            approve: status == LeaveRequestStatus.Approved,
+            cancellationToken);
+        var previousStatus = request.Status;
+        request.Status = status;
+        request.DecidedAtUtc = decidedAtUtc;
+        context.LeaveRequestHistories.Add(new LeaveRequestHistory
         {
-            throw new LeaveConflictException("Leave request or balance changed concurrently; retry the decision.");
-        }
-        catch (Exception exception) when (IsConcurrentWriteConflict(exception))
-        {
-            throw new LeaveConflictException("Leave request changed concurrently; retry the decision.");
-        }
+            LeaveRequestId = request.Id,
+            ActorId = actorId,
+            Action = status == LeaveRequestStatus.Approved ? "Approved" : "Rejected",
+            FromStatus = previousStatus,
+            ToStatus = status,
+            Note = note,
+            CreatedAtUtc = decidedAtUtc
+        });
+
+        await context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return (request, balances);
     }
 
-    public async Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> CancelAsync(
+    private async Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> CancelOnceAsync(
         Guid employeeId,
         Guid requestId,
         string? note,
         DateTime cancelledAtUtc,
         CancellationToken cancellationToken = default)
     {
-        try
-        {
-            await using var transaction = await context.Database.BeginTransactionAsync(
-                IsolationLevel.Serializable,
-                cancellationToken);
-            var request = await context.LeaveRequests
-                .Include(item => item.YearAllocations)
-                .SingleOrDefaultAsync(
-                    item => item.Id == requestId && item.EmployeeId == employeeId,
-                    cancellationToken)
-                ?? throw new LeaveNotFoundException($"Leave request with id '{requestId}' was not found.");
-            EnsurePending(request);
+        await using var transaction = await context.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+        var request = await context.LeaveRequests
+            .Include(item => item.YearAllocations)
+            .SingleOrDefaultAsync(
+                item => item.Id == requestId && item.EmployeeId == employeeId,
+                cancellationToken)
+            ?? throw new LeaveNotFoundException($"Leave request with id '{requestId}' was not found.");
+        EnsurePending(request);
 
-            var balances = await UpdateBalancesAsync(request, approve: false, cancellationToken);
-            var previousStatus = request.Status;
-            request.Status = LeaveRequestStatus.Cancelled;
-            request.DecidedAtUtc = cancelledAtUtc;
-            context.LeaveRequestHistories.Add(new LeaveRequestHistory
-            {
-                LeaveRequestId = request.Id,
-                ActorId = employeeId,
-                Action = "Cancelled",
-                FromStatus = previousStatus,
-                ToStatus = LeaveRequestStatus.Cancelled,
-                Note = note,
-                CreatedAtUtc = cancelledAtUtc
-            });
+        var balances = await UpdateBalancesAsync(request, approve: false, cancellationToken);
+        var previousStatus = request.Status;
+        request.Status = LeaveRequestStatus.Cancelled;
+        request.DecidedAtUtc = cancelledAtUtc;
+        context.LeaveRequestHistories.Add(new LeaveRequestHistory
+        {
+            LeaveRequestId = request.Id,
+            ActorId = employeeId,
+            Action = "Cancelled",
+            FromStatus = previousStatus,
+            ToStatus = LeaveRequestStatus.Cancelled,
+            Note = note,
+            CreatedAtUtc = cancelledAtUtc
+        });
 
-            await context.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-            return (request, balances);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            throw new LeaveConflictException("Leave request or balance changed concurrently; retry the cancellation.");
-        }
-        catch (Exception exception) when (IsConcurrentWriteConflict(exception))
-        {
-            throw new LeaveConflictException("Leave request changed concurrently; retry the cancellation.");
-        }
+        await context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return (request, balances);
     }
 
     public async Task<IReadOnlyList<LeaveBalance>> ListBalancesAsync(
@@ -417,11 +454,43 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
         }
     }
 
-    private static bool IsConcurrentWriteConflict(Exception exception)
+    private const int MaxAttempts = 3;
+
+    /// <summary>
+    /// Runs a serializable transaction and retries it when SQL Server picks it as a deadlock
+    /// victim or another writer wins a race (row-version or unique-index conflict). On retry the
+    /// operation re-reads fresh data, so it either succeeds or fails with a precise business error
+    /// (insufficient balance, request no longer pending) instead of a generic conflict.
+    /// </summary>
+    private async Task<T> ExecuteWithRetryAsync<T>(
+        Func<Task<T>> operation,
+        string conflictMessage,
+        CancellationToken cancellationToken)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return await operation();
+            }
+            catch (Exception exception) when (IsRetryableConflict(exception) && attempt < MaxAttempts)
+            {
+                context.ChangeTracker.Clear();
+                await Task.Delay(TimeSpan.FromMilliseconds(Random.Shared.Next(15, 60) * attempt), cancellationToken);
+            }
+            catch (Exception exception) when (IsRetryableConflict(exception))
+            {
+                throw new LeaveConflictException(conflictMessage);
+            }
+        }
+    }
+
+    private static bool IsRetryableConflict(Exception exception)
     {
         for (Exception? current = exception; current is not null; current = current.InnerException)
         {
-            if (current is SqlException { Number: 1205 or 2601 or 2627 })
+            if (current is DbUpdateConcurrencyException ||
+                current is SqlException { Number: 1205 or 2601 or 2627 })
             {
                 return true;
             }

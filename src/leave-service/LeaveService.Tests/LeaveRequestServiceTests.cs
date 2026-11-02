@@ -195,6 +195,7 @@ public sealed class LeaveRequestServiceTests
                 expectedStatus,
                 "Reviewed",
                 It.IsAny<DateTime>(),
+                (Guid?)actorId,
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(() =>
             {
@@ -224,18 +225,93 @@ public sealed class LeaveRequestServiceTests
                 expectedStatus,
                 "Reviewed",
                 It.IsAny<DateTime>(),
+                (Guid?)actorId,
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
     [Fact]
-    public async Task DecideAsync_RejectsManagerWhoIsNotAssignedWithoutCallingHr()
+    public async Task DecideAsync_RejectsManagerWhoIsNoLongerTheEmployeesManager()
     {
+        var actorId = Guid.NewGuid();
+        var employeeId = Guid.NewGuid();
         var request = new LeaveRequest
         {
             Id = Guid.NewGuid(),
-            EmployeeId = Guid.NewGuid(),
-            ApproverId = Guid.NewGuid(),
+            EmployeeId = employeeId,
+            ApproverId = actorId, // stale snapshot: the employee has since been reassigned
+            Status = LeaveRequestStatus.Pending
+        };
+        var repository = new Mock<ILeaveRequestRepository>();
+        repository
+            .Setup(item => item.GetForDecisionAsync(request.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(request);
+        var hrClient = new Mock<ILeaveHrClient>();
+        hrClient
+            .Setup(item => item.GetEmployeeAsync(employeeId, "Bearer manager", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new HrEmployeeSnapshot(employeeId, "E1", "Employee", "Employee", true, 1, Guid.NewGuid()));
+        var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
+
+        await Assert.ThrowsAsync<LeaveForbiddenException>(() =>
+            service.DecideAsync(actorId, "Bearer manager", request.Id, approve: true, isHr: false, note: null));
+
+        AssertNoTransition(repository);
+    }
+
+    [Fact]
+    public async Task DecideAsync_AllowsNewManagerAfterReassignmentEvenWhenSnapshotIsStale()
+    {
+        var newManagerId = Guid.NewGuid();
+        var employeeId = Guid.NewGuid();
+        var request = new LeaveRequest
+        {
+            Id = Guid.NewGuid(),
+            EmployeeId = employeeId,
+            ApproverId = Guid.NewGuid(), // previous manager
+            Status = LeaveRequestStatus.Pending
+        };
+        var repository = new Mock<ILeaveRequestRepository>();
+        repository
+            .Setup(item => item.GetForDecisionAsync(request.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(request);
+        repository
+            .Setup(item => item.TransitionAsync(
+                request.Id,
+                newManagerId,
+                false,
+                LeaveRequestStatus.Approved,
+                null,
+                It.IsAny<DateTime>(),
+                (Guid?)newManagerId,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() =>
+            {
+                request.Status = LeaveRequestStatus.Approved;
+                return (request, (IReadOnlyList<LeaveBalance>)[]);
+            });
+        var hrClient = new Mock<ILeaveHrClient>();
+        hrClient
+            .Setup(item => item.GetEmployeeAsync(employeeId, "Bearer manager", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new HrEmployeeSnapshot(employeeId, "E1", "Employee", "Employee", true, 1, newManagerId));
+        var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
+
+        var result = await service.DecideAsync(
+            newManagerId, "Bearer manager", request.Id, approve: true, isHr: false, note: null);
+
+        Assert.Equal(LeaveRequestStatus.Approved, result.Status);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DecideAsync_RejectsDecidingYourOwnRequest(bool isHr)
+    {
+        var actorId = Guid.NewGuid();
+        var request = new LeaveRequest
+        {
+            Id = Guid.NewGuid(),
+            EmployeeId = actorId,
+            ApproverId = actorId,
             Status = LeaveRequestStatus.Pending
         };
         var repository = new Mock<ILeaveRequestRepository>();
@@ -246,15 +322,62 @@ public sealed class LeaveRequestServiceTests
         var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
 
         await Assert.ThrowsAsync<LeaveForbiddenException>(() =>
-            service.DecideAsync(
-                Guid.NewGuid(),
-                "Bearer manager",
-                request.Id,
-                approve: true,
-                isHr: false,
-                note: null));
+            service.DecideAsync(actorId, "Bearer token", request.Id, approve: true, isHr, note: null));
 
         hrClient.VerifyNoOtherCalls();
+        AssertNoTransition(repository);
+    }
+
+    [Fact]
+    public async Task CreateAsync_RejectsRangeLongerThanOneYearBeforeCallingHr()
+    {
+        var hrClient = new Mock<ILeaveHrClient>();
+        var service = new LeaveRequestService(
+            new Mock<ILeaveRequestRepository>().Object,
+            hrClient.Object,
+            new FixedTimeProvider(new DateTimeOffset(2026, 10, 27, 0, 0, 0, TimeSpan.Zero)));
+
+        var exception = await Assert.ThrowsAsync<LeaveValidationException>(() =>
+            service.CreateAsync(
+                Guid.NewGuid(),
+                "Bearer token",
+                new CreateLeaveRequest(4, new DateOnly(2026, 11, 1), new DateOnly(9999, 12, 31), "reason")));
+
+        Assert.True(exception.Errors.ContainsKey("endDate"));
+        hrClient.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetPendingAsync_ForManagerUsesCurrentTeamFromHr()
+    {
+        var managerId = Guid.NewGuid();
+        var memberId = Guid.NewGuid();
+        var repository = new Mock<ILeaveRequestRepository>();
+        repository
+            .Setup(item => item.ListPendingByEmployeesAsync(
+                It.Is<IReadOnlyCollection<Guid>>(ids => ids.Count == 1 && ids.Contains(memberId)),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        var hrClient = new Mock<ILeaveHrClient>();
+        hrClient
+            .Setup(item => item.GetTeamAsync(managerId, "Bearer manager", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new HrEmployeeSnapshot(memberId, "E2", "Member", "Employee", true, 1, managerId)]);
+        var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
+
+        var result = await service.GetPendingAsync(managerId, "Bearer manager", isHr: false);
+
+        Assert.Empty(result);
+        repository.Verify(
+            item => item.ListPendingByEmployeesAsync(
+                It.IsAny<IReadOnlyCollection<Guid>>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        repository.Verify(
+            item => item.ListPendingAsync(It.IsAny<Guid?>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    private static void AssertNoTransition(Mock<ILeaveRequestRepository> repository) =>
         repository.Verify(
             item => item.TransitionAsync(
                 It.IsAny<Guid>(),
@@ -263,9 +386,9 @@ public sealed class LeaveRequestServiceTests
                 It.IsAny<LeaveRequestStatus>(),
                 It.IsAny<string?>(),
                 It.IsAny<DateTime>(),
+                It.IsAny<Guid?>(),
                 It.IsAny<CancellationToken>()),
             Times.Never);
-    }
 
     [Fact]
     public async Task CancelAsync_RecordsEmployeeCancellation()

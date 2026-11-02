@@ -111,13 +111,15 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
         CancellationToken cancellationToken)
     {
         var actorId = GetCurrentEmployeeId();
-        if (!actorId.HasValue)
+        var authorization = Request.Headers.Authorization.ToString();
+        if (!actorId.HasValue || string.IsNullOrWhiteSpace(authorization))
         {
             return Unauthorized();
         }
 
         var requests = await leaveRequestService.GetPendingAsync(
             actorId.Value,
+            authorization,
             User.IsInRole("HR"),
             cancellationToken);
         return Ok(requests);
