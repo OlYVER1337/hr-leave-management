@@ -12,7 +12,7 @@ const accounts = [
 ];
 
 export function LoginPage() {
-  const { user, signIn, busy } = useAuth();
+  const { user, signIn, busy, restoreError } = useAuth();
   const navigate = useNavigate();
   const notify = useToast();
   const [email, setEmail] = useState(DEMO_MODE ? 'hr@company.com' : '');
@@ -55,6 +55,7 @@ export function LoginPage() {
             <div className="form-label-row"><label htmlFor="password">Mật khẩu</label><span className="muted-label">Đăng nhập an toàn</span></div>
             <div className="input-with-icon"><LockKeyhole size={18} /><input id="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" required placeholder="Nhập mật khẩu" value={password} onChange={(e) => setPassword(e.target.value)} /><button type="button" className="password-toggle" aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'} onClick={() => setShowPassword((show) => !show)}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div>
             {error && <div className="form-error">{error}</div>}
+            {restoreError && <div className="form-error">{restoreError}</div>}
             <button className="button button-primary button-full login-submit" disabled={busy} type="submit">{busy ? 'Đang đăng nhập…' : 'Đăng nhập Peopleflow'}<ArrowRight size={17} /></button>
           </form>
           {DEMO_MODE && <div className="demo-accounts"><div className="demo-accounts-heading"><span>TRUY CẬP NHANH</span><span>Mật khẩu: <code>Demo123!</code></span></div>{accounts.map((account) => <button className="demo-account" key={account.email} onClick={() => { setEmail(account.email); setPassword('Demo123!'); setError(''); }}><span className={`demo-account-icon demo-${account.color}`}><UsersRound size={17} /></span><span className="demo-account-copy"><strong>{account.label}</strong><small>{account.email}</small></span><span className="demo-account-role">{account.role}</span></button>)}</div>}

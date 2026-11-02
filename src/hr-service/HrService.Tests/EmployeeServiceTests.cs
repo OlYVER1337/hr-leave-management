@@ -297,12 +297,24 @@ public sealed class EmployeeServiceTests
         Mock<IEmployeeRepository> repository,
         Mock<IDepartmentRepository>? departmentRepository = null,
         Mock<IPasswordHasher>? passwordHasher = null,
-        Mock<IUnitOfWork>? unitOfWork = null) =>
-        new(
+        Mock<IUnitOfWork>? unitOfWork = null,
+        Mock<IRefreshTokenRepository>? refreshTokenRepository = null)
+    {
+        refreshTokenRepository ??= new Mock<IRefreshTokenRepository>();
+        refreshTokenRepository
+            .Setup(item => item.RevokeAllAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        return new EmployeeService(
             repository.Object,
             (departmentRepository ?? new Mock<IDepartmentRepository>()).Object,
             (passwordHasher ?? new Mock<IPasswordHasher>()).Object,
+            refreshTokenRepository.Object,
+            TimeProvider.System,
             (unitOfWork ?? new Mock<IUnitOfWork>()).Object);
+    }
 
     private static Employee CreateEmployee(Guid id, Guid? managerId = null) =>
         new()

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts';
 import { DEMO_MODE } from '../services/config';
+import { getApiErrorMessage } from '../services/apiClient';
 import { Avatar } from './ui';
 
 type NavItem = { label: string; to: string; icon: typeof LayoutDashboard; roles?: Array<'HR' | 'Manager' | 'Employee'>; badge?: string };
@@ -34,7 +35,11 @@ export function AppShell() {
   const visiblePrimary = primaryItems.filter((item) => !item.roles || item.roles.includes(role));
   const visibleAdmin = adminItems.filter((item) => item.roles?.includes(role));
 
-  function handleSignOut() { signOut(); navigate('/login'); }
+  async function handleSignOut() {
+    try { await signOut(); }
+    catch (error) { window.alert(getApiErrorMessage(error)); }
+    finally { navigate('/login'); }
+  }
   function renderNav(items: NavItem[]) {
     return items.map((item) => {
       const Icon = item.icon;

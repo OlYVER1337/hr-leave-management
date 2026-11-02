@@ -9,3 +9,8 @@ public sealed record AuthenticationResponse(
     string Email,
     Guid UserId,
     string Role);
+
+public sealed record AuthenticationSession(
+    AuthenticationResponse Response,
+    string RefreshToken,
+    DateTimeOffset RefreshTokenExpiresAtUtc);

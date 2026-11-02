@@ -8,6 +8,7 @@ public class HrDbContext(DbContextOptions<HrDbContext> options) : DbContext(opti
     // khai báo bảng (mỗi DbSet là một bảng trong database) 
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<Employee> Employees => Set<Employee>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<LeaveType> LeaveTypes => Set<LeaveType>();
     public DbSet<LeavePolicy> LeavePolicies => Set<LeavePolicy>();
     public DbSet<Holiday> Holidays => Set<Holiday>();
@@ -36,6 +37,15 @@ public class HrDbContext(DbContextOptions<HrDbContext> options) : DbContext(opti
 
             e.HasOne(x => x.Manager).WithMany(m => m.Subordinates)
              .HasForeignKey(x => x.ManagerId).OnDelete(DeleteBehavior.Restrict);
+        });
+        b.Entity<RefreshToken>(e =>
+        {
+            e.Property(x => x.TokenHash).HasMaxLength(64).IsRequired();
+            e.Property(x => x.ReplacedByTokenHash).HasMaxLength(64);
+            e.HasIndex(x => x.TokenHash).IsUnique();
+            e.HasIndex(x => new { x.EmployeeId, x.RevokedAtUtc, x.ExpiresAtUtc });
+            e.HasOne(x => x.Employee).WithMany()
+             .HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Cascade);
         });
         b.Entity<LeaveType>(e =>
         {

@@ -16,7 +16,8 @@ import { ProfilePage } from './pages/ProfilePage';
 import type { UserRole } from './types';
 
 function RequireAuth() {
-  const { user } = useAuth();
+  const { user, busy } = useAuth();
+  if (busy) return null;
   return user ? <Outlet /> : <Navigate to="/login" replace />;
 }
 

@@ -12,6 +12,20 @@ interface LoginResponse {
   role: string;
 }
 
+function saveUser(data: LoginResponse): AuthUser {
+  const user: AuthUser = {
+    id: data.userId,
+    fullName: data.fullName,
+    email: data.email,
+    role: data.role as UserRole,
+    accessToken: data.accessToken,
+    expiresAtUtc: data.expiresAtUtc,
+  };
+  sessionStorage.setItem(TOKEN_STORAGE_KEY, user.accessToken);
+  sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+  return user;
+}
+
 export async function login(email: string, password: string): Promise<AuthUser> {
   if (DEMO_MODE) {
     const normalizedEmail = email.trim().toLowerCase();
@@ -38,17 +52,25 @@ export async function login(email: string, password: string): Promise<AuthUser> 
   }
 
   const { data } = await hrApi.post<LoginResponse>('/api/v1/auth/login', { email, password });
-  const user: AuthUser = {
-    id: data.userId,
-    fullName: data.fullName,
-    email: data.email,
-    role: data.role as UserRole,
-    accessToken: data.accessToken,
-    expiresAtUtc: data.expiresAtUtc,
-  };
-  sessionStorage.setItem(TOKEN_STORAGE_KEY, user.accessToken);
-  sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
-  return user;
+  return saveUser(data);
+}
+
+export async function restoreSession(): Promise<AuthUser> {
+  if (DEMO_MODE) {
+    const user = getStoredUser();
+    if (!user) throw new Error('Không có phiên đăng nhập.');
+    return user;
+  }
+  const { data } = await hrApi.post<LoginResponse>('/api/v1/auth/refresh');
+  return saveUser(data);
+}
+
+export async function logout(): Promise<void> {
+  try {
+    if (!DEMO_MODE) await hrApi.post('/api/v1/auth/logout');
+  } finally {
+    clearSession();
+  }
 }
 
 export function getStoredUser(): AuthUser | null {

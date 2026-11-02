@@ -21,12 +21,14 @@ public sealed class AuthenticationServiceTests
         };
         var response = new AuthenticationResponse(
             "access-token",
-            DateTimeOffset.UtcNow.AddMinutes(30),
+            DateTimeOffset.UtcNow.AddMinutes(15),
             employee.FullName,
             employee.Email,
             employee.Id,
             employee.Role.ToString());
         var repository = new Mock<IEmployeeRepository>();
+        var refreshTokenRepository = new Mock<IRefreshTokenRepository>();
+        var unitOfWork = new Mock<IUnitOfWork>();
         var passwordHasher = new Mock<IPasswordHasher>();
         var tokenGenerator = new Mock<IJwtTokenGenerator>();
 
@@ -39,23 +41,39 @@ public sealed class AuthenticationServiceTests
             .Setup(item => item.Verify(employee, "correct-password"))
             .Returns(true);
         tokenGenerator.Setup(item => item.GenerateToken(employee)).Returns(response);
+        refreshTokenRepository
+            .Setup(item => item.Add(It.IsAny<RefreshToken>()))
+            .Callback<RefreshToken>(token =>
+            {
+                Assert.Equal(employee.Id, token.EmployeeId);
+                Assert.NotEqual("opaque-refresh-token", token.TokenHash);
+            });
+        unitOfWork
+            .Setup(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
 
         var service = new AuthenticationService(
             repository.Object,
             passwordHasher.Object,
-            tokenGenerator.Object);
+            tokenGenerator.Object,
+            refreshTokenRepository.Object,
+            unitOfWork.Object,
+            TimeProvider.System);
 
         var result = await service.AuthenticateAsync(
             "  EMPLOYEE@EXAMPLE.COM ",
             "correct-password");
 
-        Assert.Same(response, result);
+        Assert.Same(response, result.Response);
+        Assert.Equal(86, result.RefreshToken.Length);
         repository.Verify(
             item => item.GetActiveByEmailAsync(
                 "employee@example.com",
                 It.IsAny<CancellationToken>()),
             Times.Once);
         tokenGenerator.Verify(item => item.GenerateToken(employee), Times.Once);
+        refreshTokenRepository.Verify(item => item.Add(It.IsAny<RefreshToken>()), Times.Once);
+        unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Theory]
@@ -67,10 +85,14 @@ public sealed class AuthenticationServiceTests
         string password)
     {
         var repository = new Mock<IEmployeeRepository>();
+        var unitOfWork = new Mock<IUnitOfWork>();
         var service = new AuthenticationService(
             repository.Object,
             Mock.Of<IPasswordHasher>(),
-            Mock.Of<IJwtTokenGenerator>());
+            Mock.Of<IJwtTokenGenerator>(),
+            Mock.Of<IRefreshTokenRepository>(),
+            unitOfWork.Object,
+            TimeProvider.System);
 
         var exception = await Assert.ThrowsAsync<UnauthorizedException>(
             () => service.AuthenticateAsync(email, password));
@@ -91,7 +113,10 @@ public sealed class AuthenticationServiceTests
         var service = new AuthenticationService(
             repository.Object,
             passwordHasher.Object,
-            Mock.Of<IJwtTokenGenerator>());
+            Mock.Of<IJwtTokenGenerator>(),
+            Mock.Of<IRefreshTokenRepository>(),
+            Mock.Of<IUnitOfWork>(),
+            TimeProvider.System);
         repository
             .Setup(item => item.GetActiveByEmailAsync(
                 "unknown@example.com",
@@ -112,5 +137,89 @@ public sealed class AuthenticationServiceTests
 
         Assert.Equal(unknownUser.Message, wrongPassword.Message);
         Assert.Equal(401, unknownUser.StatusCode);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_RotatesPersistedTokenAndIssuesNewAccessToken()
+    {
+        var employee = new Employee
+        {
+            Email = "employee@example.com",
+            FullName = "Test Employee",
+            Role = Role.Employee,
+            IsActive = true
+        };
+        RefreshToken? replacement = null;
+        var response = new AuthenticationResponse(
+            "new-access-token",
+            DateTimeOffset.UtcNow.AddMinutes(15),
+            employee.FullName,
+            employee.Email,
+            employee.Id,
+            employee.Role.ToString());
+        var refreshTokenRepository = new Mock<IRefreshTokenRepository>();
+        var tokenGenerator = new Mock<IJwtTokenGenerator>();
+        refreshTokenRepository
+            .Setup(item => item.RotateAsync(
+                It.IsAny<string>(),
+                It.IsAny<RefreshToken>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<CancellationToken>()))
+            .Callback<string, RefreshToken, DateTime, CancellationToken>(
+                (_, token, _, _) =>
+                {
+                    token.EmployeeId = employee.Id;
+                    replacement = token;
+                })
+            .ReturnsAsync(employee);
+        tokenGenerator.Setup(item => item.GenerateToken(employee)).Returns(response);
+        var service = new AuthenticationService(
+            Mock.Of<IEmployeeRepository>(),
+            Mock.Of<IPasswordHasher>(),
+            tokenGenerator.Object,
+            refreshTokenRepository.Object,
+            Mock.Of<IUnitOfWork>(),
+            TimeProvider.System);
+
+        var result = await service.RefreshAsync("old-refresh-token");
+
+        Assert.Same(response, result.Response);
+        Assert.NotEqual("old-refresh-token", result.RefreshToken);
+        Assert.NotNull(replacement);
+        Assert.Equal(employee.Id, replacement.EmployeeId);
+        Assert.NotEqual(result.RefreshToken, replacement.TokenHash);
+        tokenGenerator.Verify(item => item.GenerateToken(employee), Times.Once);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_RejectsMissingOrExpiredRefreshToken()
+    {
+        var refreshTokenRepository = new Mock<IRefreshTokenRepository>();
+        refreshTokenRepository
+            .Setup(item => item.RotateAsync(
+                It.IsAny<string>(),
+                It.IsAny<RefreshToken>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Employee?)null);
+        var service = new AuthenticationService(
+            Mock.Of<IEmployeeRepository>(),
+            Mock.Of<IPasswordHasher>(),
+            Mock.Of<IJwtTokenGenerator>(),
+            refreshTokenRepository.Object,
+            Mock.Of<IUnitOfWork>(),
+            TimeProvider.System);
+
+        await Assert.ThrowsAsync<UnauthorizedException>(() => service.RefreshAsync(null));
+        await Assert.ThrowsAsync<UnauthorizedException>(
+            () => service.RefreshAsync("expired-or-revoked-token"));
+
+        refreshTokenRepository.Verify(
+            item => item.RotateAsync(
+                It.IsAny<string>(),
+                It.IsAny<RefreshToken>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 }

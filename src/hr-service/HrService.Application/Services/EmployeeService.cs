@@ -10,6 +10,8 @@ public sealed class EmployeeService(
     IEmployeeRepository employeeRepository,
     IDepartmentRepository departmentRepository,
     IPasswordHasher passwordHasher,
+    IRefreshTokenRepository refreshTokenRepository,
+    TimeProvider timeProvider,
     IUnitOfWork unitOfWork)
 {
     private const int MinimumPasswordLength = 12;
@@ -92,6 +94,10 @@ public sealed class EmployeeService(
         }
 
         employee.PasswordHash = passwordHasher.Hash(employee, newPassword);
+        await refreshTokenRepository.RevokeAllAsync(
+            employee.Id,
+            timeProvider.GetUtcNow().UtcDateTime,
+            cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
@@ -301,6 +307,10 @@ public sealed class EmployeeService(
         if (employee.IsActive)
         {
             employee.IsActive = false;
+            await refreshTokenRepository.RevokeAllAsync(
+                employee.Id,
+                timeProvider.GetUtcNow().UtcDateTime,
+                cancellationToken);
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
@@ -326,6 +336,10 @@ public sealed class EmployeeService(
             ?? throw new NotFoundException($"Employee with id '{id}' was not found.");
 
         employee.PasswordHash = passwordHasher.Hash(employee, password);
+        await refreshTokenRepository.RevokeAllAsync(
+            employee.Id,
+            timeProvider.GetUtcNow().UtcDateTime,
+            cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 

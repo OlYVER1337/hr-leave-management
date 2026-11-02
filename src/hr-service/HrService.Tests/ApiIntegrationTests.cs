@@ -85,16 +85,77 @@ public sealed class ApiIntegrationTests
             StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task Login_SetsHttpOnlyRefreshCookieAndReturnsOnlyAccessToken()
+    {
+        var employee = new HrService.Domain.Entities.Employee
+        {
+            Email = "employee@example.com",
+            FullName = "Test Employee",
+            Role = HrService.Domain.Entities.Role.Employee
+        };
+        var employeeRepository = new Mock<IEmployeeRepository>();
+        employeeRepository
+            .Setup(repository => repository.GetActiveByEmailAsync(
+                employee.Email,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(employee);
+        var passwordHasher = new Mock<IPasswordHasher>();
+        passwordHasher.Setup(hasher => hasher.Verify(employee, "password")).Returns(true);
+        var refreshTokenRepository = new Mock<IRefreshTokenRepository>();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        unitOfWork
+            .Setup(work => work.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(1);
+        var tokenGenerator = new Mock<IJwtTokenGenerator>();
+        tokenGenerator
+            .Setup(generator => generator.GenerateToken(employee))
+            .Returns(new HrService.Application.Dtos.AuthenticationResponse(
+                "access-token",
+                DateTimeOffset.UtcNow.AddMinutes(15),
+                employee.FullName,
+                employee.Email,
+                employee.Id,
+                employee.Role.ToString()));
+
+        using var host = await CreateHostAsync(
+            employeeRepository,
+            passwordHasher,
+            refreshTokenRepository,
+            unitOfWork,
+            tokenGenerator);
+        using var client = host.GetTestClient();
+        using var content = new StringContent(
+            """{"email":"employee@example.com","password":"password"}""",
+            Encoding.UTF8,
+            "application/json");
+
+        var response = await client.PostAsync("/api/v1/auth/login", content);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains(
+            response.Headers.GetValues("Set-Cookie"),
+            cookie => cookie.Contains("HttpOnly", StringComparison.OrdinalIgnoreCase));
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("accessToken", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("refreshToken", body, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static async Task<IHost> CreateHostAsync(
-        Mock<IEmployeeRepository>? employeeRepository = null)
+        Mock<IEmployeeRepository>? employeeRepository = null,
+        Mock<IPasswordHasher>? passwordHasher = null,
+        Mock<IRefreshTokenRepository>? refreshTokenRepository = null,
+        Mock<IUnitOfWork>? unitOfWork = null,
+        Mock<IJwtTokenGenerator>? tokenGenerator = null)
     {
         employeeRepository ??= new Mock<IEmployeeRepository>();
         var departmentRepository = new Mock<IDepartmentRepository>();
         var leaveCatalogRepository = new Mock<ILeaveCatalogRepository>();
         var cache = new Mock<ILeaveCatalogCache>();
-        var unitOfWork = new Mock<IUnitOfWork>();
-        var passwordHasher = new Mock<IPasswordHasher>();
-        var tokenGenerator = new Mock<IJwtTokenGenerator>();
+        unitOfWork ??= new Mock<IUnitOfWork>();
+        passwordHasher ??= new Mock<IPasswordHasher>();
+        refreshTokenRepository ??= new Mock<IRefreshTokenRepository>();
+        tokenGenerator ??= new Mock<IJwtTokenGenerator>();
 
         var host = new HostBuilder()
             .ConfigureWebHost(webHost =>
@@ -125,7 +186,9 @@ public sealed class ApiIntegrationTests
                     services.AddSingleton<ILeaveCatalogCache>(cache.Object);
                     services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
                     services.AddSingleton<IPasswordHasher>(passwordHasher.Object);
+                    services.AddSingleton<IRefreshTokenRepository>(refreshTokenRepository.Object);
                     services.AddSingleton<IJwtTokenGenerator>(tokenGenerator.Object);
+                    services.AddSingleton(TimeProvider.System);
                 });
                 webHost.Configure(app =>
                 {
