@@ -231,6 +231,11 @@ public sealed class LeaveCatalogService(
             throw Problems.Invalid("leaveTypeId", "A policy cannot be created for an inactive leave type.");
         }
 
+        if (!leaveType.DeductsBalance)
+        {
+            throw Problems.Invalid("leaveTypeId", "Policies are only available for leave types that deduct a balance.");
+        }
+
         if (await repository.ExistsLeavePolicyAsync(
                 request.LeaveTypeId,
                 request.Year,
@@ -279,6 +284,11 @@ public sealed class LeaveCatalogService(
         if (!leaveType.IsActive)
         {
             throw Problems.Invalid("leaveTypeId", "A policy cannot be assigned to an inactive leave type.");
+        }
+
+        if (!leaveType.DeductsBalance)
+        {
+            throw Problems.Invalid("leaveTypeId", "Policies are only available for leave types that deduct a balance.");
         }
 
         if (await repository.ExistsLeavePolicyAsync(

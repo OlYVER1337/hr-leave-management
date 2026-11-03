@@ -186,16 +186,53 @@ public sealed class EmployeeServiceTests
         var employee = CreateEmployee(Guid.NewGuid());
         employee.IsActive = false;
         var repository = new Mock<IEmployeeRepository>();
+        var refreshTokenRepository = new Mock<IRefreshTokenRepository>();
         var unitOfWork = new Mock<IUnitOfWork>();
         repository
             .Setup(item => item.GetForUpdateByIdAsync(employee.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(employee);
-        var service = CreateService(repository, unitOfWork: unitOfWork);
+        var service = CreateService(
+            repository,
+            unitOfWork: unitOfWork,
+            refreshTokenRepository: refreshTokenRepository);
 
         var result = await service.DeactivateAsync(employee.Id);
 
         Assert.False(result.IsActive);
+        refreshTokenRepository.Verify(
+            item => item.RevokeAllAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeactivateAsync_RevokesAllRefreshTokensWhenDeactivatingEmployee()
+    {
+        var employee = CreateEmployee(Guid.NewGuid());
+        var repository = new Mock<IEmployeeRepository>();
+        var refreshTokenRepository = new Mock<IRefreshTokenRepository>();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        repository
+            .Setup(item => item.GetForUpdateByIdAsync(employee.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(employee);
+        var service = CreateService(
+            repository,
+            unitOfWork: unitOfWork,
+            refreshTokenRepository: refreshTokenRepository);
+
+        var result = await service.DeactivateAsync(employee.Id);
+
+        Assert.False(result.IsActive);
+        refreshTokenRepository.Verify(
+            item => item.RevokeAllAsync(
+                employee.Id,
+                It.IsAny<DateTime>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

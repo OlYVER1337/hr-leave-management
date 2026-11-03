@@ -14,6 +14,12 @@ namespace HrService.Tests;
 public sealed class RedisLeaveCatalogCacheTests
 {
     [Fact]
+    public void CacheOptions_DefaultExpirationIsThirtyMinutes()
+    {
+        Assert.Equal(1800, new CacheOptions().ExpirationSeconds);
+    }
+
+    [Fact]
     public async Task GetAsync_ReturnsCacheMissWhenRedisTimesOut()
     {
         var distributedCache = new Mock<IDistributedCache>();

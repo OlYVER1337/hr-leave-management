@@ -3,17 +3,18 @@
 ## 1. Kết quả kiểm thử hồi quy và tích hợp
 
 Backend được chạy lại ngày **03/11/2026** sau khi cập nhật Microsoft.Data.SqlClient
-6.1.8. Web test và production build được chạy lại ngày **03/11/2026** sau khi
-hoàn thiện dashboard và các luồng UI quản trị.
+6.1.8 và thêm kiểm tra TTL mặc định/thu hồi refresh token khi deactivate. Web test
+và production build được chạy lại ngày **03/11/2026** sau khi thêm kiểm thử cho
+Calendar và Departments.
 
 | Bộ kiểm thử | Kết quả gần nhất | Tích hợp thực |
 |---|---:|---|
-| HR Service (`HrService.slnx`) | 46/46 pass, 0 fail, 0 skip (03/11) | SQL Server và Redis |
+| HR Service (`HrService.slnx`) | 53/53 pass, 0 fail, 0 skip (03/11) | SQL Server và Redis |
 | Leave Service (`LeaveService.slnx`) | 25/25 pass, 0 fail, 0 skip (03/11) | SQL Server |
-| Web (Vitest) | 9/9 file, 25/25 test pass (03/11) | React Testing Library |
+| Web (Vitest) | 11/11 file, 31/31 test pass (03/11) | React Testing Library |
 | Web production build | Thành công (03/11) | TypeScript check và Vite build |
 
-Lượt backend mới nhất có **71 test pass**, không fail hoặc skip. Hai test suite
+Lượt backend mới nhất có **78 test pass**, không fail hoặc skip. Hai test suite
 tạo database tích hợp với tên ngẫu nhiên rồi xóa database đó khi hoàn tất; HR
 integration test dùng Redis database 15. Chỉ chạy các test này trên SQL Server
 và Redis dành riêng cho kiểm thử, không dùng dịch vụ production.
@@ -59,6 +60,7 @@ docker run --rm --volume "${web}:/src:ro" node:20-alpine sh -c `
 - [K6 JSON, SQL-authoritative 100 VU](./evidence/diagnostics-sql-reads-100vu.json)
 - [Container CPU/memory mẫu mỗi khoảng 5–7 giây](./evidence/diagnostics-containers.csv)
 - [SQL cached-plan và runtime summary](./evidence/sql-query-plan-summary.txt)
+- [Workforce load summary, gồm lỗi phát hiện ở 100 VU](./evidence/workforce-load-summary.json)
 - [Redis ON/OFF benchmark ban đầu](../performance/redis-performance.md)
 
 ### Cảnh báo trong lúc kiểm thử
@@ -212,7 +214,42 @@ khi có API tương ứng. HR không được tạo đơn nghỉ; xác nhận ro
 điều hướng về dashboard và CTA không xuất hiện với vai trò HR. Dùng đúng màn hình/API đã được xác nhận trong
 [tài liệu UI](../README.md).
 
-## 4. Checklist nghiệm thu
+## 4. Đối chiếu bảng yêu cầu dự án
+
+| Yêu cầu | Trạng thái hiện tại | Bằng chứng / việc còn lại |
+|---|---|---|
+| Hai microservice, database tách biệt, giao tiếp REST | Đạt | HR Service sở hữu `HR_DB`; Leave Service sở hữu `Leave_DB`; Leave gọi HR API |
+| ASP.NET Core, React/TypeScript, EF Core, migrations, OpenAPI | Đạt | Hai solution .NET 10, Vite/React, EF migrations và OpenAPI ở Development |
+| JWT, phân quyền và vòng đời token | Đạt một phần | Có role authorization, refresh rotation/revocation và test; JWT access đã cấp vẫn hợp lệ tới khi hết hạn (mặc định 1 phút) |
+| Nghiệp vụ HR | Đạt | CRUD nhân viên/phòng ban, quản lý trực tiếp, danh mục nghỉ/ngày lễ và kiểm tra dữ liệu |
+| Nghiệp vụ nghỉ phép | Đạt | Tạo/xem/hủy/duyệt/từ chối, số dư, phân bổ năm, ngày làm việc và history |
+| Tính đồng thời | Đạt | SQL integration test cho tạo đơn cạnh tranh, trùng ngày và quyết định cạnh tranh |
+| Redis catalog cache | Đạt | Ba nhóm cache, key riêng, TTL mặc định 30 phút, invalidation, SQL fallback và authoritative reads |
+| Redis outage | Đạt | Ba catalog endpoint trả HTTP 200 khi Redis dừng; kết quả smoke được ghi ở mục 2 |
+| Load test 50/100 VU, 5 phút, Redis ON/OFF | Catalog đạt; workforce đã đo ON, 100 VU còn lỗi | Catalog benchmark đã có ON/OFF. Workforce: 50 VU 0 lỗi; 100 VU có 21 HTTP 500 (0,31%); chưa chạy Redis OFF cho workload này |
+| Docker Compose, healthcheck, README | Đạt | Compose, Dockerfile, `.env.example`, volume và hướng dẫn chạy đã có |
+| Design System và giao diện | Tài liệu/test có; nghiệm thu trực quan còn mở | Có Design System, wireframe và UI test; chưa có chữ ký nghiệm thu thủ công responsive/accessibility |
+| Bàn giao tài liệu | Đạt về tài liệu kỹ thuật | Có sơ đồ, ERD, sequence, Redis/performance, TRX, README và [hướng dẫn sử dụng/test/demo](../USER-GUIDE.md); còn kết quả workforce benchmark và sign-off giao diện |
+
+### Điểm cần lưu ý
+
+- Deactivate nhân viên sẽ đánh dấu tài khoản không hoạt động và thu hồi toàn bộ
+  refresh token. Vì access JWT được xác thực stateless ở cả hai service, token
+  đã phát hành không bị thu hồi tức thời; nó còn hiệu lực đến `exp`. Cấu hình
+  mặc định hiện là 1 phút; benchmark riêng có thể tăng thời hạn token để chạy
+  đủ lượt. Muốn thu hồi access token ngay cần một thiết kế revocation chung và
+  đánh đổi đặc tính không gọi HR ở mỗi request.
+- TTL trong bảng yêu cầu người dùng gửi là 30 phút. Cấu hình mặc định trước đây
+  là 5 phút; đã đổi default thành 30 phút và bổ sung test. Benchmark catalog cũ
+  vẫn hợp lệ cho workload warm-cache, nhưng cần rebuild service để áp dụng
+  default mới trong runtime.
+- `workforce.js` chỉ đọc dữ liệu. Trên 1.000 nhân viên/5.000 đơn, lượt 50 VU
+  trong 5 phút có 0 lỗi; lượt 100 VU trong 5 phút có 21 HTTP 500 (0,31%), p95
+  11,05 giây. Lượt 100 VU không được coi là đạt không lỗi; cần điều tra và chạy
+  lại. Redis OFF cho workforce chưa được đo. Chi tiết ở
+  [workforce load summary](./evidence/workforce-load-summary.json).
+
+## 5. Checklist nghiệm thu
 
 `[x]` nghĩa là đã có bằng chứng test hoặc kiểm tra trực tiếp trong lượt kỹ
 thuật; không thay thế việc người hướng dẫn/nghiệm thu xác nhận trải nghiệm UI.
@@ -221,27 +258,30 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
 | Xong | Hạng mục | Kỳ vọng khi nghiệm thu | Bằng chứng/tham chiếu |
 |---|---|---|---|
 | [x] | Dựng môi trường | Compose chạy Web, HR, Leave, SQL Server, Redis; healthcheck đạt | [README chạy hệ thống](../README.md), kiểm tra `hrbench` 03/11 |
-| [ ] | Tài khoản và phân quyền | HR/Manager/Employee đăng nhập được; route và API chặn đúng vai trò/phạm vi | HR API tests, `App.tsx` |
-| [ ] | Quản trị nhân sự | HR tạo/sửa nhân viên, phòng ban và quản lý trực tiếp | Trang `/employees`, `/departments`; HR tests |
-| [ ] | Chính sách nghỉ | HR cấu hình loại nghỉ, hạn mức năm và ngày lễ | Trang `/policies`; [Redis report](../performance/redis-performance.md) |
+| [x] | Tài khoản và phân quyền theo role | API/UI chặn đúng vai trò/phạm vi; refresh token bị thu hồi khi deactivate | HR API tests, `App.tsx`, `EmployeeServiceTests`; access JWT còn hiệu lực đến expiry |
+| [x] | Quản trị nhân sự | HR tạo/sửa nhân viên, phòng ban và quản lý trực tiếp | `/employees`, `/departments`; HR tests |
+| [x] | Chính sách nghỉ | HR quản lý loại chuẩn, hạn mức năm và ngày lễ | `/policies`; [Redis report](../performance/redis-performance.md) |
 | [x] | Số dư cá nhân | Employee thấy hạn mức, đã dùng, đang chờ và khả dụng | Leave tests; đọc lại số dư sau demo API |
 | [x] | Tạo đơn hợp lệ | Ngày kết thúc không trước ngày bắt đầu; chỉ tính ngày làm việc; tạo trạng thái Pending | `RequestLeavePage`; Leave tests; demo API |
 | [x] | Đơn không hợp lệ | Đơn trùng ngày, ngày không hợp lệ, số dư thiếu và tổng ngày bằng 0 bị từ chối | Leave service tests |
 | [x] | Hủy đơn | Employee chỉ hủy đơn Pending của mình; số dư và lịch sử cập nhật cùng giao dịch | Leave persistence integration tests |
 | [x] | Phê duyệt/từ chối | Chỉ người duyệt hợp lệ xử lý; đơn chỉ chuyển trạng thái một lần; có history | Approvals page; Leave persistence tests; demo API approve |
 | [x] | Concurrency | Hai yêu cầu vượt số dư hoặc hai quyết định cạnh tranh không làm sai số dư/trạng thái | [Leave TRX](./evidence/dotnet/leave/leave-service.trx) |
-| [ ] | Lịch và thống kê | Đơn Pending/Approved và ngày lễ xuất hiện đúng trên lịch/dashboard | `CalendarPage`, `DashboardPage` |
+| [x] | Lịch và thống kê — automated | Đơn Pending/Approved và ngày lễ được hiển thị trên lịch/dashboard | `CalendarPage.test.tsx`, `DashboardPage.test.tsx` |
+| [ ] | Lịch và thống kê — visual sign-off | Người nghiệm thu xác nhận hiển thị, responsive và trạng thái trực quan trên browser | Chờ chạy nghiệm thu UI trực tiếp |
 | [x] | Redis cache | Tối thiểu 2 nhóm dữ liệu có key/TTL/invalidation; cache miss đọc SQL | [Redis report](../performance/redis-performance.md) |
 | [x] | Redis outage | Catalog vẫn đọc được từ SQL; nghiệp vụ không dựa cache cũ | [Redis report](../performance/redis-performance.md) |
 | [x] | HR outage | Tác vụ cần HR trả lỗi dependency phù hợp và không lưu đơn dở dang | `HrServiceOutageTests`; [Redis report](../performance/redis-performance.md) |
-| [x] | Regression backend | HR 46/46 và Leave 25/25 pass; không skip khi có test dependencies | Hai file TRX trong `evidence/dotnet/` (03/11) |
-| [x] | Regression frontend | 25 UI tests pass và production build thành công | Vitest/build (03/11), báo cáo mục 1 |
-| [ ] | Load test Redis ON/OFF | 50 và 100 VU, 5 phút mỗi lượt; báo cáo RPS/p50/p95/error và cấu hình máy | [Redis performance report](../performance/redis-performance.md) |
+| [x] | Regression backend | HR 53/53 và Leave 25/25 pass; không skip khi có test dependencies | Lượt chạy HR mới nhất; TRX lưu sẵn trong `evidence/dotnet/` |
+| [x] | Regression frontend | 31 UI tests pass và production build thành công | Vitest/build lượt mới nhất, báo cáo mục 1 |
+| [x] | Load test catalog Redis ON/OFF | 50 và 100 VU, 5 phút mỗi lượt; báo cáo RPS/p50/p95/error và cấu hình máy | [Redis performance report](../performance/redis-performance.md) |
+| [x] | Load test workforce — Redis ON | 50/100 VU, 5 phút, dataset 1.000 nhân viên/5.000 đơn | 50 VU 0 lỗi; 100 VU 21 HTTP 500; [summary](./evidence/workforce-load-summary.json) |
+| [ ] | Load test workforce — hoàn thiện | Điều tra HTTP 500 ở 100 VU; chạy lại 100 VU và đo Redis OFF | `scripts/load-test/workforce.js`; hiện threshold 0,1% |
 | [x] | Bottleneck | Đọc được CPU/container, SQL runtime và plan; không thêm index nếu chưa có bằng chứng | `evidence/diagnostics-*`, `evidence/sql-query-plan-summary.txt` |
-| [ ] | Thiết kế và bàn giao | ERD, kiến trúc, API/OpenAPI, Design System, wireframe, README được trình bày | [UI docs](../README.md), [architecture diagrams](../architecture/README.md) |
+| [x] | Tài liệu thiết kế và bàn giao | ERD, kiến trúc, API/OpenAPI, Design System, wireframe, README, hướng dẫn sử dụng | [Docs index](../README.md), [architecture diagrams](../architecture/README.md), [user guide](../USER-GUIDE.md) |
 | [x] | Chạy demo an toàn | API mode thật; dùng dataset demo; không reset volume hoặc dùng secret production | Luồng API `hrbench` 03/11; checklist chuẩn bị demo phía trên |
 
-## 5. Bảo toàn dữ liệu khi chạy lại
+## 6. Bảo toàn dữ liệu khi chạy lại
 
 - Chỉ chạy seed/load test trên Compose project cô lập `hrbench` hoặc stack được
   tạo riêng cho kiểm thử.

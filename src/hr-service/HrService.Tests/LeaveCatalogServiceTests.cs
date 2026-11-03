@@ -286,6 +286,30 @@ public sealed class LeaveCatalogServiceTests
     }
 
     [Fact]
+    public async Task CreateLeavePolicyAsync_RejectsUnpaidLeaveTypeWithoutSaving()
+    {
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        repository
+            .Setup(item => item.GetLeaveTypeForUpdateByIdAsync(4, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new LeaveType
+            {
+                Id = 4,
+                Code = "UNPAID",
+                IsActive = true,
+                DeductsBalance = false
+            });
+        var service = CreateService(repository, new InMemoryLeaveCatalogCache(), unitOfWork);
+
+        var exception = await Assert.ThrowsAsync<RequestValidationException>(
+            () => service.CreateLeavePolicyAsync(new LeavePolicyRequest(4, 2026, 12m)));
+
+        Assert.Contains("leaveTypeId", exception.Errors.Keys);
+        repository.Verify(item => item.Add(It.IsAny<LeavePolicy>()), Times.Never);
+        unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task CreateLeavePolicyAsync_RejectsPolicyForCustomLeaveType()
     {
         var repository = new Mock<ILeaveCatalogRepository>();
@@ -300,6 +324,39 @@ public sealed class LeaveCatalogServiceTests
 
         Assert.Contains("leaveTypeId", exception.Errors.Keys);
         repository.Verify(item => item.Add(It.IsAny<LeavePolicy>()), Times.Never);
+        unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateLeavePolicyAsync_RejectsUnpaidLeaveTypeWithoutSaving()
+    {
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        repository
+            .Setup(item => item.GetLeavePolicyForUpdateByIdAsync(9, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new LeavePolicy
+            {
+                Id = 9,
+                LeaveTypeId = 1,
+                LeaveType = new LeaveType { Id = 1, Code = "ANNUAL", DeductsBalance = true },
+                Year = 2026,
+                DaysPerYear = 12m
+            });
+        repository
+            .Setup(item => item.GetLeaveTypeForUpdateByIdAsync(3, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new LeaveType
+            {
+                Id = 3,
+                Code = "UNPAID",
+                IsActive = true,
+                DeductsBalance = false
+            });
+        var service = CreateService(repository, new InMemoryLeaveCatalogCache(), unitOfWork);
+
+        var exception = await Assert.ThrowsAsync<RequestValidationException>(
+            () => service.UpdateLeavePolicyAsync(9, new LeavePolicyRequest(3, 2026, 12m)));
+
+        Assert.Contains("leaveTypeId", exception.Errors.Keys);
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 

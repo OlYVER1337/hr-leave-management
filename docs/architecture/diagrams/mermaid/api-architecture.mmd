@@ -6,7 +6,6 @@ flowchart TB
   HR --> HRDB[("HR_DB")]
   LV --> LVDB[("Leave_DB")]
   HR -.->|"cache loại phép,<br/>chính sách, ngày lễ"| R[("Redis<br/>cache đọc, có fallback")]
-  LV -.->|"cache dữ liệu tra cứu,<br/>thống kê"| R
   subgraph SQL["SQL Server container (2 database riêng)"]
     HRDB
     LVDB

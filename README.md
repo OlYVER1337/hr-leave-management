@@ -31,6 +31,12 @@ Hệ thống quản lý nhân sự và nghỉ phép, được xây dựng theo k
 
 ## 2. Kiến trúc và cấu trúc thư mục
 
+Tài liệu bàn giao theo hạng mục: [System design](docs/architecture/SYSTEM_DESIGN.md),
+[Database design](docs/architecture/DATABASE_DESIGN.md),
+[API reference](docs/API_REFERENCE.md), [Design System](docs/design/DESIGN_SYSTEM.md),
+[Redis/performance report](docs/performance/redis-performance.md) và
+[Handover checklist](docs/HANDOFF.md).
+
 ```text
 hr-leave-management/
 ├── docker-compose.yml

@@ -13,6 +13,9 @@ kịch bản demo**.
 ## 2. Kiến trúc và sơ đồ
 
 - [Danh mục sơ đồ kiến trúc và database](architecture/README.md): kiến trúc tổng thể, ERD và sequence diagram; mỗi sơ đồ có source Mermaid và bản xem PNG/SVG.
+- [System design](architecture/SYSTEM_DESIGN.md): trách nhiệm service, quyền sở hữu dữ liệu, luồng giao tiếp và xử lý lỗi.
+- [Database design](architecture/DATABASE_DESIGN.md): schema, index, constraints, migrations và seed data.
+- [API reference](API_REFERENCE.md): endpoint theo service/role, ví dụ request/response, lỗi và OpenAPI.
 
 ## 3. Giao diện
 
@@ -29,6 +32,7 @@ kịch bản demo**.
 ## 5. Hướng dẫn chạy hệ thống
 
 - [README dự án](../README.md): cấu hình môi trường, Docker Compose, tài khoản khởi tạo và lệnh test.
+- [Handover checklist](HANDOFF.md): trạng thái 9 hạng mục bàn giao và các việc cần chốt trước sign-off.
 
 ## Quy ước cập nhật
 

@@ -1,0 +1,58 @@
+{
+  "date": "2026-11-03",
+  "composeProject": "hrbench",
+  "dataset": {
+    "employees": 1000,
+    "leaveRequests": 5000
+  },
+  "cacheEnabled": true,
+  "scenario": {
+    "type": "constant-vus",
+    "routes": [
+      "HR employee list",
+      "HR leave request list",
+      "HR leave calendar",
+      "Manager approvals inbox"
+    ],
+    "sleepSeconds": 0.1
+  },
+  "results": [
+    {
+      "vus": 1,
+      "duration": "10s",
+      "requests": 45,
+      "rps": 3.07,
+      "p50Ms": 155.875,
+      "p95Ms": 504.2,
+      "httpErrorRate": 0,
+      "httpErrors": 0,
+      "purpose": "Smoke test only"
+    },
+    {
+      "vus": 50,
+      "duration": "5m",
+      "requests": 6919,
+      "rps": 22.8413,
+      "p50Ms": 2014.1428,
+      "p95Ms": 4701.1102,
+      "httpErrorRate": 0,
+      "httpErrors": 0
+    },
+    {
+      "vus": 100,
+      "duration": "5m",
+      "requests": 6837,
+      "rps": 20.0772,
+      "p50Ms": 4212.6947,
+      "p95Ms": 11054.7076,
+      "httpErrorRate": 0.0030715,
+      "httpErrors": 21,
+      "outcome": "Not clean: HTTP 500 responses observed"
+    }
+  ],
+  "notes": [
+    "The 100-VU run returned generic ProblemDetails for HTTP 500 responses; a specific server-side cause was not identified from the available logs.",
+    "The workload script threshold is now http_req_failed < 0.001 (0.1%), so a similar error rate fails the benchmark.",
+    "These results are for the isolated local benchmark stack and are not a production capacity guarantee."
+  ]
+}

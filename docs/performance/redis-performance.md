@@ -13,11 +13,12 @@ HR Service lưu cache ba nhóm dữ liệu danh mục sau:
 
 | Nhóm dữ liệu | Redis key | TTL mặc định | Cơ chế invalidation |
 |---|---|---:|---|
-| Loại nghỉ phép | `hr:catalog:leave-types` | 300 giây | Xóa cache khi tạo/cập nhật loại nghỉ; cập nhật loại nghỉ cũng xóa cache chính sách |
-| Chính sách nghỉ phép | `hr:catalog:leave-policies` | 300 giây | Xóa cache khi tạo/cập nhật chính sách hoặc cập nhật loại nghỉ liên quan |
-| Ngày lễ | `hr:catalog:holidays` | 300 giây | Xóa cache khi tạo/cập nhật/xóa ngày lễ |
+| Loại nghỉ phép | `hr:catalog:leave-types` | 1.800 giây (30 phút) | Xóa cache khi tạo/cập nhật loại nghỉ; cập nhật loại nghỉ cũng xóa cache chính sách |
+| Chính sách nghỉ phép | `hr:catalog:leave-policies` | 1.800 giây (30 phút) | Xóa cache khi tạo/cập nhật chính sách hoặc cập nhật loại nghỉ liên quan |
+| Ngày lễ | `hr:catalog:holidays` | 1.800 giây (30 phút) | Xóa cache khi tạo/cập nhật/xóa ngày lễ |
 
 `Cache:ExpirationSeconds` cấu hình TTL chung, trong khoảng từ 1 đến 3.600 giây.
+Giá trị mặc định là 1.800 giây (30 phút).
 Khi cache miss, dịch vụ đọc SQL Server, trả kết quả và thử ghi dữ liệu vào Redis.
 Lỗi đọc, ghi hoặc xóa cache được ghi log; khi Redis lỗi, thao tác đọc quay về
 SQL và các thao tác ghi dữ liệu vẫn tiếp tục qua SQL. Nếu không thể invalidation
@@ -89,6 +90,42 @@ docker compose @compose up -d --force-recreate hr-service
 docker compose @compose run --rm -e VUS=50 -e DURATION=5m k6 run /scripts/catalog.js
 docker compose @compose run --rm -e VUS=100 -e DURATION=5m k6 run /scripts/catalog.js
 ```
+
+### Workload danh sách nhân viên và đơn nghỉ
+
+`scripts/load-test/workforce.js` đo các API đọc trên dataset đã seed: danh sách
+nhân viên, tất cả đơn nghỉ và lịch nghỉ bằng tài khoản HR, cùng hộp thư phê duyệt
+bằng tài khoản Manager. Workload chỉ đọc dữ liệu, không tạo hoặc thay đổi đơn.
+Seed từ 1.000 nhân viên và 1–20 đơn mỗi nhân viên bằng `seed-scale-data.sql` trước
+khi chạy; kiểm tra có HR/Manager hoạt động và cấu hình email/mật khẩu riêng trong
+`.env`. Kết quả workload này cần được báo cáo riêng, không gộp vào số liệu
+catalog bên dưới.
+
+```powershell
+docker compose @compose run --rm -e VUS=50 -e DURATION=5m k6 run /scripts/workforce.js
+docker compose @compose run --rm -e VUS=100 -e DURATION=5m k6 run /scripts/workforce.js
+```
+
+Chạy lại hai mức trên khi `CACHE_ENABLED=false` nếu cần so sánh ON/OFF. Dùng
+Compose project `hrbench` cô lập như các lệnh bên trên. Đã chạy workforce
+benchmark Redis ON ngày 03/11/2026 trên 1.000 nhân viên và 5.000 đơn nghỉ:
+
+| VU | Thời lượng | Requests | RPS | p50 (ms) | p95 (ms) | HTTP lỗi |
+|---:|---:|---:|---:|---:|---:|---:|
+| 50 | 5 phút | 6.919 | 22,84 | 2.014 | 4.701 | 0% |
+| 100 | 5 phút | 6.837 | 20,08 | 4.213 | 11.055 | 0,31% (21 HTTP 500) |
+
+Ở 100 VU, ba endpoint đọc của Leave Service có trả HTTP 500 trong một số request;
+API response chỉ có ProblemDetails tổng quát và log service không cung cấp được
+nguyên nhân cụ thể từ lượt đo. Vì vậy không coi lượt 100 VU là đạt không lỗi.
+Script hiện đặt ngưỡng `http_req_failed < 0,1%` để lượt chạy có tỷ lệ lỗi tương
+tự trả trạng thái thất bại. Cần điều tra lỗi và chạy lại sau khi khắc phục.
+Đây là workload đọc đồng đều bốn route, không phải mô phỏng tần suất người dùng
+production; percentile chịu ảnh hưởng lớn từ các response danh sách lớn.
+
+Kết quả smoke-test 1 VU/10 giây là 45 request, 0 lỗi; không dùng smoke-test làm
+thay thế cho các lượt 5 phút. Tóm tắt có thể tái kiểm tra tại
+[workforce load summary](../testing/evidence/workforce-load-summary.json).
 
 Sau khi đổi `CACHE_ENABLED`, cần đợi `hr-service` healthy. Khôi phục cache ON cho
 stack benchmark rồi chỉ xóa Compose project `hrbench` cùng các volume của project:

@@ -101,7 +101,10 @@ Role badge là thông tin phân loại, không phải status tài khoản.
 | SICK | Nghỉ ốm | Violet \`#9c7de8\` |
 | UNPAID | Nghỉ không lương | Amber \`#e0a340\` |
 
-Các loại nghỉ được nạp từ HR Service ở API mode; ba loại trên cũng là fallback/demo seed. Không hard-code giả định rằng hệ thống chỉ có đúng ba loại nếu backend đã cho phép HR tạo thêm Leave Type.
+Các loại nghỉ được nạp từ HR Service ở API mode; hệ thống chỉ hỗ trợ ba mã chuẩn
+`ANNUAL`, `SICK` và `UNPAID`. HR có thể khôi phục loại chuẩn còn thiếu, nhưng
+backend từ chối mã loại nghỉ tùy ý. Chỉ loại trừ phép khỏi số dư được phép có
+chính sách ngày phép theo năm.
 
 ### 3.5. Semantic states
 

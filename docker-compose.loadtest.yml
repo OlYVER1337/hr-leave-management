@@ -30,5 +30,7 @@ services:
       HR_BASE_URL: http://hr-service:8080
       HR_EMAIL: ${INITIAL_HR_EMAIL}
       HR_PASSWORD: ${INITIAL_HR_PASSWORD}
+      MANAGER_EMAIL: ${DEMO_MANAGER_EMAIL}
+      MANAGER_PASSWORD: ${DEMO_MANAGER_PASSWORD}
     volumes:
       - ./scripts/load-test:/scripts:ro
