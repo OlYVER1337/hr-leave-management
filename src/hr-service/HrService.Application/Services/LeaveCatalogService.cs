@@ -10,6 +10,14 @@ public sealed class LeaveCatalogService(
     ILeaveCatalogCache cache,
     IUnitOfWork unitOfWork)
 {
+    private static readonly IReadOnlyDictionary<string, (string Name, bool IsPaid, bool DeductsBalance)> BuiltInLeaveTypes =
+        new Dictionary<string, (string Name, bool IsPaid, bool DeductsBalance)>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ANNUAL"] = ("Nghỉ phép năm", true, true),
+            ["SICK"] = ("Nghỉ ốm", true, true),
+            ["UNPAID"] = ("Nghỉ không lương", false, false)
+        };
+
     private const string LeaveTypesCacheKey = "hr:catalog:leave-types";
     private const string LeavePoliciesCacheKey = "hr:catalog:leave-policies";
     private const string HolidaysCacheKey = "hr:catalog:holidays";
@@ -29,9 +37,10 @@ public sealed class LeaveCatalogService(
             },
             cancellationToken);
 
+        var builtInTypes = leaveTypes.Where(leaveType => IsBuiltInLeaveType(leaveType.Code));
         return includeInactive
-            ? leaveTypes
-            : leaveTypes.Where(leaveType => leaveType.IsActive).ToArray();
+            ? builtInTypes.ToArray()
+            : builtInTypes.Where(leaveType => leaveType.IsActive).ToArray();
     }
 
     public async Task<IReadOnlyList<LeaveTypeResponse>> GetAuthoritativeLeaveTypesAsync(
@@ -39,7 +48,10 @@ public sealed class LeaveCatalogService(
         CancellationToken cancellationToken = default)
     {
         var entities = await repository.ListLeaveTypesAsync(includeInactive, cancellationToken);
-        return entities.Select(ToResponse).ToArray();
+        return entities
+            .Where(leaveType => IsBuiltInLeaveType(leaveType.Code))
+            .Select(ToResponse)
+            .ToArray();
     }
 
     public async Task<LeaveTypeResponse> GetLeaveTypeByIdAsync(
@@ -55,7 +67,8 @@ public sealed class LeaveCatalogService(
                     cancellationToken);
                 return entities.Select(ToResponse).ToArray();
             },
-            cancellationToken)).FirstOrDefault(item => item.Id == id)
+            cancellationToken))
+            .FirstOrDefault(item => item.Id == id && IsBuiltInLeaveType(item.Code))
             ?? throw new NotFoundException($"Leave type with id '{id}' was not found.");
         return leaveType;
     }
@@ -66,6 +79,11 @@ public sealed class LeaveCatalogService(
     {
         var leaveType = await repository.GetLeaveTypeByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException($"Leave type with id '{id}' was not found.");
+        if (!IsBuiltInLeaveType(leaveType.Code))
+        {
+            throw new NotFoundException($"Leave type with id '{id}' was not found.");
+        }
+
         return ToResponse(leaveType);
     }
 
@@ -73,10 +91,15 @@ public sealed class LeaveCatalogService(
         CreateLeaveTypeRequest request,
         CancellationToken cancellationToken = default)
     {
-        var (code, name) = ValidateLeaveType(request.Code, request.Name);
-        if (code == "UNPAID" && request.IsPaid)
+        var (code, _) = ValidateLeaveType(request.Code, request.Name);
+        if (!BuiltInLeaveTypes.TryGetValue(code, out var definition))
         {
-            throw Problems.Invalid("isPaid", "The UNPAID leave type cannot be paid.");
+            throw Problems.Invalid("code", "Only ANNUAL, SICK and UNPAID leave types are supported.");
+        }
+
+        if (request.IsPaid != definition.IsPaid || request.DeductsBalance != definition.DeductsBalance)
+        {
+            throw Problems.Invalid("code", "The built-in leave type properties cannot be changed.");
         }
 
         if (await repository.ExistsLeaveTypeCodeAsync(code, cancellationToken: cancellationToken))
@@ -87,9 +110,9 @@ public sealed class LeaveCatalogService(
         var leaveType = new LeaveType
         {
             Code = code,
-            Name = name,
-            IsPaid = request.IsPaid,
-            DeductsBalance = request.DeductsBalance,
+            Name = definition.Name,
+            IsPaid = definition.IsPaid,
+            DeductsBalance = definition.DeductsBalance,
             IsActive = true
         };
         repository.Add(leaveType);
@@ -105,15 +128,14 @@ public sealed class LeaveCatalogService(
     {
         var leaveType = await repository.GetLeaveTypeForUpdateByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException($"Leave type with id '{id}' was not found.");
-        var name = ValidateLeaveTypeName(request.Name);
-        if (leaveType.Code == "UNPAID" && request.IsPaid)
+        if (!BuiltInLeaveTypes.TryGetValue(leaveType.Code, out var definition))
         {
-            throw Problems.Invalid("isPaid", "The UNPAID leave type cannot be paid.");
+            throw new NotFoundException($"Leave type with id '{id}' was not found.");
         }
 
-        leaveType.Name = name;
-        leaveType.IsPaid = request.IsPaid;
-        leaveType.DeductsBalance = request.DeductsBalance;
+        leaveType.Name = definition.Name;
+        leaveType.IsPaid = definition.IsPaid;
+        leaveType.DeductsBalance = definition.DeductsBalance;
         leaveType.IsActive = request.IsActive;
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -138,9 +160,10 @@ public sealed class LeaveCatalogService(
             },
             cancellationToken);
 
+        var builtInPolicies = policies.Where(policy => IsBuiltInLeaveType(policy.LeaveTypeCode));
         return year.HasValue
-            ? policies.Where(policy => policy.Year == year.Value).ToArray()
-            : policies;
+            ? builtInPolicies.Where(policy => policy.Year == year.Value).ToArray()
+            : builtInPolicies.ToArray();
     }
 
     public async Task<LeavePolicyResponse> GetLeavePolicyByIdAsync(
@@ -156,7 +179,8 @@ public sealed class LeaveCatalogService(
                     cancellationToken);
                 return entities.Select(ToResponse).ToArray();
             },
-            cancellationToken)).FirstOrDefault(item => item.Id == id)
+            cancellationToken))
+            .FirstOrDefault(item => item.Id == id && IsBuiltInLeaveType(item.LeaveTypeCode))
             ?? throw new NotFoundException($"Leave policy with id '{id}' was not found.");
         return policy;
     }
@@ -167,7 +191,10 @@ public sealed class LeaveCatalogService(
     {
         ValidateYear(year);
         var policies = await repository.ListLeavePoliciesAsync(year, cancellationToken);
-        return policies.Select(ToResponse).ToArray();
+        return policies
+            .Where(policy => policy.LeaveType is not null && IsBuiltInLeaveType(policy.LeaveType.Code))
+            .Select(ToResponse)
+            .ToArray();
     }
 
     public async Task<LeavePolicyResponse> GetAuthoritativeLeavePolicyByIdAsync(
@@ -176,6 +203,11 @@ public sealed class LeaveCatalogService(
     {
         var policy = await repository.GetLeavePolicyForUpdateByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException($"Leave policy with id '{id}' was not found.");
+        if (policy.LeaveType is null || !IsBuiltInLeaveType(policy.LeaveType.Code))
+        {
+            throw new NotFoundException($"Leave policy with id '{id}' was not found.");
+        }
+
         return ToResponse(policy);
     }
 
@@ -188,6 +220,11 @@ public sealed class LeaveCatalogService(
             request.LeaveTypeId,
             cancellationToken)
             ?? throw new NotFoundException($"Leave type with id '{request.LeaveTypeId}' was not found.");
+
+        if (!IsBuiltInLeaveType(leaveType.Code))
+        {
+            throw Problems.Invalid("leaveTypeId", "Policies are limited to the built-in leave types.");
+        }
 
         if (!leaveType.IsActive)
         {
@@ -224,10 +261,20 @@ public sealed class LeaveCatalogService(
         ValidatePolicy(request);
         var policy = await repository.GetLeavePolicyForUpdateByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException($"Leave policy with id '{id}' was not found.");
+        if (policy.LeaveType is null || !IsBuiltInLeaveType(policy.LeaveType.Code))
+        {
+            throw new NotFoundException($"Leave policy with id '{id}' was not found.");
+        }
+
         var leaveType = await repository.GetLeaveTypeForUpdateByIdAsync(
             request.LeaveTypeId,
             cancellationToken)
             ?? throw new NotFoundException($"Leave type with id '{request.LeaveTypeId}' was not found.");
+
+        if (!IsBuiltInLeaveType(leaveType.Code))
+        {
+            throw Problems.Invalid("leaveTypeId", "Policies are limited to the built-in leave types.");
+        }
 
         if (!leaveType.IsActive)
         {
@@ -406,6 +453,9 @@ public sealed class LeaveCatalogService(
         errors.ThrowIfAny();
         return (code!, ValidateLeaveTypeName(nameValue));
     }
+
+    private static bool IsBuiltInLeaveType(string code) =>
+        BuiltInLeaveTypes.ContainsKey(code);
 
     private static string ValidateLeaveTypeName(string value)
     {

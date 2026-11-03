@@ -384,16 +384,15 @@ Tab Loại nghỉ & hạn mức:
     │ 12 ngày / năm        │ 10 ngày / năm        │ Không giới hạn                │
     │ Hưởng lương          │ Hưởng lương          │ Không hưởng lương             │
     │ Trừ số dư            │ Trừ số dư            │ Không trừ số dư               │
-    │ [Sửa chính sách]     │ [Sửa chính sách]     │ [Sửa chính sách]              │
+    │ [Sửa hạn mức]        │ [Sửa hạn mức]        │                               │
     └──────────────────────┴─────────────────────┴───────────────────────────────┘
 
-Policy edit modal:
-- Tên hiển thị.
-- Days per year (disabled khi không deduct balance).
-- Paid checkbox; UNPAID bị khóa false.
-- Deducts balance checkbox.
-- Is active checkbox.
-- Save.
+    Chỉ có ba loại nghỉ cố định: `ANNUAL`, `SICK`, `UNPAID`. Không tạo hoặc xóa
+    loại tùy ý. Nếu thiếu một loại chuẩn, HR có thể thêm lại loại và hạn mức mặc
+    định; loại đã cấu hình chỉ có thể sửa hạn mức.
+
+    Policy edit modal chỉ cho phép sửa số ngày mỗi năm; tên và thuộc tính loại nghỉ
+    được cố định.
 
 Tab Ngày nghỉ lễ:
 
@@ -501,7 +500,7 @@ Endpoints are relative to each service's API base URL.
 | Đã xử lý | Export buttons chỉ toast báo API chưa có | Disable và ghi rõ chưa khả dụng cho tới khi có endpoint |
 | Đã xử lý | Notification bell không có click handler | Disable, bỏ dấu chấm thông báo giả và ghi rõ chưa khả dụng |
 | Đã xử lý | HR có thể mở /request dù chính sách không cho tự gửi đơn | Chặn route và ẩn CTA tạo đơn ở dashboard/lịch đối với HR |
-| Đã xử lý | UI không thể tạo Leave Type dù API có POST | Thêm flow tạo loại nghỉ; HR có thể cấu hình hạn mức năm sau khi tạo |
+| Đã xử lý | Có thể tạo các loại nghỉ ngoài danh mục nghiệp vụ | Giới hạn danh mục ở `ANNUAL`, `SICK`, `UNPAID`; xóa để ngừng hoạt động và cho phép khôi phục loại chuẩn |
 | Hoãn theo quyết định | API reset password employee có nhưng UI thiếu | Chỉ thêm HR action sau khi backend hỗ trợ mật khẩu tạm thời và bắt buộc đổi mật khẩu |
 | Đã xử lý | “Cài đặt” điều hướng tới /policies | Đổi thành “Chính sách nghỉ phép” và chỉ hiện với HR |
 | P2 | Danh sách nhân viên và hộp thư phê duyệt phân trang phía client, chọn 10/25/50 dòng mỗi trang | Nếu API cần phục vụ quy mô lớn hơn, chuyển sang pagination phía server và giữ tìm kiếm/lọc trên toàn bộ tập dữ liệu |

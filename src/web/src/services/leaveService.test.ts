@@ -1,17 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthUser } from '../types';
-import { createLeaveType, getLeaveRequests } from './leaveService';
+import { getLeaveRequests, getPolicies, restoreBuiltInLeaveType } from './leaveService';
 
 const mocks = vi.hoisted(() => ({
   hrGet: vi.fn(),
   hrPost: vi.fn(),
+  hrPut: vi.fn(),
   leaveGet: vi.fn(),
 }));
 
 vi.mock('./config', () => ({ DEMO_MODE: false }));
 vi.mock('./apiClient', () => ({
   getApiErrorMessage: (error: unknown) => String(error),
-  hrApi: { get: mocks.hrGet, post: mocks.hrPost },
+  hrApi: { get: mocks.hrGet, post: mocks.hrPost, put: mocks.hrPut },
   leaveApi: { get: mocks.leaveGet },
 }));
 vi.mock('./mockStore', () => ({
@@ -81,24 +82,75 @@ describe('getLeaveRequests', () => {
   });
 });
 
-describe('createLeaveType', () => {
+describe('built-in leave policies', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('normalizes the code and always creates UNPAID as unpaid', async () => {
-    await createLeaveType({
-      code: ' unpaid ',
-      name: 'Nghỉ không lương',
-      isPaid: true,
-      deductsBalance: false,
+  it('returns only the fixed three types and represents a deleted type as restorable', async () => {
+    const year = new Date().getFullYear();
+    mocks.hrGet.mockImplementation(async (path: string) => {
+      if (path === '/api/v1/leave-types') {
+        return {
+          data: [
+            { id: 1, code: 'ANNUAL', name: 'Custom annual', isPaid: true, deductsBalance: true, isActive: true },
+            { id: 2, code: 'PARENTAL', name: 'Nghỉ chăm con', isPaid: true, deductsBalance: true, isActive: true },
+          ],
+        };
+      }
+      if (path === '/api/v1/leave-policies') {
+        return { data: [{ id: 12, leaveTypeId: 1, year, daysPerYear: 15 }] };
+      }
+      throw new Error(`Unexpected HR API path: ${path}`);
     });
 
-    expect(mocks.hrPost).toHaveBeenCalledWith('/api/v1/leave-types', {
-      code: 'UNPAID',
-      name: 'Nghỉ không lương',
-      isPaid: false,
-      deductsBalance: false,
+    const result = await getPolicies();
+
+    expect(result.map((policy) => policy.typeCode)).toEqual(['ANNUAL', 'SICK', 'UNPAID']);
+    expect(result.find((policy) => policy.typeCode === 'ANNUAL')).toMatchObject({
+      typeName: 'Nghỉ phép năm',
+      daysPerYear: 15,
+      isActive: true,
+    });
+    expect(result.find((policy) => policy.typeCode === 'SICK')).toMatchObject({
+      isActive: false,
+      leaveTypeId: undefined,
+      daysPerYear: 10,
+    });
+  });
+
+  it('restores a missing built-in type and creates its default annual policy', async () => {
+    const year = new Date().getFullYear();
+    mocks.hrGet.mockImplementation(async (path: string) => {
+      if (path === '/api/v1/leave-types') return { data: [] };
+      if (path === '/api/v1/leave-policies') return { data: [] };
+      throw new Error(`Unexpected HR API path: ${path}`);
+    });
+    mocks.hrPost.mockResolvedValue({ data: { id: 4 } });
+
+    await restoreBuiltInLeaveType({
+      id: 'type-SICK',
+      typeCode: 'SICK',
+      typeName: 'Nghỉ ốm',
+      daysPerYear: 10,
+      paid: true,
+      deductsBalance: true,
+      description: 'Nghỉ ốm',
+      isActive: false,
+      year,
+    });
+
+    expect(mocks.hrPost).toHaveBeenNthCalledWith(1, '/api/v1/leave-types', {
+      code: 'SICK',
+      name: 'Nghỉ ốm',
+      isPaid: true,
+      deductsBalance: true,
+      isActive: true,
+    });
+    expect(mocks.hrPost).toHaveBeenNthCalledWith(2, '/api/v1/leave-policies', {
+      leaveTypeId: 4,
+      year,
+      daysPerYear: 10,
     });
   });
 });

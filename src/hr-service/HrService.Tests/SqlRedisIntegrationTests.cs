@@ -53,7 +53,7 @@ public sealed class SqlRedisIntegrationTests : IClassFixture<SqlRedisIntegration
                 new UnitOfWork(context));
 
             var leaveType = await service.CreateLeaveTypeAsync(
-                new CreateLeaveTypeRequest("INTEGRATION", "Integration leave", true, true));
+                new CreateLeaveTypeRequest("SICK", "Integration leave", true, true));
 
             var leaveTypes = await service.GetLeaveTypesAsync(includeInactive: false);
             Assert.Contains(leaveTypes, item => item.Id == leaveType.Id);
@@ -65,7 +65,7 @@ public sealed class SqlRedisIntegrationTests : IClassFixture<SqlRedisIntegration
             Assert.Null(await distributedCache.GetAsync("hr:catalog:leave-types"));
 
             var updatedLeaveType = await service.GetLeaveTypeByIdAsync(leaveType.Id);
-            Assert.Equal("Updated integration leave", updatedLeaveType.Name);
+            Assert.Equal("Nghỉ ốm", updatedLeaveType.Name);
             Assert.NotNull(await distributedCache.GetAsync("hr:catalog:leave-types"));
 
             var policy = await service.CreateLeavePolicyAsync(
@@ -84,7 +84,7 @@ public sealed class SqlRedisIntegrationTests : IClassFixture<SqlRedisIntegration
         }
 
         await using var verificationContext = new HrDbContext(contextOptions);
-        Assert.True(await verificationContext.LeaveTypes.AnyAsync(item => item.Code == "INTEGRATION"));
+        Assert.True(await verificationContext.LeaveTypes.AnyAsync(item => item.Code == "SICK"));
         Assert.True(await verificationContext.LeavePolicies.AnyAsync(item => item.Year == 2098));
         Assert.True(await verificationContext.Holidays.AnyAsync(
             item => item.HolidayDate == new DateOnly(2098, 1, 1)));

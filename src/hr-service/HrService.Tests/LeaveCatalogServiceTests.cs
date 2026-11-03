@@ -11,7 +11,7 @@ namespace HrService.Tests;
 public sealed class LeaveCatalogServiceTests
 {
     [Fact]
-    public async Task GetLeaveTypesAsync_CachesAllTypesAndFiltersInactiveForRegularList()
+    public async Task GetLeaveTypesAsync_ReturnsOnlyBuiltInTypesAndFiltersInactiveForRegularList()
     {
         var repository = new Mock<ILeaveCatalogRepository>();
         var cache = new InMemoryLeaveCatalogCache();
@@ -20,6 +20,7 @@ public sealed class LeaveCatalogServiceTests
             .ReturnsAsync(
             [
                 new LeaveType { Id = 1, Code = "ANNUAL", Name = "Annual", IsActive = true },
+                new LeaveType { Id = 2, Code = "SICK", Name = "Sick", IsActive = false },
                 new LeaveType { Id = 2, Code = "OLD", Name = "Old", IsActive = false }
             ]);
         var service = CreateService(repository, cache);
@@ -30,13 +31,14 @@ public sealed class LeaveCatalogServiceTests
         Assert.Single(activeTypes);
         Assert.Equal("ANNUAL", activeTypes[0].Code);
         Assert.Equal(2, allTypes.Count);
+        Assert.DoesNotContain(allTypes, item => item.Code == "OLD");
         repository.Verify(
             item => item.ListLeaveTypesAsync(true, It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
     [Fact]
-    public async Task CreateLeaveTypeAsync_NormalizesCodeAndInvalidatesCacheAfterSave()
+    public async Task CreateLeaveTypeAsync_UsesBuiltInDefinitionAndInvalidatesCacheAfterSave()
     {
         var repository = new Mock<ILeaveCatalogRepository>();
         var cache = new InMemoryLeaveCatalogCache();
@@ -45,7 +47,7 @@ public sealed class LeaveCatalogServiceTests
         LeaveType? addedLeaveType = null;
         repository
             .Setup(item => item.ExistsLeaveTypeCodeAsync(
-                "PERSONAL",
+                "ANNUAL",
                 null,
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
@@ -64,12 +66,13 @@ public sealed class LeaveCatalogServiceTests
         var service = CreateService(repository, cache, unitOfWork);
 
         var result = await service.CreateLeaveTypeAsync(
-            new CreateLeaveTypeRequest(" personal ", " Personal ", true, true));
+            new CreateLeaveTypeRequest(" annual ", "Custom name", true, true));
 
-        Assert.Equal("PERSONAL", result.Code);
+        Assert.Equal("ANNUAL", result.Code);
+        Assert.Equal("Nghỉ phép năm", result.Name);
         Assert.True(result.IsActive);
         Assert.NotNull(addedLeaveType);
-        Assert.Equal("Personal", addedLeaveType.Name);
+        Assert.Equal("Nghỉ phép năm", addedLeaveType.Name);
         Assert.Equal(
             new[] { "add", "save", "remove:hr:catalog:leave-types" },
             events);
@@ -86,7 +89,7 @@ public sealed class LeaveCatalogServiceTests
             () => service.CreateLeaveTypeAsync(
                 new CreateLeaveTypeRequest("unpaid", "Unpaid leave", true, false)));
 
-        Assert.Contains("isPaid", exception.Errors.Keys);
+        Assert.Contains("code", exception.Errors.Keys);
         repository.Verify(item => item.Add(It.IsAny<LeaveType>()), Times.Never);
         unitOfWork.Verify(
             item => item.SaveChangesAsync(It.IsAny<CancellationToken>()),
@@ -94,7 +97,25 @@ public sealed class LeaveCatalogServiceTests
     }
 
     [Fact]
-    public async Task UpdateLeaveTypeAsync_UpdatesMutableFieldsAndInvalidatesRelatedCachesAfterSave()
+    public async Task CreateLeaveTypeAsync_RejectsCustomTypes()
+    {
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        var service = CreateService(repository, new InMemoryLeaveCatalogCache(), unitOfWork);
+
+        var exception = await Assert.ThrowsAsync<RequestValidationException>(
+            () => service.CreateLeaveTypeAsync(
+                new CreateLeaveTypeRequest("PARENTAL", "Nghỉ chăm con", true, true)));
+
+        Assert.Contains("code", exception.Errors.Keys);
+        repository.Verify(item => item.Add(It.IsAny<LeaveType>()), Times.Never);
+        unitOfWork.Verify(
+            item => item.SaveChangesAsync(It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateLeaveTypeAsync_PreservesBuiltInDefinitionAndInvalidatesRelatedCachesAfterSave()
     {
         var leaveType = new LeaveType
         {
@@ -125,6 +146,9 @@ public sealed class LeaveCatalogServiceTests
 
         Assert.Equal("ANNUAL", result.Code);
         Assert.False(result.IsActive);
+        Assert.Equal("Nghỉ phép năm", result.Name);
+        Assert.True(result.IsPaid);
+        Assert.True(result.DeductsBalance);
         Assert.Equal(
             new[]
             {
@@ -136,7 +160,7 @@ public sealed class LeaveCatalogServiceTests
     }
 
     [Fact]
-    public async Task UpdateLeaveTypeAsync_RejectsChangingUnpaidTypeToPaid()
+    public async Task UpdateLeaveTypeAsync_PreservesBuiltInPropertiesWhenDeletingUnpaidType()
     {
         var leaveType = new LeaveType
         {
@@ -157,16 +181,15 @@ public sealed class LeaveCatalogServiceTests
             new InMemoryLeaveCatalogCache(),
             unitOfWork);
 
-        var exception = await Assert.ThrowsAsync<RequestValidationException>(
-            () => service.UpdateLeaveTypeAsync(
-                3,
-                new UpdateLeaveTypeRequest("Unpaid leave", true, false, true)));
+        var result = await service.UpdateLeaveTypeAsync(
+            3,
+            new UpdateLeaveTypeRequest("Custom name", true, true, false));
 
-        Assert.Contains("isPaid", exception.Errors.Keys);
+        Assert.Equal("Nghỉ không lương", result.Name);
         Assert.False(leaveType.IsPaid);
-        unitOfWork.Verify(
-            item => item.SaveChangesAsync(It.IsAny<CancellationToken>()),
-            Times.Never);
+        Assert.False(result.DeductsBalance);
+        Assert.False(result.IsActive);
+        unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Theory]
@@ -248,7 +271,7 @@ public sealed class LeaveCatalogServiceTests
         var unitOfWork = new Mock<IUnitOfWork>();
         repository
             .Setup(item => item.GetLeaveTypeForUpdateByIdAsync(4, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new LeaveType { Id = 4, IsActive = false });
+            .ReturnsAsync(new LeaveType { Id = 4, Code = "ANNUAL", IsActive = false });
         var service = CreateService(repository, new InMemoryLeaveCatalogCache(), unitOfWork);
 
         await Assert.ThrowsAsync<RequestValidationException>(
@@ -260,6 +283,50 @@ public sealed class LeaveCatalogServiceTests
         unitOfWork.Verify(
             item => item.SaveChangesAsync(It.IsAny<CancellationToken>()),
             Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateLeavePolicyAsync_RejectsPolicyForCustomLeaveType()
+    {
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        repository
+            .Setup(item => item.GetLeaveTypeForUpdateByIdAsync(4, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new LeaveType { Id = 4, Code = "PARENTAL", IsActive = true });
+        var service = CreateService(repository, new InMemoryLeaveCatalogCache(), unitOfWork);
+
+        var exception = await Assert.ThrowsAsync<RequestValidationException>(
+            () => service.CreateLeavePolicyAsync(new LeavePolicyRequest(4, 2026, 12m)));
+
+        Assert.Contains("leaveTypeId", exception.Errors.Keys);
+        repository.Verify(item => item.Add(It.IsAny<LeavePolicy>()), Times.Never);
+        unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateLeavePolicyAsync_RejectsCustomPolicy()
+    {
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        repository
+            .Setup(item => item.GetLeavePolicyForUpdateByIdAsync(9, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new LeavePolicy
+            {
+                Id = 9,
+                LeaveTypeId = 4,
+                LeaveType = new LeaveType { Id = 4, Code = "PARENTAL" },
+                Year = 2026,
+                DaysPerYear = 12m
+            });
+        var service = CreateService(repository, new InMemoryLeaveCatalogCache(), unitOfWork);
+
+        await Assert.ThrowsAsync<NotFoundException>(
+            () => service.UpdateLeavePolicyAsync(9, new LeavePolicyRequest(1, 2026, 12m)));
+
+        repository.Verify(
+            item => item.GetLeaveTypeForUpdateByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
