@@ -56,6 +56,14 @@ app.UseAuthorization();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+      app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint(
+            "/openapi/v1.json",
+            "HR Service API v1");
+
+        options.RoutePrefix = "swagger";
+    });
 }
 
 app.MapHealthChecks("/health");
