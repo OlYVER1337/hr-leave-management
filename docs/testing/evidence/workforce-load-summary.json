@@ -48,10 +48,33 @@
       "httpErrorRate": 0.0030715,
       "httpErrors": 21,
       "outcome": "Not clean: HTTP 500 responses observed"
+    },
+    {
+      "vus": 100,
+      "duration": "5m",
+      "requests": 4480,
+      "p95Ms": 17225,
+      "httpErrorRate": 0,
+      "httpErrors": 0,
+      "purpose": "Re-run with concurrent SQL DMV sampling and live service log monitoring",
+      "outcome": "Passed: no HTTP errors; diagnostic overhead may affect latency"
+    },
+    {
+      "vus": 100,
+      "duration": "5m",
+      "requests": 5876,
+      "rps": 19.18,
+      "p50Ms": 4615,
+      "p95Ms": 13470,
+      "httpErrorRate": 0,
+      "httpErrors": 0,
+      "purpose": "Confirmation re-run without concurrent SQL/log monitoring",
+      "outcome": "Passed: no HTTP errors; historical failure not reproduced"
     }
   ],
   "notes": [
     "The 100-VU run returned generic ProblemDetails for HTTP 500 responses; a specific server-side cause was not identified from the available logs.",
+    "Two subsequent 100-VU, five-minute re-runs returned zero HTTP errors. The historical failure is not reproduced, but its root cause is unknown and no application code change has been shown to fix it.",
     "The workload script threshold is now http_req_failed < 0.001 (0.1%), so a similar error rate fails the benchmark.",
     "These results are for the isolated local benchmark stack and are not a production capacity guarantee."
   ]

@@ -113,13 +113,18 @@ benchmark Redis ON ngày 03/11/2026 trên 1.000 nhân viên và 5.000 đơn ngh�
 | VU | Thời lượng | Requests | RPS | p50 (ms) | p95 (ms) | HTTP lỗi |
 |---:|---:|---:|---:|---:|---:|---:|
 | 50 | 5 phút | 6.919 | 22,84 | 2.014 | 4.701 | 0% |
-| 100 | 5 phút | 6.837 | 20,08 | 4.213 | 11.055 | 0,31% (21 HTTP 500) |
+| 100 — lượt đầu | 5 phút | 6.837 | 20,08 | 4.213 | 11.055 | 0,31% (21 HTTP 500) |
+| 100 — chạy lại, có giám sát | 5 phút | 4.480 | — | — | 17.225 | 0% |
+| 100 — chạy xác nhận | 5 phút | 5.876 | 19,18 | 4.615 | 13.470 | 0% |
 
-Ở 100 VU, ba endpoint đọc của Leave Service có trả HTTP 500 trong một số request;
-API response chỉ có ProblemDetails tổng quát và log service không cung cấp được
-nguyên nhân cụ thể từ lượt đo. Vì vậy không coi lượt 100 VU là đạt không lỗi.
-Script hiện đặt ngưỡng `http_req_failed < 0,1%` để lượt chạy có tỷ lệ lỗi tương
-tự trả trạng thái thất bại. Cần điều tra lỗi và chạy lại sau khi khắc phục.
+Lượt đầu ghi nhận HTTP 500 ở ba endpoint đọc của Leave Service; response chỉ có
+ProblemDetails tổng quát và log không cho biết nguyên nhân cụ thể. Hai lượt chạy
+lại 100 VU/5 phút đều không có HTTP error; lượt đầu chạy kèm lấy mẫu SQL DMV và
+theo dõi log trực tiếp, còn lượt xác nhận không chạy các phép giám sát đồng thời.
+Do lỗi lịch sử chưa tái hiện, chưa thể xác nhận nguyên nhân hay coi đây là một
+code fix. Giữ việc truy nguyên ở trạng thái mở; nếu lỗi xuất hiện lại, cần lưu
+exception/stack trace và endpoint cụ thể trước khi sửa. Script đặt ngưỡng
+`http_req_failed < 0,1%` để tỷ lệ lỗi tương tự lượt đầu làm benchmark thất bại.
 Đây là workload đọc đồng đều bốn route, không phải mô phỏng tần suất người dùng
 production; percentile chịu ảnh hưởng lớn từ các response danh sách lớn.
 

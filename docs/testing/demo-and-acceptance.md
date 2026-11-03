@@ -226,10 +226,10 @@ khi có API tương ứng. HR không được tạo đơn nghỉ; xác nhận ro
 | Tính đồng thời | Đạt | SQL integration test cho tạo đơn cạnh tranh, trùng ngày và quyết định cạnh tranh |
 | Redis catalog cache | Đạt | Ba nhóm cache, key riêng, TTL mặc định 30 phút, invalidation, SQL fallback và authoritative reads |
 | Redis outage | Đạt | Ba catalog endpoint trả HTTP 200 khi Redis dừng; kết quả smoke được ghi ở mục 2 |
-| Load test 50/100 VU, 5 phút, Redis ON/OFF | Catalog đạt; workforce đã đo ON, 100 VU còn lỗi | Catalog benchmark đã có ON/OFF. Workforce: 50 VU 0 lỗi; 100 VU có 21 HTTP 500 (0,31%); chưa chạy Redis OFF cho workload này |
+| Load test 50/100 VU, 5 phút, Redis ON/OFF | Catalog đạt; workforce 100 VU chạy lại không lỗi, nguyên nhân lịch sử chưa rõ | Workforce: lượt đầu 100 VU có 21 HTTP 500 (0,31%); hai lượt chạy lại có 0 lỗi. Chưa chạy Redis OFF cho workload này; không có code fix được xác nhận |
 | Docker Compose, healthcheck, README | Đạt | Compose, Dockerfile, `.env.example`, volume và hướng dẫn chạy đã có |
-| Design System và giao diện | Tài liệu/test có; nghiệm thu trực quan còn mở | Có Design System, wireframe và UI test; chưa có chữ ký nghiệm thu thủ công responsive/accessibility |
-| Bàn giao tài liệu | Đạt về tài liệu kỹ thuật | Có sơ đồ, ERD, sequence, Redis/performance, TRX, README và [hướng dẫn sử dụng/test/demo](../USER-GUIDE.md); còn kết quả workforce benchmark và sign-off giao diện |
+| Design System và giao diện | Đã được người dùng nghiệm thu | Người dùng xác nhận UI đạt ngày 03/11/2026; Design System, wireframe và UI test được lưu trong repository. Chưa thực hiện audit accessibility độc lập |
+| Bàn giao tài liệu | Đạt về tài liệu kỹ thuật | Có sơ đồ, ERD, sequence, Redis/performance, TRX, README và [hướng dẫn sử dụng/test/demo](../USER-GUIDE.md); còn kết quả workforce benchmark |
 
 ### Điểm cần lưu ý
 
@@ -244,15 +244,17 @@ khi có API tương ứng. HR không được tạo đơn nghỉ; xác nhận ro
   vẫn hợp lệ cho workload warm-cache, nhưng cần rebuild service để áp dụng
   default mới trong runtime.
 - `workforce.js` chỉ đọc dữ liệu. Trên 1.000 nhân viên/5.000 đơn, lượt 50 VU
-  trong 5 phút có 0 lỗi; lượt 100 VU trong 5 phút có 21 HTTP 500 (0,31%), p95
-  11,05 giây. Lượt 100 VU không được coi là đạt không lỗi; cần điều tra và chạy
-  lại. Redis OFF cho workforce chưa được đo. Chi tiết ở
+  trong 5 phút có 0 lỗi. Lượt 100 VU đầu tiên có 21 HTTP 500 (0,31%), p95
+  11,05 giây; hai lượt chạy lại 100 VU/5 phút có 0 lỗi (p95 lần lượt 17,23 và
+  13,47 giây). Lỗi lịch sử chưa tái hiện, nguyên nhân chưa xác định và không có
+  thay đổi code nào được xác nhận là bản sửa. Redis OFF cho workforce chưa được
+  đo. Chi tiết ở
   [workforce load summary](./evidence/workforce-load-summary.json).
 
 ## 5. Checklist nghiệm thu
 
-`[x]` nghĩa là đã có bằng chứng test hoặc kiểm tra trực tiếp trong lượt kỹ
-thuật; không thay thế việc người hướng dẫn/nghiệm thu xác nhận trải nghiệm UI.
+`[x]` nghĩa là đã có bằng chứng test, kiểm tra trực tiếp hoặc người dùng xác
+nhận nghiệm thu trong lượt kỹ thuật.
 Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc tài liệu để đối chiếu.
 
 | Xong | Hạng mục | Kỳ vọng khi nghiệm thu | Bằng chứng/tham chiếu |
@@ -268,15 +270,15 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
 | [x] | Phê duyệt/từ chối | Chỉ người duyệt hợp lệ xử lý; đơn chỉ chuyển trạng thái một lần; có history | Approvals page; Leave persistence tests; demo API approve |
 | [x] | Concurrency | Hai yêu cầu vượt số dư hoặc hai quyết định cạnh tranh không làm sai số dư/trạng thái | [Leave TRX](./evidence/dotnet/leave/leave-service.trx) |
 | [x] | Lịch và thống kê — automated | Đơn Pending/Approved và ngày lễ được hiển thị trên lịch/dashboard | `CalendarPage.test.tsx`, `DashboardPage.test.tsx` |
-| [ ] | Lịch và thống kê — visual sign-off | Người nghiệm thu xác nhận hiển thị, responsive và trạng thái trực quan trên browser | Chờ chạy nghiệm thu UI trực tiếp |
+| [x] | Lịch và thống kê — visual sign-off | Người dùng xác nhận giao diện đạt nghiệm thu UI | Người dùng xác nhận ngày 03/11/2026; accessibility audit độc lập chưa thực hiện |
 | [x] | Redis cache | Tối thiểu 2 nhóm dữ liệu có key/TTL/invalidation; cache miss đọc SQL | [Redis report](../performance/redis-performance.md) |
 | [x] | Redis outage | Catalog vẫn đọc được từ SQL; nghiệp vụ không dựa cache cũ | [Redis report](../performance/redis-performance.md) |
 | [x] | HR outage | Tác vụ cần HR trả lỗi dependency phù hợp và không lưu đơn dở dang | `HrServiceOutageTests`; [Redis report](../performance/redis-performance.md) |
 | [x] | Regression backend | HR 53/53 và Leave 25/25 pass; không skip khi có test dependencies | Lượt chạy HR mới nhất; TRX lưu sẵn trong `evidence/dotnet/` |
 | [x] | Regression frontend | 31 UI tests pass và production build thành công | Vitest/build lượt mới nhất, báo cáo mục 1 |
 | [x] | Load test catalog Redis ON/OFF | 50 và 100 VU, 5 phút mỗi lượt; báo cáo RPS/p50/p95/error và cấu hình máy | [Redis performance report](../performance/redis-performance.md) |
-| [x] | Load test workforce — Redis ON | 50/100 VU, 5 phút, dataset 1.000 nhân viên/5.000 đơn | 50 VU 0 lỗi; 100 VU 21 HTTP 500; [summary](./evidence/workforce-load-summary.json) |
-| [ ] | Load test workforce — hoàn thiện | Điều tra HTTP 500 ở 100 VU; chạy lại 100 VU và đo Redis OFF | `scripts/load-test/workforce.js`; hiện threshold 0,1% |
+| [x] | Load test workforce — Redis ON | 50/100 VU, 5 phút, dataset 1.000 nhân viên/5.000 đơn | 50 VU 0 lỗi; lượt đầu 100 VU 21 HTTP 500; hai lần chạy lại 100 VU 0 lỗi; [summary](./evidence/workforce-load-summary.json) |
+| [ ] | Truy nguyên lỗi workforce lịch sử | Xác định exception/endpoint gây 500 và kiểm chứng bản sửa; nếu lỗi tái diễn, giữ log đủ chi tiết để tái hiện | Hai lượt chạy lại không tái hiện; nguyên nhân chưa rõ. Redis OFF cho workforce cũng chưa đo |
 | [x] | Bottleneck | Đọc được CPU/container, SQL runtime và plan; không thêm index nếu chưa có bằng chứng | `evidence/diagnostics-*`, `evidence/sql-query-plan-summary.txt` |
 | [x] | Tài liệu thiết kế và bàn giao | ERD, kiến trúc, API/OpenAPI, Design System, wireframe, README, hướng dẫn sử dụng | [Docs index](../README.md), [architecture diagrams](../architecture/README.md), [user guide](../USER-GUIDE.md) |
 | [x] | Chạy demo an toàn | API mode thật; dùng dataset demo; không reset volume hoặc dùng secret production | Luồng API `hrbench` 03/11; checklist chuẩn bị demo phía trên |
