@@ -330,9 +330,11 @@ UI hiện có: search, toggle Pending-only, summary cards, modal có note option
     └────────────┴─────────┴──────────┴───────────┴──────────┴─────────┴──────────┘
 
 Create/edit modal fields:
-- Code, full name, email, role, department, hire date, direct manager.
+- Code is read-only: HR sees that it will be generated on create, then sees the generated code when editing.
+- Full name, email, role, department, hire date, direct manager.
 - Create only: temporary password required, 12–30 characters.
 - Edit: password field is not shown.
+- HR API generates unique codes in the `EMP-<16 hex characters>` format; the database unique index remains the final collision guard.
 - Manager dropdown only includes active Manager records and excludes currently edited employee.
 - Deactivate action requires confirmation and refreshes list.
 
@@ -498,7 +500,7 @@ Endpoints are relative to each service's API base URL.
 | P1 | UI không thể tạo Leave Type dù API có POST | Thêm create leave type flow |
 | P1 | API reset password employee có nhưng UI thiếu | Thêm action HR reset password nếu nằm trong scope |
 | P1 | “Cài đặt” điều hướng tới /policies | Đổi nhãn hoặc tạo Settings route |
-| P2 | Bảng chưa có pagination | Thêm khi lượng dữ liệu lớn |
+| P2 | Danh sách nhân viên và hộp thư phê duyệt phân trang phía client, chọn 10/25/50 dòng mỗi trang | Nếu API cần phục vụ quy mô lớn hơn, chuyển sang pagination phía server và giữ tìm kiếm/lọc trên toàn bộ tập dữ liệu |
 | P2 | Calendar manager scope không như approval inbox | Chốt scope theo current reporting line hay approver snapshot rồi đồng bộ |
 | P2 | Reason UI max 600 nhưng backend nhận 1000 | Đồng bộ giới hạn hoặc ghi rõ lý do UI giới hạn ngắn hơn |
 | P2 | Text “nhóm/tổ chức” không luôn khớp scope API | Dùng mô tả theo role/scope |

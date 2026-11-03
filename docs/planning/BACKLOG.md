@@ -13,7 +13,7 @@ chưa làm.
 | P1 | Bỏ trạng thái UI giả/chưa hoàn thiện | Donut tính Cancelled nhất quán; chi tiết đơn dùng modal/drawer accessible; nút export và notification được triển khai hoặc ẩn/disable thay vì chỉ thông báo; kiểm thử error/loading/empty states. | [Gap UI](../design/WIREFRAMES.md), mục P1 |
 | P1 | Chạy nghiệm thu giao diện trực tiếp ở API mode | Thực hiện kịch bản demo 8–10 phút trên Web với HR/Manager/Employee; xác nhận role guards, tạo/duyệt/từ chối/hủy, lỗi validation và responsive/accessibility; người nghiệm thu đánh dấu checklist. API flow đã chạy trên `hrbench`, nhưng UI/manual sign-off còn mở. | [Kịch bản và checklist](../testing/demo-and-acceptance.md) |
 | P2 | Profile CPU của HR Service dưới tải | Dùng `dotnet-counters` hoặc trace trong workload catalog 100 VU; xác định hot path trước khi tối ưu; báo cáo cùng cấu hình và so sánh RPS/p95. Chưa thêm index nếu chưa có bằng chứng SQL. | HR Service trung bình 119.07% CPU trong workload SQL-authoritative 100 VU/2 phút; SQL catalog query dưới 0.3 ms CPU trung bình. |
-| P2 | Chốt hành vi lịch và dữ liệu lớn | Quy định Calendar Manager theo current reporting line hay approver snapshot; phân trang bảng khi quy mô cần; đồng bộ giới hạn lý do 600/1.000 và nhãn “nhóm/tổ chức” theo đúng phạm vi dữ liệu. | [Gap UI](../design/WIREFRAMES.md), mục P2 |
+| P2 | Chốt hành vi lịch và dữ liệu lớn | Quy định Calendar Manager theo current reporting line hay approver snapshot; chuyển phân trang danh sách nhân viên/hộp thư sang server-side nếu quy mô dữ liệu cần; đồng bộ giới hạn lý do 600/1.000 và nhãn “nhóm/tổ chức” theo đúng phạm vi dữ liệu. | [Gap UI](../design/WIREFRAMES.md), mục P2 |
 
 ## Thứ tự đề xuất
 

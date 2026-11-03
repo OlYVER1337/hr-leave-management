@@ -105,17 +105,11 @@ public sealed class EmployeeService(
         CreateEmployeeRequest request,
         CancellationToken cancellationToken = default)
     {
-        var code = request.Code?.Trim();
         var fullName = request.FullName?.Trim();
         var email = request.Email?.Trim().ToLowerInvariant();
         var roleName = request.Role?.Trim();
         var password = request.Password;
         var errors = new ValidationErrors();
-
-        if (string.IsNullOrWhiteSpace(code) || code.Length > 20)
-        {
-            errors.Add("code", "Employee code is required and cannot exceed 20 characters.");
-        }
 
         if (string.IsNullOrWhiteSpace(fullName) || fullName.Length > 150)
         {
@@ -148,11 +142,6 @@ public sealed class EmployeeService(
 
         errors.ThrowIfAny();
 
-        if (await employeeRepository.ExistsByCodeAsync(code!, cancellationToken: cancellationToken))
-        {
-            throw new ConflictException($"Employee code '{code}' is already in use.");
-        }
-
         if (await employeeRepository.ExistsByEmailAsync(email!, cancellationToken: cancellationToken))
         {
             throw new ConflictException($"Email '{email}' is already in use.");
@@ -181,9 +170,20 @@ public sealed class EmployeeService(
             }
         }
 
+        var employeeId = Guid.NewGuid();
+        var code = CreateEmployeeCode(employeeId);
+        while (await employeeRepository.ExistsByCodeAsync(
+                   code,
+                   cancellationToken: cancellationToken))
+        {
+            employeeId = Guid.NewGuid();
+            code = CreateEmployeeCode(employeeId);
+        }
+
         var employee = new Employee
         {
-            Code = code!,
+            Id = employeeId,
+            Code = code,
             FullName = fullName!,
             Email = email!,
             Role = role,
@@ -378,4 +378,7 @@ public sealed class EmployeeService(
             employee.IsActive,
             employee.DepartmentId,
             employee.ManagerId);
+
+    private static string CreateEmployeeCode(Guid employeeId) =>
+        $"EMP-{employeeId:N}"[..20].ToUpperInvariant();
 }

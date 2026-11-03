@@ -5,7 +5,6 @@ public sealed record ChangeEmployeePasswordRequest(
     string NewPassword);
 
 public sealed record CreateEmployeeRequest(
-    string Code,
     string FullName,
     string Email,
     string Password,

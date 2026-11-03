@@ -138,7 +138,7 @@ public sealed class EmployeeServiceTests
         Employee? addedEmployee = null;
         repository
             .Setup(item => item.ExistsByCodeAsync(
-                "EMP-42",
+                It.IsAny<string>(),
                 null,
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
@@ -160,7 +160,6 @@ public sealed class EmployeeServiceTests
         var service = CreateService(repository, departmentRepository, passwordHasher, unitOfWork);
 
         var result = await service.CreateAsync(new CreateEmployeeRequest(
-            " EMP-42 ",
             " Person Name ",
             " PERSON@EXAMPLE.COM ",
             "valid-password-123",
@@ -170,7 +169,9 @@ public sealed class EmployeeServiceTests
             null));
 
         Assert.NotNull(addedEmployee);
-        Assert.Equal("EMP-42", addedEmployee.Code);
+        Assert.Matches("^EMP-[A-F0-9]{16}$", addedEmployee.Code);
+        Assert.Equal($"EMP-{addedEmployee.Id:N}"[..20].ToUpperInvariant(), addedEmployee.Code);
+        Assert.Equal(addedEmployee.Code, result.Code);
         Assert.Equal("Person Name", addedEmployee.FullName);
         Assert.Equal("person@example.com", addedEmployee.Email);
         Assert.Equal("password-hash", addedEmployee.PasswordHash);

@@ -4,7 +4,7 @@ import { getApiErrorMessage, hrApi } from './apiClient';
 import { loadDemoState, makeId, updateDemoState } from './mockStore';
 
 export interface EmployeeInput {
-  code: string;
+  code?: string;
   fullName: string;
   email: string;
   password?: string;
@@ -29,32 +29,43 @@ export async function saveEmployee(input: EmployeeInput, id?: string): Promise<E
       const department = state.departments.find((item) => item.id === Number(input.departmentId));
       const manager = input.managerId ? state.employees.find((item) => item.id === input.managerId) : null;
       if (!department) throw new Error('Vui lòng chọn phòng ban hợp lệ.');
-      const duplicate = state.employees.some((item) => (item.email.toLowerCase() === input.email.toLowerCase() || item.code.toLowerCase() === input.code.toLowerCase()) && item.id !== id);
+      const code = id ? input.code?.trim() : undefined;
+      const duplicate = state.employees.some((item) => (item.email.toLowerCase() === input.email.toLowerCase() || (code && item.code.toLowerCase() === code.toLowerCase())) && item.id !== id);
       if (duplicate) throw new Error('Email hoặc mã nhân viên đã tồn tại.');
       if (id) {
         const current = state.employees.find((item) => item.id === id);
         if (!current) throw new Error('Không tìm thấy nhân viên.');
-        saved = { ...current, ...input, managerId: input.managerId, managerName: manager?.fullName ?? null, departmentId: department.id, departmentName: department.name };
+        saved = { ...current, ...input, code: code ?? current.code, managerId: input.managerId, managerName: manager?.fullName ?? null, departmentId: department.id, departmentName: department.name };
         return { ...state, employees: state.employees.map((item) => item.id === id ? saved : item) };
       }
       if (!input.password || input.password.length < 12) throw new Error('Mật khẩu phải có ít nhất 12 ký tự.');
-      const { password: _temporaryPassword, ...employeeFields } = input;
+      const generatedCode = generateEmployeeCode(state.employees);
+      const { password: _temporaryPassword, code: _providedCode, ...employeeFields } = input;
       void _temporaryPassword;
-      saved = { id: makeId('emp'), isActive: true, ...employeeFields, managerId: input.managerId, managerName: manager?.fullName ?? null, departmentId: department.id, departmentName: department.name };
+      void _providedCode;
+      saved = { id: makeId('emp'), isActive: true, ...employeeFields, code: generatedCode, managerId: input.managerId, managerName: manager?.fullName ?? null, departmentId: department.id, departmentName: department.name };
       return { ...state, employees: [...state.employees, saved] };
     });
     return saved;
   }
   try {
     if (id) {
-      const body = { code: input.code, fullName: input.fullName, email: input.email, role: input.role, hireDate: input.hireDate, departmentId: Number(input.departmentId), managerId: input.managerId || null };
+      const body = { code: input.code ?? '', fullName: input.fullName, email: input.email, role: input.role, hireDate: input.hireDate, departmentId: Number(input.departmentId), managerId: input.managerId || null };
       const { data } = await hrApi.put<Employee>(`/api/v1/employees/${id}`, body);
       return data;
     }
-    const body = { code: input.code, fullName: input.fullName, email: input.email, password: input.password, role: input.role, hireDate: input.hireDate, departmentId: Number(input.departmentId), managerId: input.managerId || null };
+    const body = { fullName: input.fullName, email: input.email, password: input.password, role: input.role, hireDate: input.hireDate, departmentId: Number(input.departmentId), managerId: input.managerId || null };
     const { data } = await hrApi.post<Employee>('/api/v1/employees', body);
     return data;
   } catch (error) { throw new Error(getApiErrorMessage(error)); }
+}
+
+function generateEmployeeCode(employees: Employee[]): string {
+  let code: string;
+  do {
+    code = `EMP-${crypto.randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase()}`;
+  } while (employees.some((employee) => employee.code.toUpperCase() === code));
+  return code;
 }
 
 export async function deactivateEmployee(id: string): Promise<void> {
