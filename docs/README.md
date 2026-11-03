@@ -23,6 +23,7 @@ kịch bản demo**.
 
 - [Báo cáo Redis và load test ON/OFF](performance/redis-performance.md): cache, fallback, concurrency và benchmark 50/100 VU.
 - [Kết quả kiểm thử, chẩn đoán và checklist nghiệm thu](testing/demo-and-acceptance.md): test regression/integration, CPU/SQL/query plan và kịch bản demo.
+- [Hướng dẫn sử dụng, chạy test và demo](USER-GUIDE.md): cách thao tác theo vai trò, bật demo, trình diễn luồng API thật và chạy bộ kiểm thử.
 - [Bằng chứng kiểm thử thô](testing/evidence/): TRX, log build, kết quả k6 và số liệu container.
 
 ## 5. Hướng dẫn chạy hệ thống

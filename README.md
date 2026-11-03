@@ -354,4 +354,5 @@ docker compose down -v
 
 Tài liệu được phân loại theo chủ đề trong [`docs/`](docs/README.md). Bắt đầu từ
 [mục lục tài liệu](docs/README.md) để tìm yêu cầu, sơ đồ, hướng dẫn, báo cáo và
-checklist nghiệm thu.
+checklist nghiệm thu. Xem [hướng dẫn sử dụng, chạy test và demo](docs/USER-GUIDE.md)
+để thực hành các luồng theo vai trò.
