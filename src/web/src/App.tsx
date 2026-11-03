@@ -35,7 +35,7 @@ export default function App() {
         <Route index element={<DashboardPage />} />
         <Route path="leaves" element={<LeaveRequestsPage />} />
         <Route path="all-leaves" element={<RequireRole roles={['HR']}><LeaveRequestsPage all /></RequireRole>} />
-        <Route path="request" element={<RequestLeavePage />} />
+        <Route path="request" element={<RequireRole roles={['Employee', 'Manager']}><RequestLeavePage /></RequireRole>} />
         <Route path="approvals" element={<RequireRole roles={['Manager', 'HR']}><ApprovalsPage /></RequireRole>} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="employees" element={<RequireRole roles={['HR']}><EmployeesPage /></RequireRole>} />

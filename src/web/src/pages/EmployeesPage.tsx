@@ -75,7 +75,7 @@ export function EmployeesPage() {
 
   const managers = employees.filter((employee) => employee.role === 'Manager' && employee.isActive && employee.id !== editing?.id);
   return <div className="page-stack">
-    <PageHeader eyebrow="QUẢN TRỊ" title="Nhân viên" description="Quản lý hồ sơ nhân viên, phân công đội nhóm và quyền truy cập." actions={<><button className="button button-secondary" onClick={() => notify('Chức năng xuất danh sách sẽ khả dụng khi có API báo cáo.', 'info')}><Download size={16} /> Xuất danh sách</button><button className="button button-primary" onClick={openCreate}><Plus size={17} /> Thêm nhân viên</button></>} />
+    <PageHeader eyebrow="QUẢN TRỊ" title="Nhân viên" description="Quản lý hồ sơ nhân viên, phân công đội nhóm và quyền truy cập." actions={<><button className="button button-secondary" disabled title="Chưa khả dụng: API xuất danh sách chưa được triển khai"><Download size={16} /> Xuất danh sách (chưa khả dụng)</button><button className="button button-primary" onClick={openCreate}><Plus size={17} /> Thêm nhân viên</button></>} />
     <div className="page-summary-row"><div className="summary-metric"><span>Tổng số nhân viên</span><strong>{employees.length}</strong></div><div className="summary-metric"><span>Đang hoạt động</span><strong>{employees.filter((item) => item.isActive).length}</strong></div><div className="summary-metric"><span>Quản lý</span><strong>{employees.filter((item) => item.role === 'Manager' && item.isActive).length}</strong></div><div className="summary-metric"><span>Phòng ban</span><strong>{departments.length}</strong></div></div>
     {error && <div className="inline-alert alert-warning">{error}</div>}
     <section className="panel page-table-panel">

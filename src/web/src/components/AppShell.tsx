@@ -78,10 +78,10 @@ export function AppShell() {
           <div className="topbar-right">
             {DEMO_MODE && <span className="demo-pill"><span /> Chế độ dùng thử</span>}
             <span className="topbar-date">{new Intl.DateTimeFormat('vi-VN', { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date())}</span>
-            <button className="icon-button notification-button" aria-label="Thông báo"><Bell size={19} /><i /></button>
+            <button className="icon-button notification-button" aria-label="Thông báo chưa khả dụng" title="Thông báo chưa khả dụng" disabled><Bell size={19} /></button>
             <div className="topbar-profile-wrap">
               <button className="topbar-profile" onClick={() => setProfileOpen((value) => !value)}><Avatar name={user?.fullName ?? 'Người dùng'} size="sm" /><span>{user?.fullName.split(' ').slice(-1)[0]}</span><ChevronDown size={14} /></button>
-              {profileOpen && <div className="profile-menu"><button onClick={() => { setProfileOpen(false); navigate('/profile'); }}><UserRound size={16} /> Hồ sơ của tôi</button><button onClick={() => { setProfileOpen(false); navigate('/policies'); }}><Settings2 size={16} /> Cài đặt</button><button onClick={handleSignOut}><LogOut size={16} /> Đăng xuất</button></div>}
+              {profileOpen && <div className="profile-menu"><button onClick={() => { setProfileOpen(false); navigate('/profile'); }}><UserRound size={16} /> Hồ sơ của tôi</button>{role === 'HR' && <button onClick={() => { setProfileOpen(false); navigate('/policies'); }}><Settings2 size={16} /> Chính sách nghỉ phép</button>}<button onClick={handleSignOut}><LogOut size={16} /> Đăng xuất</button></div>}
             </div>
           </div>
         </header>

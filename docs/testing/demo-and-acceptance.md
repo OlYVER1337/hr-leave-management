@@ -3,15 +3,15 @@
 ## 1. Kết quả kiểm thử hồi quy và tích hợp
 
 Backend được chạy lại ngày **03/11/2026** sau khi cập nhật Microsoft.Data.SqlClient
-6.1.8. Web test/build gần nhất vẫn là lượt **02/11/2026** vì thay đổi lần này
-không tác động frontend.
+6.1.8. Web test và production build được chạy lại ngày **03/11/2026** sau khi
+hoàn thiện dashboard và các luồng UI quản trị.
 
 | Bộ kiểm thử | Kết quả gần nhất | Tích hợp thực |
 |---|---:|---|
 | HR Service (`HrService.slnx`) | 46/46 pass, 0 fail, 0 skip (03/11) | SQL Server và Redis |
 | Leave Service (`LeaveService.slnx`) | 25/25 pass, 0 fail, 0 skip (03/11) | SQL Server |
-| Web (Vitest) | 6/6 pass, 0 fail (02/11) | React Testing Library |
-| Web production build | Thành công (02/11) | TypeScript check và Vite build |
+| Web (Vitest) | 9/9 file, 25/25 test pass (03/11) | React Testing Library |
+| Web production build | Thành công (03/11) | TypeScript check và Vite build |
 
 Lượt backend mới nhất có **71 test pass**, không fail hoặc skip. Hai test suite
 tạo database tích hợp với tên ngẫu nhiên rồi xóa database đó khi hoàn tất; HR
@@ -69,7 +69,7 @@ docker run --rm --volume "${web}:/src:ro" node:20-alpine sh -c `
   `Pkcs 9.0.21` đã vá. Quét `--vulnerable --include-transitive` cho cả hai
   solution ngày 03/11 không còn package dễ tổn thương.
 - Vite build thành công nhưng cảnh báo chunk JavaScript sau minify khoảng
-  `766.56 kB`, dynamic import không tách được `apiClient`, và Recharts 2.x đã
+  `775.45 kB` (gzip khoảng `221.68 kB`), dynamic import không tách được `apiClient`, và Recharts 2.x đã
   hết active support. Đây chưa phải lỗi chức năng; nên xử lý trong đợt tối ưu UI.
 
 ### Kiểm tra luồng demo API thật (03/11/2026)
@@ -85,8 +85,11 @@ docker run --rm --volume "${web}:/src:ro" node:20-alpine sh -c `
 - Đơn demo được giữ trong volume riêng `hrbench` để làm dữ liệu trình diễn và
   vẫn còn sau khi build lại hai API. Không reset volume và không tác động stack
   `hr-leave` chính.
-- Đây là kiểm tra API end-to-end; nghiệm thu thao tác giao diện và các trạng
-  thái trực quan vẫn cần người trình diễn/nghiệm thu xác nhận riêng.
+- Web container của `hrbench` được build lại riêng ngày 03/11; chỉ container
+  Web được thay, không restart API, reset volume hay tác động stack `hr-leave`.
+  HTTP trả 200 và browser mở được trang đăng nhập; chưa đăng nhập trong browser.
+- Đây là kiểm tra API end-to-end và HTTP smoke test; nghiệm thu giao diện có
+  xác thực cùng các trạng thái trực quan vẫn cần người trình diễn/nghiệm thu xác nhận.
 
 ## 2. Chẩn đoán CPU, SQL và query plan
 
@@ -193,8 +196,8 @@ khoảng 1.39 GiB trong lượt này, nên cũng cần tính memory cache/buffer
    Pending/Approved hoặc yêu cầu vượt số dư; backend phải từ chối và giao diện
    giữ thông báo lỗi. Dùng dữ liệu demo an toàn, không ảnh hưởng dữ liệu thật.
 5. **Manager — phê duyệt:** đăng nhập Manager; mở Hộp thư phê duyệt; xác nhận
-   chỉ thấy đơn thuộc phạm vi được giao; xem chi tiết và duyệt hoặc từ chối một
-   đơn với ghi chú tùy chọn.
+   chỉ thấy đơn thuộc phạm vi được giao; xem chi tiết trong hộp thoại rồi duyệt
+   hoặc từ chối một đơn với ghi chú tùy chọn.
 6. **Employee — xác nhận kết quả:** đăng nhập lại Employee; kiểm tra trạng thái
    và số dư. Đơn được duyệt chuyển số ngày từ đang chờ sang đã dùng; đơn bị từ
    chối trả lại phần giữ chỗ.
@@ -204,9 +207,9 @@ khoảng 1.39 GiB trong lượt này, nên cũng cần tính memory cache/buffer
    concurrency; sau đó trình bày Redis key/TTL/fallback và báo cáo ON/OFF cùng
    kết quả CPU/SQL trong tài liệu này.
 
-Nút “Xuất báo cáo” trên một số màn hình hiện chỉ thông báo chức năng sẽ có khi
-có API báo cáo; không nên đưa thao tác xuất file vào kịch bản demo như một tính
-năng đã hoàn thiện. Dùng đúng màn hình/API đã được xác nhận trong
+Nút xuất báo cáo và chuông thông báo được disable, ghi rõ chưa khả dụng cho tới
+khi có API tương ứng. HR không được tạo đơn nghỉ; xác nhận route `/request`
+điều hướng về dashboard và CTA không xuất hiện với vai trò HR. Dùng đúng màn hình/API đã được xác nhận trong
 [tài liệu UI](../README.md).
 
 ## 4. Checklist nghiệm thu
@@ -232,7 +235,7 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
 | [x] | Redis outage | Catalog vẫn đọc được từ SQL; nghiệp vụ không dựa cache cũ | [Redis report](../performance/redis-performance.md) |
 | [x] | HR outage | Tác vụ cần HR trả lỗi dependency phù hợp và không lưu đơn dở dang | `HrServiceOutageTests`; [Redis report](../performance/redis-performance.md) |
 | [x] | Regression backend | HR 46/46 và Leave 25/25 pass; không skip khi có test dependencies | Hai file TRX trong `evidence/dotnet/` (03/11) |
-| [x] | Regression frontend | 6 UI tests pass và production build thành công | Vitest/build (02/11), báo cáo mục 1 |
+| [x] | Regression frontend | 25 UI tests pass và production build thành công | Vitest/build (03/11), báo cáo mục 1 |
 | [ ] | Load test Redis ON/OFF | 50 và 100 VU, 5 phút mỗi lượt; báo cáo RPS/p50/p95/error và cấu hình máy | [Redis performance report](../performance/redis-performance.md) |
 | [x] | Bottleneck | Đọc được CPU/container, SQL runtime và plan; không thêm index nếu chưa có bằng chứng | `evidence/diagnostics-*`, `evidence/sql-query-plan-summary.txt` |
 | [ ] | Thiết kế và bàn giao | ERD, kiến trúc, API/OpenAPI, Design System, wireframe, README được trình bày | [UI docs](../README.md), [architecture diagrams](../architecture/README.md) |

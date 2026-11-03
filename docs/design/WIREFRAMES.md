@@ -110,7 +110,7 @@ Yêu cầu:
 - Menu hiện tại phải có active state.
 - Page header gồm eyebrow, title, description và action.
 - Footer nằm dưới content.
-- Profile menu hiện có Hồ sơ, mục “Cài đặt” và Đăng xuất. Hiện “Cài đặt” đang điều hướng tới /policies; nên đổi nhãn thành “Chính sách nghỉ phép” hoặc tạo Settings route riêng.
+- Profile menu có Hồ sơ và Đăng xuất; HR có thêm lối tắt “Chính sách nghỉ phép” tới `/policies`.
 
 ## 4. Wireframe từng màn hình
 
@@ -147,7 +147,7 @@ API: HR POST /api/v1/auth/login; refresh/logout dùng các endpoint auth tương
 Dashboard hiện có welcome strip, KPI cards, chart hoạt động sáu tháng, donut status, recent requests và leave balance. KPI thay đổi theo role.
 
     ┌────────────────────────────────────────────────────────────────────────────┐
-    │ TỔNG QUAN                                           [Xuất báo cáo] [Tạo đơn]│
+    │ TỔNG QUAN                             [Xuất báo cáo (disabled)] [Tạo đơn*]│
     │ Xin chào, {firstName}                                                       │
     │ Mô tả thay đổi theo Employee / Manager / HR                                │
     ├────────────────────────────────────────────────────────────────────────────┤
@@ -156,7 +156,8 @@ Dashboard hiện có welcome strip, KPI cards, chart hoạt động sáu tháng,
     │ KPI 1            │ KPI 2            │ KPI 3            │ KPI 4             │
     ├────────────────────────────────────────────┬───────────────────────────────┤
     │ Hoạt động nghỉ phép (bar chart)            │ Trạng thái đơn (donut)        │
-    │ 6 tháng gần đây                            │ Approved / Pending / Rejected │
+    │ 6 tháng gần đây                            │ Pending / Approved / Rejected │
+    │                                             │ Cancelled                      │
     ├────────────────────────────────────────────┼───────────────────────────────┤
     │ Đơn nghỉ gần đây (table)                   │ Số dư phép (balance list)     │
     │                                             │ progress + used/pending       │
@@ -164,21 +165,24 @@ Dashboard hiện có welcome strip, KPI cards, chart hoạt động sáu tháng,
 
 KPI theo code hiện tại:
 - **HR:** nhân viên đang hoạt động; đơn chờ; đơn đã duyệt; số phòng ban.
-- **Employee / Manager:** số ngày phép còn; số ngày đã nghỉ; đang chờ xử lý; tổng đơn của tôi.
+- **Employee:** số ngày phép còn; số ngày đã nghỉ; đơn cá nhân đang chờ; tổng đơn của tôi.
+- **Manager:** số ngày phép còn; số ngày đã nghỉ; đơn trong hộp thư phê duyệt; tổng đơn của tôi.
 
-Các điểm phải xử lý trước khi xem Dashboard là chuẩn production:
-1. HR dashboard có nhãn “Tổng quan số dư phép” nhưng getBalances(user) chỉ trả balance của user hiện tại. Đổi thành “Số dư phép của tôi” hoặc bỏ khỏi dashboard toàn tổ chức.
-2. Manager pending KPI đang đếm Pending trong tất cả request nhìn thấy; list này có thể gồm request của chính manager. Dùng approval inbox count cho KPI chờ manager xử lý và tách khỏi đơn pending của chính họ.
-3. Bar chart đếm **số yêu cầu**, không phải tổng số ngày nghỉ. Đổi nhãn/subtitle cho đúng hoặc sửa phép tính nếu muốn thể hiện ngày nghỉ.
-4. Donut hiện có Approved/Pending/Rejected nhưng số giữa donut lấy tổng toàn bộ request, có thể gồm Cancelled. Thêm slice Cancelled hoặc đổi mẫu số.
-5. “Xuất báo cáo” hiện chỉ hiển thị toast thông báo API báo cáo chưa có. Không mô tả nó như một chức năng download đã hoạt động.
+Các điểm đã xử lý:
+1. Số dư được gắn nhãn “Số dư phép của tôi” cho mọi vai trò, đúng với API chỉ trả balance của người đang đăng nhập.
+2. KPI Manager và lời chào lấy số đơn từ approval inbox; đơn Pending của chính Manager không bị tính là đơn cần họ duyệt.
+3. Request summary ánh xạ approver theo `approverId`; dùng `ManagerName` hiện tại khi nằm ngoài directory, nếu không xác định được thì hiển thị nhãn trung tính.
+4. Bar chart ghi rõ đang đếm **số yêu cầu**; donut có đủ các trạng thái, bao gồm Cancelled, trong tổng số.
+
+Nút xuất báo cáo được disable và ghi rõ chưa khả dụng cho tới khi có API.
+CTA “Tạo đơn” chỉ hiển thị Employee/Manager; HR không được phép tự gửi đơn.
 
 ### 4.3. Đơn nghỉ của tôi — /leaves
 
 **Mục tiêu:** xem lịch sử yêu cầu, lọc, mở chi tiết và hủy request Pending của chính mình.
 
     ┌────────────────────────────────────────────────────────────────────────────┐
-    │ NGHỈ PHÉP                                           [Xuất báo cáo]          │
+    │ NGHỈ PHÉP                              [Xuất báo cáo (chưa khả dụng)]       │
     │ Đơn nghỉ phép của tôi                                                       │
     ├────────────────────────────────────────────────────────────────────────────┤
     │ Tổng số đơn      Chờ duyệt        Đã duyệt         Bị từ chối                 │
@@ -199,7 +203,7 @@ Scope:
 
 Search hiện lọc id, employee name/code, reason và leave type; filter theo status và type. Cancel xuất hiện chỉ với request Pending của user hiện tại.
 
-**Đề xuất:** thay window.alert hiện dùng cho “Xem chi tiết” bằng modal/drawer gồm request reason, dates, approver, status và decision note. Export button hiện là placeholder.
+Chi tiết mở trong accessible modal với lý do, ngày nghỉ, approver, trạng thái và decision note; export được disable cho tới khi có API.
 
 ### 4.4. Tạo đơn nghỉ phép — /request
 
@@ -243,7 +247,7 @@ Backend authoritative validation:
 - Với leave type deductsBalance, kiểm tra quota theo từng năm; request qua năm được phân bổ riêng.
 - Request mới trạng thái Pending; ApproverId snapshot lấy từ ManagerId của employee trong HR Service.
 
-**Mismatch quan trọng:** request summary đang hard-code người duyệt theo role. Backend thực tế dùng ManagerId của employee hiện tại cho mọi role. Nếu ManagerId null, HR có thể xử lý. Nên lấy approver thật từ employee profile/API; nếu chưa có thì dùng label “Tuyến phê duyệt sẽ được xác định khi gửi”.
+Request summary lấy người duyệt theo `approverId`; với approver không nằm trong directory dùng `ManagerName` hiện tại, hoặc nhãn trung tính nếu không xác định được.
 
 Text “ƯỚC TÍNH” và note backend tính lại phải được giữ lại.
 
@@ -317,7 +321,7 @@ UI hiện có: search, toggle Pending-only, summary cards, modal có note option
 ### 4.7. Nhân viên — /employees (HR only)
 
     ┌────────────────────────────────────────────────────────────────────────────┐
-    │ QUẢN TRỊ                                            [Xuất danh sách] [+ Add]│
+    │ QUẢN TRỊ                        [Xuất danh sách (chưa khả dụng)] [+ Add]   │
     │ Nhân viên                                                                  │
     ├─────────────────┬─────────────────┬─────────────────┬──────────────────────┤
     │ Tổng nhân viên  │ Active          │ Manager         │ Phòng ban            │
@@ -404,7 +408,7 @@ Tab Ngày nghỉ lễ:
 
 Holiday modal: tên ngày lễ + ngày. Create/edit/delete đã được nối frontend HR API.
 
-**API/UI gap:** HR API có endpoint tạo Leave Type (POST /api/v1/leave-types) nhưng Policies UI không có flow tạo mới. Service hiện chọn current year; không có year selector trên UI. Nên thêm year selector trước khi phát triển cấu hình nhiều năm.
+Policies UI tạo Leave Type qua HR API. Với loại nghỉ trừ số dư, hạn mức năm hiện tại cần được cấu hình tiếp trong “Sửa chính sách”; service hiện chọn năm hiện tại và chưa có year selector.
 
 ### 4.10. Hồ sơ của tôi — /profile
 
@@ -489,17 +493,17 @@ Endpoints are relative to each service's API base URL.
 
 | Ưu tiên | Phát hiện từ source | Đề xuất |
 |---|---|---|
-| P0 | HR dashboard gắn label số dư toàn tổ chức nhưng service chỉ lấy balance của HR hiện tại | Đổi thành “Số dư phép của tôi” hoặc bỏ card khỏi HR org dashboard |
-| P0 | Request summary đoán approver dựa role; backend dùng ManagerId snapshot | Hiển thị approver thực tế hoặc nhãn trung tính |
-| P0 | Manager pending KPI đếm visible pending, có thể gồm request của chính manager | Dùng approvals inbox count |
-| P1 | Donut bỏ Cancelled nhưng center total gồm tất cả request | Thêm slice Cancelled hoặc sửa mẫu số |
-| P1 | Xem chi tiết request dùng window.alert | Thay bằng accessible modal/drawer |
-| P1 | Export buttons chỉ toast báo API chưa có | Ẩn/disable cho tới khi có endpoint hoặc triển khai export |
-| P1 | Notification bell không có click handler | Ẩn hoặc làm rõ trạng thái “Chưa có thông báo” đến khi có notification backend |
-| P1 | HR mở được /request nhưng nav không có mục Create Leave | Chốt chính sách HR self-request và đồng bộ nav/route/CTA |
-| P1 | UI không thể tạo Leave Type dù API có POST | Thêm create leave type flow |
-| P1 | API reset password employee có nhưng UI thiếu | Thêm action HR reset password nếu nằm trong scope |
-| P1 | “Cài đặt” điều hướng tới /policies | Đổi nhãn hoặc tạo Settings route |
+| Đã xử lý | Dashboard gắn nhãn balance cá nhân như số dư toàn tổ chức | Dùng nhãn “Số dư phép của tôi” cho balance của tài khoản hiện tại |
+| Đã xử lý | Request summary không phân giải được approver ngoài directory | Ánh xạ `approverId`; nếu không tìm được thì dùng nhãn trung tính |
+| Đã xử lý | Manager pending KPI đếm visible pending, có thể gồm request của chính manager | Dùng approvals inbox count |
+| Đã xử lý | Donut bỏ Cancelled nhưng center total gồm tất cả request | Thêm slice Cancelled và tính tổng từ các trạng thái |
+| Đã xử lý | Xem chi tiết request dùng window.alert | Thay bằng modal có role dialog, hỗ trợ Escape, giữ focus trong dialog và trả focus về nút mở |
+| Đã xử lý | Export buttons chỉ toast báo API chưa có | Disable và ghi rõ chưa khả dụng cho tới khi có endpoint |
+| Đã xử lý | Notification bell không có click handler | Disable, bỏ dấu chấm thông báo giả và ghi rõ chưa khả dụng |
+| Đã xử lý | HR có thể mở /request dù chính sách không cho tự gửi đơn | Chặn route và ẩn CTA tạo đơn ở dashboard/lịch đối với HR |
+| Đã xử lý | UI không thể tạo Leave Type dù API có POST | Thêm flow tạo loại nghỉ; HR có thể cấu hình hạn mức năm sau khi tạo |
+| Hoãn theo quyết định | API reset password employee có nhưng UI thiếu | Chỉ thêm HR action sau khi backend hỗ trợ mật khẩu tạm thời và bắt buộc đổi mật khẩu |
+| Đã xử lý | “Cài đặt” điều hướng tới /policies | Đổi thành “Chính sách nghỉ phép” và chỉ hiện với HR |
 | P2 | Danh sách nhân viên và hộp thư phê duyệt phân trang phía client, chọn 10/25/50 dòng mỗi trang | Nếu API cần phục vụ quy mô lớn hơn, chuyển sang pagination phía server và giữ tìm kiếm/lọc trên toàn bộ tập dữ liệu |
 | P2 | Calendar manager scope không như approval inbox | Chốt scope theo current reporting line hay approver snapshot rồi đồng bộ |
 | P2 | Reason UI max 600 nhưng backend nhận 1000 | Đồng bộ giới hạn hoặc ghi rõ lý do UI giới hạn ngắn hơn |

@@ -17,6 +17,13 @@ export interface RequestLeaveType {
   deductsBalance: boolean;
 }
 
+export interface CreateLeaveTypeInput {
+  code: string;
+  name: string;
+  isPaid: boolean;
+  deductsBalance: boolean;
+}
+
 interface LeaveTypeRecord {
   id: number;
   code: string;
@@ -85,7 +92,8 @@ const leaveColor = (code: string): string => code.toUpperCase() === 'ANNUAL' ? '
 const leaveDescription = (code: string): string => {
   if (code.toUpperCase() === 'ANNUAL') return 'Nghỉ hưởng lương để nghỉ ngơi hoặc giải quyết việc cá nhân.';
   if (code.toUpperCase() === 'SICK') return 'Nghỉ để điều trị bệnh hoặc khám sức khỏe.';
-  return 'Nghỉ không lương, không trừ vào số dư phép có lương.';
+  if (code.toUpperCase() === 'UNPAID') return 'Nghỉ không lương, không trừ vào số dư phép có lương.';
+  return 'Nghỉ phép theo chính sách của tổ chức.';
 };
 
 function getLocalizedLeaveTypeName(code: string, fallback: string): string {
@@ -148,7 +156,15 @@ async function getEmployeeDirectory(user: AuthUser): Promise<Map<string, Employe
     const { data: team } = await hrApi.get<EmployeeRecord[]>('/api/v1/me/team');
     employees.push(...team);
   }
-  return new Map(employees.map((employee) => [employee.id, employee]));
+  const directory = new Map(employees.map((employee) => [employee.id, employee]));
+  if (currentEmployee.managerId && currentEmployee.managerName && !directory.has(currentEmployee.managerId)) {
+    directory.set(currentEmployee.managerId, {
+      ...currentEmployee,
+      id: currentEmployee.managerId,
+      fullName: currentEmployee.managerName,
+    });
+  }
+  return directory;
 }
 
 async function mapApiRequests(records: LeaveRequestRecord[], user: AuthUser): Promise<LeaveRequest[]> {
@@ -174,7 +190,7 @@ async function mapApiRequests(records: LeaveRequestRecord[], user: AuthUser): Pr
       days: record.totalDays,
       reason: record.reason,
       status: mapLeaveStatus(record.status),
-      approverName: approver?.fullName ?? '—',
+      approverName: approver?.fullName ?? (record.approverId ? 'Người duyệt không xác định' : '—'),
       createdAt: record.createdAtUtc,
     };
   });
@@ -337,6 +353,45 @@ export async function getPolicies(): Promise<LeavePolicy[]> {
       };
     });
   } catch (error) { throw new Error(`Không tải được loại nghỉ/chính sách. ${getApiErrorMessage(error)}`); }
+}
+
+export async function createLeaveType(input: CreateLeaveTypeInput): Promise<void> {
+  const code = input.code.trim().toUpperCase();
+  const name = input.name.trim();
+  const isPaid = code !== 'UNPAID' && input.isPaid;
+  if (DEMO_MODE) {
+    updateDemoState((state) => {
+      if (state.policies.some((policy) => policy.typeCode.toUpperCase() === code)) {
+        throw new Error(`Mã loại nghỉ '${code}' đã tồn tại.`);
+      }
+      if (code === 'UNPAID' && input.isPaid) {
+        throw new Error('Loại nghỉ UNPAID không thể hưởng lương.');
+      }
+      const leaveTypeId = Math.max(0, ...state.policies.map((policy) => policy.leaveTypeId ?? 0)) + 1;
+      const policy: LeavePolicy = {
+        id: `type-${leaveTypeId}`,
+        leaveTypeId,
+        year: new Date().getFullYear(),
+        typeCode: code,
+        typeName: name,
+        daysPerYear: input.deductsBalance ? 0 : null,
+        paid: isPaid,
+        deductsBalance: input.deductsBalance,
+        description: leaveDescription(code),
+        isActive: true,
+      };
+      return { ...state, policies: [...state.policies, policy] };
+    });
+    return;
+  }
+  try {
+    await hrApi.post<LeaveTypeRecord>('/api/v1/leave-types', {
+      code,
+      name,
+      isPaid,
+      deductsBalance: input.deductsBalance,
+    });
+  } catch (error) { throw new Error(getApiErrorMessage(error)); }
 }
 
 export async function savePolicies(policies: LeavePolicy[]): Promise<void> {
