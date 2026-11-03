@@ -38,11 +38,13 @@ hr-leave-management/
 ├── docker/
 │   └── dotnet.Dockerfile
 ├── docs/
-│   ├── BACKLOG.md
-│   ├── api-architecture.png
-│   ├── erd-hr-db.png
-│   ├── erd-leave-db.png
-│   └── diagrams/
+│   ├── README.md
+│   ├── requirements/       # Yêu cầu và mô tả hệ thống gốc
+│   ├── architecture/       # Sơ đồ Mermaid, PNG và SVG
+│   ├── design/             # Design System và wireframe
+│   ├── performance/        # Báo cáo Redis/load test
+│   ├── testing/            # Kết quả test, chẩn đoán và demo
+│   └── planning/           # Backlog
 ├── src/
 │   ├── hr-service/
 │   │   ├── HrService.Api/
@@ -350,4 +352,6 @@ docker compose down -v
 
 ## Tài liệu liên quan
 
-Các sơ đồ kiến trúc, ERD và sequence diagram nằm trong thư mục [`docs/`](docs/). 
+Tài liệu được phân loại theo chủ đề trong [`docs/`](docs/README.md). Bắt đầu từ
+[mục lục tài liệu](docs/README.md) để tìm yêu cầu, sơ đồ, hướng dẫn, báo cáo và
+checklist nghiệm thu.

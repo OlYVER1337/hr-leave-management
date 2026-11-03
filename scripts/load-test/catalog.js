@@ -6,6 +6,7 @@ const baseUrl = __ENV.HR_BASE_URL || 'http://host.docker.internal:18081';
 const vuCount = Number(__ENV.VUS || 50);
 const duration = __ENV.DURATION || '5m';
 const year = __ENV.YEAR || new Date().getUTCFullYear();
+const authoritativeReads = __ENV.AUTHORITATIVE === 'true';
 const httpErrors = new Counter('catalog_http_errors');
 const reportedFailures = new Set();
 
@@ -27,6 +28,13 @@ const catalogPaths = [
   `/api/v1/leave-policies?year=${year}`,
   `/api/v1/holidays?from=${year}-01-01&to=${year}-12-31`,
 ];
+
+function getRequestPath(path) {
+  if (!authoritativeReads) {
+    return path;
+  }
+  return `${path}${path.includes('?') ? '&' : '?'}authoritative=true`;
+}
 
 export function setup() {
   const response = http.post(
@@ -50,7 +58,7 @@ export function setup() {
   }
 
   for (const path of catalogPaths) {
-    const warmup = http.get(`${baseUrl}${path}`, {
+    const warmup = http.get(`${baseUrl}${getRequestPath(path)}`, {
       headers: { Authorization: `Bearer ${payload.accessToken}` },
       tags: { endpoint: path.split('?')[0], phase: 'warmup' },
     });
@@ -63,7 +71,7 @@ export function setup() {
 
 export default function ({ token }) {
   const path = catalogPaths[(__VU + __ITER) % catalogPaths.length];
-  const response = http.get(`${baseUrl}${path}`, {
+  const response = http.get(`${baseUrl}${getRequestPath(path)}`, {
     headers: { Authorization: `Bearer ${token}` },
     tags: { endpoint: path.split('?')[0] },
   });
