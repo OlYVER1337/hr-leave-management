@@ -1,3 +1,4 @@
+using System.Reflection;
 using HrService.Api.Controllers;
 using HrService.Application.Abstractions;
 using HrService.Application.Common;
