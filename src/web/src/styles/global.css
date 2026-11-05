@@ -120,6 +120,7 @@ button:disabled { opacity: .58; cursor: not-allowed; }
 .text-link { display: inline-flex; align-items: center; gap: 6px; color: #5b77df; font-size: 10px; font-weight: 700; }
 .text-link:hover, .panel-more-link:hover { color: #324fbe; }
 .page-summary-row { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); border: 1px solid #e8edf4; border-radius: 12px; background: #fff; box-shadow: var(--shadow); }
+.manager-team-summary { grid-template-columns: repeat(3, minmax(0,1fr)); }
 .summary-metric { display: flex; flex-direction: column; gap: 7px; padding: 16px 20px; border-right: 1px solid #edf0f5; }
 .summary-metric:last-child { border-right: 0; }
 .summary-metric span { color: #8893a6; font-size: 10px; }
