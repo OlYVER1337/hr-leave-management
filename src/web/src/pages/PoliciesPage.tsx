@@ -52,7 +52,7 @@ export function PoliciesPage() {
     setSaving(true);
     try {
       await restoreBuiltInLeaveType({ ...policy, year: selectedYear });
-      setPoliciesState(await getPolicies());
+      setPoliciesState(await getPolicies(selectedYear));
       notify('Đã thêm lại chính sách nghỉ.');
     } catch (reason) {
       notify(getApiErrorMessage(reason), 'error');
