@@ -214,6 +214,84 @@ public sealed class LeaveCatalogServiceTests
             Times.Never);
     }
 
+    [Theory]
+    [InlineData(2024)]
+    [InlineData(2025)]
+    public async Task CreateLeavePolicyAsync_RejectsCurrentOrPastPolicyYear(int year)
+    {
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        var service = CreateService(repository, new InMemoryLeaveCatalogCache(), unitOfWork);
+
+        var exception = await Assert.ThrowsAsync<RequestValidationException>(
+            () => service.CreateLeavePolicyAsync(new LeavePolicyRequest(4, year, 12m)));
+
+        Assert.Contains("year", exception.Errors.Keys);
+        repository.Verify(
+            item => item.GetLeaveTypeForUpdateByIdAsync(
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+        repository.Verify(item => item.Add(It.IsAny<LeavePolicy>()), Times.Never);
+        unitOfWork.Verify(
+            item => item.SaveChangesAsync(It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateLeavePolicyAsync_RejectsChangingPolicyToCurrentOrPastYear()
+    {
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        repository
+            .Setup(item => item.GetLeavePolicyForUpdateByIdAsync(9, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new LeavePolicy
+            {
+                Id = 9,
+                LeaveTypeId = 4,
+                LeaveType = new LeaveType { Id = 4, Code = "ANNUAL" },
+                Year = 2026,
+                DaysPerYear = 12m
+            });
+        var service = CreateService(repository, new InMemoryLeaveCatalogCache(), unitOfWork);
+
+        var exception = await Assert.ThrowsAsync<RequestValidationException>(
+            () => service.UpdateLeavePolicyAsync(9, new LeavePolicyRequest(4, 2025, 12m)));
+
+        Assert.Contains("year", exception.Errors.Keys);
+        repository.Verify(
+            item => item.GetLeaveTypeForUpdateByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateLeavePolicyAsync_RejectsMovingCurrentYearPolicyIntoFuture()
+    {
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        repository
+            .Setup(item => item.GetLeavePolicyForUpdateByIdAsync(9, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new LeavePolicy
+            {
+                Id = 9,
+                LeaveTypeId = 4,
+                LeaveType = new LeaveType { Id = 4, Code = "ANNUAL" },
+                Year = 2025,
+                DaysPerYear = 12m
+            });
+        var service = CreateService(repository, new InMemoryLeaveCatalogCache(), unitOfWork);
+
+        var exception = await Assert.ThrowsAsync<RequestValidationException>(
+            () => service.UpdateLeavePolicyAsync(9, new LeavePolicyRequest(4, 2026, 12m)));
+
+        Assert.Contains("year", exception.Errors.Keys);
+        repository.Verify(
+            item => item.GetLeaveTypeForUpdateByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     [Fact]
     public async Task CreateLeavePolicyAsync_AddsPolicyForActiveTypeAndInvalidatesCache()
     {
@@ -547,7 +625,16 @@ public sealed class LeaveCatalogServiceTests
         Mock<ILeaveCatalogRepository> repository,
         ILeaveCatalogCache cache,
         Mock<IUnitOfWork>? unitOfWork = null) =>
-        new(repository.Object, cache, (unitOfWork ?? new Mock<IUnitOfWork>()).Object);
+        new(
+            repository.Object,
+            cache,
+            (unitOfWork ?? new Mock<IUnitOfWork>()).Object,
+            new FixedTimeProvider(new DateTimeOffset(2025, 6, 1, 0, 0, 0, TimeSpan.Zero)));
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
+    }
 
     private sealed class InMemoryLeaveCatalogCache : ILeaveCatalogCache
     {
