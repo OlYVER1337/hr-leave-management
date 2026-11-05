@@ -41,8 +41,11 @@ type, policy and holiday information through HR Service's REST API.
    then changes the request, yearly allocations, balance and history in its
    SQL transaction.
 5. HR screens read HR-owned data from HR Service; leave screens read
-   Leave-owned data from Leave Service. Dashboard summaries are assembled from
-   available API data; there is no separate report/export service endpoint.
+   Leave-owned data from Leave Service. Managers read only their active direct
+   reports through the role-protected `GET /api/v1/me/team` endpoint; the
+   organization-wide employee administration endpoints remain HR-only.
+   Dashboard summaries are assembled from available API data; there is no
+   separate report/export service endpoint.
 
 The web/API route prefixes are configured in [nginx.conf](../../src/web/nginx.conf).
 Browser API traffic uses the web origin; host ports for the APIs are also
