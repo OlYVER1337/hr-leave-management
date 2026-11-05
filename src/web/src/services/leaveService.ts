@@ -90,7 +90,7 @@ const leaveDescription = (code: string): string => {
 };
 
 const builtInLeaveTypes = [
-  { code: 'ANNUAL', name: 'Nghỉ phép năm', isPaid: true, deductsBalance: true, defaultDays: 12 },
+  { code: 'ANNUAL', name: 'Nghỉ phép năm', isPaid: true, deductsBalance: true, defaultDays: 15 },
   { code: 'SICK', name: 'Nghỉ ốm', isPaid: true, deductsBalance: true, defaultDays: 10 },
   { code: 'UNPAID', name: 'Nghỉ không lương', isPaid: false, deductsBalance: false, defaultDays: null },
 ] as const;
