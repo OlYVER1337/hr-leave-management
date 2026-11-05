@@ -28,7 +28,7 @@ returned in JSON.
 | `POST /api/v1/auth/refresh` | Refresh cookie | Rotate refresh token and return a new access token |
 | `POST /api/v1/auth/logout` | Refresh cookie | Revoke refresh token and clear cookie |
 | `GET /api/v1/me` | Any authenticated role | Current user's HR profile |
-| `GET /api/v1/me/team` | Authenticated | Current manager's team |
+| `GET /api/v1/me/team` | Manager | Read active direct reports assigned to the current manager; no organization-wide search or write access |
 | `PUT /api/v1/me/password` | Authenticated | Change own password |
 | `GET /api/v1/departments[/{id}]` | Authenticated | Read departments |
 | `POST /api/v1/departments` | HR | Create department |
