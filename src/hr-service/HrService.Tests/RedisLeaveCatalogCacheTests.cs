@@ -79,7 +79,8 @@ public sealed class RedisLeaveCatalogCacheTests
                 distributedCache.Object,
                 Options.Create(new CacheOptions { ExpirationSeconds = 300 }),
                 NullLogger<RedisLeaveCatalogCache>.Instance),
-            Mock.Of<IUnitOfWork>());
+            Mock.Of<IUnitOfWork>(),
+            TimeProvider.System);
 
         var result = await service.GetLeaveTypesAsync(includeInactive: false);
 
