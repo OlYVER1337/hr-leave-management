@@ -116,6 +116,18 @@ export async function deleteDepartment(id: number): Promise<void> {
   catch (error) { throw new Error(getApiErrorMessage(error)); }
 }
 
+export async function getMyTeam(managerId: string): Promise<Employee[]> {
+  if (DEMO_MODE) {
+    return loadDemoState().employees
+      .filter((employee) => employee.managerId === managerId && employee.isActive)
+      .sort((a, b) => a.fullName.localeCompare(b.fullName));
+  }
+  try {
+    const { data } = await hrApi.get<Employee[]>('/api/v1/me/team');
+    return data;
+  } catch (error) { throw new Error(getApiErrorMessage(error)); }
+}
+
 export async function getCurrentEmployee(id: string): Promise<Employee | null> {
   if (DEMO_MODE) return loadDemoState().employees.find((employee) => employee.id === id) ?? null;
   try { const { data } = await hrApi.get<Employee>('/api/v1/me'); return data; }
