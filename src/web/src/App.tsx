@@ -10,6 +10,7 @@ import { RequestLeavePage } from './pages/RequestLeavePage';
 import { ApprovalsPage } from './pages/ApprovalsPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { EmployeesPage } from './pages/EmployeesPage';
+import { ManagerTeamPage } from './pages/ManagerTeamPage';
 import { DepartmentsPage } from './pages/DepartmentsPage';
 import { PoliciesPage } from './pages/PoliciesPage';
 import { ProfilePage } from './pages/ProfilePage';
@@ -37,6 +38,7 @@ export default function App() {
         <Route path="all-leaves" element={<RequireRole roles={['HR']}><LeaveRequestsPage all /></RequireRole>} />
         <Route path="request" element={<RequireRole roles={['Employee', 'Manager']}><RequestLeavePage /></RequireRole>} />
         <Route path="approvals" element={<RequireRole roles={['Manager', 'HR']}><ApprovalsPage /></RequireRole>} />
+        <Route path="my-team" element={<RequireRole roles={['Manager']}><ManagerTeamPage /></RequireRole>} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="employees" element={<RequireRole roles={['HR']}><EmployeesPage /></RequireRole>} />
         <Route path="departments" element={<RequireRole roles={['HR']}><DepartmentsPage /></RequireRole>} />
