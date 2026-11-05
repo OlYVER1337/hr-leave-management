@@ -406,6 +406,67 @@ public sealed class LeaveCatalogServiceTests
     }
 
     [Fact]
+    public async Task UpdateLeavePolicyAsync_UpdatesFuturePolicyAndInvalidatesCacheAfterSave()
+    {
+        var policy = new LeavePolicy
+        {
+            Id = 9,
+            LeaveTypeId = 4,
+            LeaveType = new LeaveType
+            {
+                Id = 4,
+                Code = "ANNUAL",
+                Name = "Annual leave",
+                IsActive = true,
+                DeductsBalance = true
+            },
+            Year = 2026,
+            DaysPerYear = 12m
+        };
+        var leaveType = new LeaveType
+        {
+            Id = 4,
+            Code = "ANNUAL",
+            Name = "Annual leave",
+            IsActive = true,
+            DeductsBalance = true
+        };
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var cache = new InMemoryLeaveCatalogCache();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        var events = new List<string>();
+        repository
+            .Setup(item => item.GetLeavePolicyForUpdateByIdAsync(9, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(policy);
+        repository
+            .Setup(item => item.GetLeaveTypeForUpdateByIdAsync(4, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(leaveType);
+        repository
+            .Setup(item => item.ExistsLeavePolicyAsync(
+                4,
+                2026,
+                9,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        unitOfWork
+            .Setup(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .Callback(() => events.Add("save"))
+            .ReturnsAsync(1);
+        cache.Removed += key => events.Add($"remove:{key}");
+        var service = CreateService(repository, cache, unitOfWork);
+
+        var result = await service.UpdateLeavePolicyAsync(
+            9,
+            new LeavePolicyRequest(4, 2026, 15m));
+
+        Assert.Equal(2026, result.Year);
+        Assert.Equal(15m, result.DaysPerYear);
+        Assert.Equal(
+            new[] { "save", "remove:hr:catalog:leave-policies" },
+            events);
+    }
+
+    [Fact]
     public async Task UpdateLeavePolicyAsync_RejectsUnpaidLeaveTypeWithoutSaving()
     {
         var repository = new Mock<ILeaveCatalogRepository>();
