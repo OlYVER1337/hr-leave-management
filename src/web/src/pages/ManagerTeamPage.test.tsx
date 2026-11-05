@@ -85,9 +85,9 @@ describe('ManagerTeamPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Xem hồ sơ Trần Bình' }));
     expect(screen.getByRole('dialog', { name: 'Thông tin nhân viên' })).toBeInTheDocument();
-    expect(screen.getByText('binh@example.com')).toBeInTheDocument();
-    expect(screen.getByText('EMP-002')).toBeInTheDocument();
-    expect(screen.getByText('Kỹ thuật')).toBeInTheDocument();
+    expect(screen.getAllByText('binh@example.com')).toHaveLength(2);
+    expect(screen.getAllByText('EMP-002')).toHaveLength(2);
+    expect(screen.getAllByText('Kỹ thuật')).toHaveLength(2);
   });
 
   it('shows an empty state when the manager has no assigned active employees', async () => {
