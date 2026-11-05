@@ -45,8 +45,8 @@ returned in JSON.
 | `POST /api/v1/leave-types` | HR | Restore a missing built-in type (ANNUAL, SICK or UNPAID); custom types are rejected |
 | `PUT /api/v1/leave-types/{id}` | HR | Update leave type |
 | `GET /api/v1/leave-policies[/{id}]` | Authenticated | Read policies; accepts `year` and/or `authoritative` query parameters |
-| `POST /api/v1/leave-policies` | HR | Add a missing yearly policy for an active, balance-deducting built-in type; duplicate policies and UNPAID policies are rejected |
-| `PUT /api/v1/leave-policies/{id}` | HR | Update policy |
+| `POST /api/v1/leave-policies` | HR | Add a missing yearly policy for an active, balance-deducting built-in type; only future years are allowed; duplicate policies and UNPAID policies are rejected |
+| `PUT /api/v1/leave-policies/{id}` | HR | Update a policy only when both the existing policy year and requested year are in the future |
 | `GET /api/v1/holidays[/{id}]` | Authenticated | Read holidays |
 | `POST /api/v1/holidays` | HR | Create holiday |
 | `PUT /api/v1/holidays/{id}` | HR | Update holiday |
@@ -194,4 +194,17 @@ identifiers. Clients should branch on the HTTP status and validation field keys.
 The catalog is fixed to ANNUAL, SICK and UNPAID. HR create endpoints exist only
 to restore one of those built-in types or add a missing policy for an active
 type that deducts a balance; they do not enable arbitrary leave types or an
-UNPAID entitlement policy. Existing policies can be updated by HR.
+UNPAID entitlement policy.
+
+### Policy year rule
+
+The business calendar uses Vietnam time (UTC+07:00). HR can create or modify
+leave policies only for a year strictly greater than the current Vietnam business
+year. Policies for the current year and previous years are read-only. Updating
+an old policy by changing its request body to a future year is also rejected:
+the stored policy year itself must already be a future year.
+
+For example, during 2026 the API allows policy creation/update for 2027 and
+later, but rejects create/update operations for 2026 or earlier. Successful
+policy changes invalidate the HR leave-policy Redis cache; Redis remains a
+best-effort cache and is not the source of truth.
