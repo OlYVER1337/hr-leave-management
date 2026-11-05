@@ -1,15 +1,29 @@
+using HrService.Api.Controllers;
 using HrService.Application.Abstractions;
 using HrService.Application.Common;
 using HrService.Application.Dtos;
 using HrService.Application.Services;
 using HrService.Domain.Entities;
 using Moq;
+using Microsoft.AspNetCore.Authorization;
 using Xunit;
 
 namespace HrService.Tests;
 
 public sealed class EmployeeServiceTests
 {
+    [Fact]
+    public void GetTeamEndpoint_RequiresManagerRole()
+    {
+        var method = typeof(CurrentEmployeeController).GetMethod(nameof(CurrentEmployeeController.GetTeam));
+        Assert.NotNull(method);
+
+        var authorization = method!.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>();
+
+        Assert.Contains(authorization, attribute => attribute.Roles == "Manager");
+    }
+
     [Fact]
     public async Task GetLookupAsync_RejectsUserOutsideEmployeeScope()
     {
