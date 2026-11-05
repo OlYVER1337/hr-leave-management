@@ -12,7 +12,8 @@ Frontend hiện có các page:
 - RequestLeavePage
 - ApprovalsPage
 - CalendarPage
-- EmployeesPage
+- EmployeesPage (HR administration)
+- ManagerTeamPage (Manager read-only direct reports)
 - DepartmentsPage
 - PoliciesPage (tab Loại nghỉ & hạn mức, tab Ngày nghỉ lễ)
 - ProfilePage
@@ -44,7 +45,8 @@ Backend là nguồn quyết định quyền cuối cùng. Ẩn link/action trong
 | Tạo đơn nghỉ | ✓ | ✓ | — |
 | Hộp thư phê duyệt | — | ✓ | ✓ |
 | Lịch nghỉ của nhóm | ✓ | ✓ | ✓ |
-| Nhân viên | — | — | ✓ |
+| Nhân viên phụ trách | — | ✓ | — |
+| Nhân viên (quản trị) | — | — | ✓ |
 | Phòng ban | — | — | ✓ |
 | Chính sách nghỉ phép | — | — | ✓ |
 | Tất cả đơn nghỉ | — | — | ✓ |
@@ -62,6 +64,7 @@ Profile và Help nằm cuối sidebar. Header có ngày hiện tại, nhãn Demo
 | /all-leaves | HR |
 | /request | Authenticated |
 | /approvals | Manager, HR |
+| /my-team | Manager |
 | /calendar | Authenticated |
 | /employees | HR |
 | /departments | HR |
@@ -318,7 +321,34 @@ UI hiện có: search, toggle Pending-only, summary cards, modal có note option
 - Calendar manager scope hiện không giống Approval Inbox: inbox dựa trên reporting line hiện tại; calendar dựa trên approver snapshot. Cần quyết định scope sản phẩm và đồng bộ.
 - Mô tả “Lịch nghỉ của nhóm” có thể gây hiểu nhầm nếu user không phải HR và dữ liệu không bao gồm toàn bộ team theo reporting line.
 
-### 4.7. Nhân viên — /employees (HR only)
+### 4.7. Nhân viên phụ trách — /my-team (Manager only)
+
+**Mục tiêu:** Manager tra cứu hồ sơ những nhân viên đang hoạt động được HR phân
+công trực tiếp. Trang chỉ có quyền đọc, không có thao tác quản trị nhân sự.
+
+    ┌────────────────────────────────────────────────────────────────────────────┐
+    │ QUẢN LÝ ĐỘI NHÓM                                                           │
+    │ Nhân viên phụ trách                                                        │
+    ├──────────────────────┬──────────────────────┬──────────────────────────────┤
+    │ Đang phụ trách       │ Đang hoạt động       │ Phòng ban có nhân viên       │
+    ├────────────────────────────────────────────────────────────────────────────┤
+    │ [Tìm tên / email / mã nhân viên / phòng ban…]                               │
+    ├────────────────────┬────────────┬──────────┬─────────┬────────────┬─────────┤
+    │ Nhân viên          │ Mã NV      │ Phòng ban│ Vai trò │ Ngày vào làm│ Trạng thái│
+    ├────────────────────┼────────────┼──────────┼─────────┼────────────┼─────────┤
+    │ Avatar + Email     │ EMP-...    │ Kỹ thuật │ Employee│ Date       │ Active  │ [View]
+    └────────────────────┴────────────┴──────────┴─────────┴────────────┴─────────┘
+
+- Manager chỉ truy vấn nhân viên có `ManagerId` bằng ID của tài khoản hiện tại.
+- Backend chỉ trả về direct reports đang hoạt động qua `GET /api/v1/me/team`.
+- Search lọc trên tên, email, mã nhân viên và phòng ban trong tập dữ liệu được phép.
+- Nút “Xem hồ sơ” mở modal read-only: họ tên, mã, email, vai trò, phòng ban,
+  ngày vào làm, quản lý trực tiếp và trạng thái.
+- Không có nút thêm, sửa, vô hiệu hóa hoặc đổi mật khẩu. API quản trị
+  `/api/v1/employees` tiếp tục chỉ dành cho HR.
+- Nếu chưa được phân công nhân viên, hiển thị empty state thay vì lỗi.
+
+### 4.8. Nhân viên — /employees (HR only)
 
     ┌────────────────────────────────────────────────────────────────────────────┐
     │ QUẢN TRỊ                        [Xuất danh sách (chưa khả dụng)] [+ Add]   │
@@ -346,7 +376,7 @@ HR API also supports reset employee password (PUT /api/v1/employees/{id}/passwor
 
 Deactivation is a soft account disable, not delete. Keep employee row and show “Đã vô hiệu hóa”.
 
-### 4.8. Phòng ban — /departments (HR only)
+### 4.9. Phòng ban — /departments (HR only)
 
     ┌────────────────────────────────────────────────────────────────────────────┐
     │ QUẢN TRỊ                                                   [+ Thêm phòng ban]│
@@ -369,7 +399,7 @@ Deactivation is a soft account disable, not delete. Keep employee row and show �
 - Delete yêu cầu xác nhận; lỗi constraint từ API phải được hiển thị cho người dùng.
 - Tên phòng ban phải unique theo schema/domain.
 
-### 4.9. Chính sách nghỉ phép — /policies (HR only)
+### 4.10. Chính sách nghỉ phép — /policies (HR only)
 
 Tab Loại nghỉ & hạn mức:
 
@@ -409,7 +439,7 @@ Holiday modal: tên ngày lễ + ngày. Create/edit/delete đã được nối f
 
 Policies UI tạo Leave Type qua HR API. Với loại nghỉ trừ số dư, hạn mức năm hiện tại cần được cấu hình tiếp trong “Sửa chính sách”; service hiện chọn năm hiện tại và chưa có year selector.
 
-### 4.10. Hồ sơ của tôi — /profile
+### 4.11. Hồ sơ của tôi — /profile
 
     ┌────────────────────────────────────────────────────────────────────────────┐
     │ TÀI KHOẢN CỦA BẠN                                                          │
