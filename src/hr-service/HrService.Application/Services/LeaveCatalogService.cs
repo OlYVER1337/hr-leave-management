@@ -8,7 +8,8 @@ namespace HrService.Application.Services;
 public sealed class LeaveCatalogService(
     ILeaveCatalogRepository repository,
     ILeaveCatalogCache cache,
-    IUnitOfWork unitOfWork)
+    IUnitOfWork unitOfWork,
+    TimeProvider timeProvider)
 {
     private static readonly IReadOnlyDictionary<string, (string Name, bool IsPaid, bool DeductsBalance)> BuiltInLeaveTypes =
         new Dictionary<string, (string Name, bool IsPaid, bool DeductsBalance)>(StringComparer.OrdinalIgnoreCase)
@@ -216,6 +217,8 @@ public sealed class LeaveCatalogService(
         CancellationToken cancellationToken = default)
     {
         ValidatePolicy(request);
+        EnsureFuturePolicyYear(request.Year);
+
         var leaveType = await repository.GetLeaveTypeForUpdateByIdAsync(
             request.LeaveTypeId,
             cancellationToken)
@@ -270,6 +273,10 @@ public sealed class LeaveCatalogService(
         {
             throw new NotFoundException($"Leave policy with id '{id}' was not found.");
         }
+
+        // Check both the existing and requested year so an old policy cannot be moved forward.
+        EnsureFuturePolicyYear(policy.Year);
+        EnsureFuturePolicyYear(request.Year);
 
         var leaveType = await repository.GetLeaveTypeForUpdateByIdAsync(
             request.LeaveTypeId,
@@ -476,6 +483,18 @@ public sealed class LeaveCatalogService(
         }
 
         return name;
+    }
+
+    private void EnsureFuturePolicyYear(int year)
+    {
+        // Business calendar uses Vietnam time (UTC+07:00), independent of the container timezone.
+        var currentYear = timeProvider.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).Year;
+        if (year <= currentYear)
+        {
+            throw Problems.Invalid(
+                "year",
+                $"Leave policies can only be created or changed for future years. Current year: {currentYear}.");
+        }
     }
 
     private static void ValidatePolicy(LeavePolicyRequest request)
