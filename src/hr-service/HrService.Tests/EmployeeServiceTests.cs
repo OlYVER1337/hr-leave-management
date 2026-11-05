@@ -51,6 +51,30 @@ public sealed class EmployeeServiceTests
     }
 
     [Fact]
+    public async Task GetTeamAsync_ReturnsEmployeesFromManagersDirectReports()
+    {
+        var managerId = Guid.NewGuid();
+        var directReports = new[]
+        {
+            CreateEmployee(Guid.NewGuid(), managerId),
+            CreateEmployee(Guid.NewGuid(), managerId)
+        };
+        var repository = new Mock<IEmployeeRepository>();
+        repository
+            .Setup(item => item.GetDirectReportsAsync(managerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(directReports);
+        var service = CreateService(repository);
+
+        var result = await service.GetTeamAsync(managerId);
+
+        Assert.Equal(2, result.Count);
+        Assert.All(result, employee => Assert.Equal(managerId, employee.ManagerId));
+        repository.Verify(
+            item => item.GetDirectReportsAsync(managerId, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
     public async Task ChangePasswordAsync_VerifiesCurrentPasswordHashesNewPasswordAndSaves()
     {
         var employee = CreateEmployee(Guid.NewGuid());
