@@ -1,15 +1,30 @@
+using System.Reflection;
+using HrService.Api.Controllers;
 using HrService.Application.Abstractions;
 using HrService.Application.Common;
 using HrService.Application.Dtos;
 using HrService.Application.Services;
 using HrService.Domain.Entities;
 using Moq;
+using Microsoft.AspNetCore.Authorization;
 using Xunit;
 
 namespace HrService.Tests;
 
 public sealed class EmployeeServiceTests
 {
+    [Fact]
+    public void GetTeamEndpoint_RequiresManagerRole()
+    {
+        var method = typeof(CurrentEmployeeController).GetMethod(nameof(CurrentEmployeeController.GetTeam));
+        Assert.NotNull(method);
+
+        var authorization = method!.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>();
+
+        Assert.Contains(authorization, attribute => attribute.Roles == "Manager");
+    }
+
     [Fact]
     public async Task GetLookupAsync_RejectsUserOutsideEmployeeScope()
     {
@@ -48,6 +63,30 @@ public sealed class EmployeeServiceTests
         Assert.Equal(employee.Code, result.Code);
         Assert.Equal(employee.ManagerId, result.ManagerId);
         Assert.DoesNotContain("Email", typeof(EmployeeLookupResponse).GetProperties().Select(property => property.Name));
+    }
+
+    [Fact]
+    public async Task GetTeamAsync_ReturnsEmployeesFromManagersDirectReports()
+    {
+        var managerId = Guid.NewGuid();
+        var directReports = new[]
+        {
+            CreateEmployee(Guid.NewGuid(), managerId),
+            CreateEmployee(Guid.NewGuid(), managerId)
+        };
+        var repository = new Mock<IEmployeeRepository>();
+        repository
+            .Setup(item => item.GetDirectReportsAsync(managerId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(directReports);
+        var service = CreateService(repository);
+
+        var result = await service.GetTeamAsync(managerId);
+
+        Assert.Equal(2, result.Count);
+        Assert.All(result, employee => Assert.Equal(managerId, employee.ManagerId));
+        repository.Verify(
+            item => item.GetDirectReportsAsync(managerId, It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]

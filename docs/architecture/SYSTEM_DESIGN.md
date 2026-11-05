@@ -41,8 +41,11 @@ type, policy and holiday information through HR Service's REST API.
    then changes the request, yearly allocations, balance and history in its
    SQL transaction.
 5. HR screens read HR-owned data from HR Service; leave screens read
-   Leave-owned data from Leave Service. Dashboard summaries are assembled from
-   available API data; there is no separate report/export service endpoint.
+   Leave-owned data from Leave Service. Managers read only their active direct
+   reports through the role-protected `GET /api/v1/me/team` endpoint; the
+   organization-wide employee administration endpoints remain HR-only.
+   Dashboard summaries are assembled from available API data; there is no
+   separate report/export service endpoint.
 
 The web/API route prefixes are configured in [nginx.conf](../../src/web/nginx.conf).
 Browser API traffic uses the web origin; host ports for the APIs are also
@@ -79,3 +82,37 @@ production environment. Before production, provide managed secrets, TLS and
 network policy, backups/restore procedures, production-grade observability, and
 a migration/rollback release procedure. OpenAPI JSON is exposed only when the
 services run in Development.
+
+
+## Manager team directory
+
+Managers can read the active employees assigned directly to them through the
+HR-owned endpoint `GET /api/v1/me/team`. The endpoint is protected with the
+`Manager` role and derives the manager identity from the authenticated JWT; the
+client does not choose another manager ID in API mode.
+
+The Web application exposes this capability at `/my-team` and shows the
+**Nhân viên phụ trách** navigation item only for Managers. The screen supports
+searching the returned direct reports and opening a read-only employee detail
+modal. It does not grant create, edit, deactivate or organization-wide employee
+search permissions.
+
+This flow stays inside HR Service because the reporting hierarchy and employee
+profiles are HR-owned data. Leave Service does not own or duplicate the team
+directory.
+
+## Leave policy year lifecycle
+
+Leave policies are HR-owned catalog data and are cached in Redis with a
+cache-aside pattern. SQL Server remains authoritative.
+
+The business rule uses Vietnam time (UTC+07:00): a policy can be created or
+changed only for a year strictly after the current business year. Current and
+past years are read-only. During an update, the service validates both the
+stored policy year and the requested year so an old policy cannot be moved into
+the future to bypass the lock.
+
+After a successful leave-policy create or update, the policy cache key is
+invalidated. The next cacheable read reloads the authoritative SQL data.
+If Redis is unavailable, the system must continue by treating the cache as a
+best-effort optimization rather than the source of truth.

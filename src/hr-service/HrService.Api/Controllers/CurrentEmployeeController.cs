@@ -26,6 +26,7 @@ public sealed class CurrentEmployeeController(EmployeeService employeeService) :
     }
 
     [HttpGet("team")]
+    [Authorize(Roles = "Manager")]
     public async Task<ActionResult<IReadOnlyList<EmployeeResponse>>> GetTeam(
         CancellationToken cancellationToken)
     {

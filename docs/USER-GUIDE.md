@@ -88,10 +88,12 @@ bằng tài khoản có quyền tương ứng.
    ban, ngày vào làm và người quản lý trực tiếp nếu có. Mã nhân viên được hệ
    thống tự sinh; không cần nhập mã. Có thể tìm kiếm, lọc, phân trang, sửa hồ sơ
    hoặc vô hiệu hóa tài khoản.
-3. Vào **Chính sách nghỉ phép** để xem/sửa hạn mức ba loại cố định:
+3. Vào **Chính sách nghỉ phép** để quản lý ba loại nghỉ cố định:
    `ANNUAL` (nghỉ phép năm), `SICK` (nghỉ ốm), `UNPAID` (nghỉ không lương).
-   Không thể tạo loại nghỉ tùy ý hoặc xóa chính sách; nếu thiếu loại chuẩn, HR
-   có thể thêm lại. Tab **Ngày nghỉ lễ** dùng để thêm, sửa hoặc xóa ngày lễ.
+   Chọn **Năm áp dụng** trước khi xem hạn mức. Chỉ các năm tương lai mới được
+   tạo hoặc chỉnh sửa; năm hiện tại và các năm trước chỉ có thể xem. Nếu thiếu
+   một loại chuẩn, HR có thể khôi phục loại đó khi đang làm việc với năm tương
+   lai. Tab **Ngày nghỉ lễ** dùng để thêm, sửa hoặc xóa ngày lễ.
 4. Dùng **Tất cả đơn nghỉ** để theo dõi các đơn trong tổ chức và
    **Hộp thư phê duyệt** để xử lý đơn chờ.
 
@@ -112,8 +114,9 @@ bằng tài khoản có quyền tương ứng.
 1. Dùng **Hộp thư phê duyệt** để xem các đơn được giao cho mình. Mở yêu cầu,
    kiểm tra nhân viên, loại nghỉ, khoảng ngày và lý do; có thể nhập ghi chú
    không bắt buộc rồi chọn **Phê duyệt đơn** hoặc **Từ chối**.
-2. Dùng **Lịch nghỉ của nhóm** để xem lịch đội ngũ.
-3. Quản lý cũng có thể tạo đơn nghỉ cho chính mình và theo dõi đơn của mình.
+2. Mở **Nhân viên phụ trách** để tra cứu các nhân viên được HR phân công trực tiếp cho mình. Có thể tìm theo tên, email, mã nhân viên hoặc phòng ban; chọn **Xem hồ sơ** để xem thông tin cơ bản như vai trò, phòng ban, ngày vào làm và trạng thái. Danh sách chỉ bao gồm nhân viên đang hoạt động báo cáo trực tiếp; đây là quyền chỉ đọc, không có thao tác thêm, sửa hoặc vô hiệu hóa.
+3. Dùng **Lịch nghỉ của nhóm** để xem lịch đội ngũ.
+4. Quản lý cũng có thể tạo đơn nghỉ cho chính mình và theo dõi đơn của mình.
 
 HR có thể xem và xử lý mọi đơn đang chờ; quản lý chỉ xử lý đơn được phân công.
 
@@ -126,8 +129,9 @@ HR có thể xem và xử lý mọi đơn đang chờ; quản lý chỉ xử lý
    **Phòng ban**, **Chính sách nghỉ phép** và **Lịch nghỉ của nhóm**.
 3. Đăng xuất, chọn tài khoản Employee, tạo một đơn nghỉ có ngày hợp lệ và lý
    do; xem đơn trong **Đơn nghỉ của tôi**.
-4. Đăng xuất, chọn tài khoản Manager, mở **Hộp thư phê duyệt**, xem xét đơn rồi
-   phê duyệt hoặc từ chối.
+4. Đăng xuất, chọn tài khoản Manager, mở **Nhân viên phụ trách** để kiểm tra
+   danh sách nhân viên báo cáo trực tiếp, sau đó mở **Hộp thư phê duyệt** để
+   xem xét đơn rồi phê duyệt hoặc từ chối.
 5. Đăng nhập lại Employee để xác nhận trạng thái đã cập nhật.
 
 Chế độ dùng thử lưu dữ liệu theo trình duyệt; làm mới trang không đồng nghĩa
