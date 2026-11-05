@@ -112,8 +112,9 @@ bằng tài khoản có quyền tương ứng.
 1. Dùng **Hộp thư phê duyệt** để xem các đơn được giao cho mình. Mở yêu cầu,
    kiểm tra nhân viên, loại nghỉ, khoảng ngày và lý do; có thể nhập ghi chú
    không bắt buộc rồi chọn **Phê duyệt đơn** hoặc **Từ chối**.
-2. Dùng **Lịch nghỉ của nhóm** để xem lịch đội ngũ.
-3. Quản lý cũng có thể tạo đơn nghỉ cho chính mình và theo dõi đơn của mình.
+2. Mở **Nhân viên phụ trách** để tra cứu các nhân viên được HR phân công trực tiếp cho mình. Có thể tìm theo tên, email, mã nhân viên hoặc phòng ban; chọn **Xem hồ sơ** để xem thông tin cơ bản như vai trò, phòng ban, ngày vào làm và trạng thái. Danh sách chỉ bao gồm nhân viên đang hoạt động báo cáo trực tiếp; đây là quyền chỉ đọc, không có thao tác thêm, sửa hoặc vô hiệu hóa.
+3. Dùng **Lịch nghỉ của nhóm** để xem lịch đội ngũ.
+4. Quản lý cũng có thể tạo đơn nghỉ cho chính mình và theo dõi đơn của mình.
 
 HR có thể xem và xử lý mọi đơn đang chờ; quản lý chỉ xử lý đơn được phân công.
 
