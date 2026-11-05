@@ -16,6 +16,7 @@ const primaryItems: NavItem[] = [
   { label: 'Đơn nghỉ của tôi', to: '/leaves', icon: FileClock, roles: ['Employee', 'Manager'] },
   { label: 'Tạo đơn nghỉ', to: '/request', icon: CalendarDays, roles: ['Employee', 'Manager'] },
   { label: 'Hộp thư phê duyệt', to: '/approvals', icon: ClipboardCheck, roles: ['Manager', 'HR'] },
+  { label: 'Nhân viên phụ trách', to: '/my-team', icon: Users, roles: ['Manager'] },
   { label: 'Lịch nghỉ của nhóm', to: '/calendar', icon: CalendarRange, roles: ['Employee', 'Manager', 'HR'] },
 ];
 const adminItems: NavItem[] = [
