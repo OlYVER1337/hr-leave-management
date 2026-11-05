@@ -62,7 +62,7 @@ Profile và Help nằm cuối sidebar. Header có ngày hiện tại, nhãn Demo
 | / | Authenticated |
 | /leaves | Authenticated |
 | /all-leaves | HR |
-| /request | Authenticated |
+| /request | Employee, Manager |
 | /approvals | Manager, HR |
 | /my-team | Manager |
 | /calendar | Authenticated |
@@ -376,6 +376,28 @@ HR API also supports reset employee password (PUT /api/v1/employees/{id}/passwor
 
 Deactivation is a soft account disable, not delete. Keep employee row and show “Đã vô hiệu hóa”.
 
+### 4.9a. Nhân viên phụ trách — /my-team (Manager only)
+
+    ┌────────────────────────────────────────────────────────────────────────────┐
+    │ QUẢN LÝ ĐỘI NHÓM                                                          │
+    │ Nhân viên phụ trách                                                       │
+    │ Tra cứu hồ sơ những nhân viên được phân công trực tiếp cho bạn.           │
+    ├─────────────────┬─────────────────┬────────────────────────────────────────┤
+    │ Đang phụ trách  │ Đang hoạt động  │ Phòng ban có nhân viên                  │
+    ├────────────────────────────────────────────────────────────────────────────┤
+    │ [🔍 Tìm tên, email, mã nhân viên, phòng ban…]  Chỉ nhân viên trực tiếp     │
+    ├────────────┬─────────┬──────────┬───────────┬──────────┬─────────┬──────────┤
+    │ Nhân viên  │ Mã NV   │ Phòng ban│ Vai trò   │ Hire date│ Status  │ [Xem]    │
+    └────────────┴─────────┴──────────┴───────────┴──────────┴─────────┴──────────┘
+
+- Chỉ Manager mới có route và menu này.
+- API mode gọi `GET /api/v1/me/team`; backend xác định Manager từ JWT.
+- Chỉ hiển thị nhân viên đang hoạt động có quan hệ báo cáo trực tiếp.
+- Tìm kiếm theo họ tên, email, mã nhân viên và phòng ban trong tập dữ liệu trả về.
+- Nút **Xem hồ sơ** mở modal chỉ đọc: họ tên, mã nhân viên, email, vai trò,
+  phòng ban, ngày vào làm, quản lý trực tiếp và trạng thái.
+- Không có thao tác thêm, sửa, vô hiệu hóa hoặc tìm kiếm toàn bộ tổ chức.
+
 ### 4.9. Phòng ban — /departments (HR only)
 
     ┌────────────────────────────────────────────────────────────────────────────┐
@@ -437,7 +459,10 @@ Tab Ngày nghỉ lễ:
 
 Holiday modal: tên ngày lễ + ngày. Create/edit/delete đã được nối frontend HR API.
 
-Policies UI tạo Leave Type qua HR API. Với loại nghỉ trừ số dư, hạn mức năm hiện tại cần được cấu hình tiếp trong “Sửa chính sách”; service hiện chọn năm hiện tại và chưa có year selector.
+Policies có bộ chọn **Năm áp dụng** và mặc định mở năm kế tiếp. HR có thể xem
+các năm hiện tại/quá khứ nhưng nút thay đổi bị khóa. Chỉ năm tương lai mới cho
+phép thiết lập hoặc sửa hạn mức. Backend cũng thực thi cùng quy tắc nên không
+thể vượt qua giới hạn bằng cách gọi API trực tiếp.
 
 ### 4.11. Hồ sơ của tôi — /profile
 
