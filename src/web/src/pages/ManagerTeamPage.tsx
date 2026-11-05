@@ -83,6 +83,11 @@ export function ManagerTeamPage() {
 
       {loading ? (
         <div className="table-loading"><span /> Đang tải danh sách nhân viên…</div>
+      ) : error ? (
+        <EmptyState
+          title="Không thể tải danh sách nhân viên"
+          description="Kiểm tra kết nối HR Service hoặc thử đăng nhập lại."
+        />
       ) : filteredEmployees.length === 0 ? (
         <EmptyState
           title={employees.length === 0 ? 'Bạn chưa có nhân viên được phân công' : 'Không tìm thấy nhân viên'}
