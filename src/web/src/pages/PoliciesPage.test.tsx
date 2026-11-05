@@ -30,8 +30,10 @@ vi.mock('../services/leaveService', () => ({
   savePolicies: mocks.savePolicies,
 }));
 
+const futureYear = new Date().getFullYear() + 1;
 const annual: LeavePolicy = {
   id: 'annual',
+  year: futureYear,
   leaveTypeId: 1,
   typeCode: 'ANNUAL',
   typeName: 'Nghỉ phép năm',
@@ -95,6 +97,24 @@ describe('PoliciesPage', () => {
 
     expect(await screen.findAllByRole('button', { name: 'Sửa chính sách' })).not.toHaveLength(0);
     expect(screen.queryByRole('button', { name: /Xóa chính sách/ })).not.toBeInTheDocument();
+  });
+
+  it('locks policy editing for the current year', async () => {
+    const user = userEvent.setup();
+    renderPoliciesPage();
+
+    await screen.findByRole('heading', { name: 'Nghỉ phép năm' });
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Năm áp dụng' }),
+      String(new Date().getFullYear()),
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: 'Chính sách đã khóa' })).toHaveLength(3);
+    });
+    expect(screen.getAllByRole('button', { name: 'Chính sách đã khóa' }).every(
+      (button) => (button as HTMLButtonElement).disabled,
+    )).toBe(true);
   });
 
   it('restores a deleted built-in policy', async () => {

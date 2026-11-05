@@ -90,7 +90,7 @@ const leaveDescription = (code: string): string => {
 };
 
 const builtInLeaveTypes = [
-  { code: 'ANNUAL', name: 'Nghỉ phép năm', isPaid: true, deductsBalance: true, defaultDays: 12 },
+  { code: 'ANNUAL', name: 'Nghỉ phép năm', isPaid: true, deductsBalance: true, defaultDays: 15 },
   { code: 'SICK', name: 'Nghỉ ốm', isPaid: true, deductsBalance: true, defaultDays: 10 },
   { code: 'UNPAID', name: 'Nghỉ không lương', isPaid: false, deductsBalance: false, defaultDays: null },
 ] as const;
@@ -324,8 +324,7 @@ export async function decideLeaveRequest(id: string, decision: 'approve' | 'reje
   catch (error) { throw new Error(getApiErrorMessage(error)); }
 }
 
-export async function getPolicies(): Promise<LeavePolicy[]> {
-  const year = new Date().getFullYear();
+export async function getPolicies(year = new Date().getFullYear() + 1): Promise<LeavePolicy[]> {
   if (DEMO_MODE) {
     const savedPolicies = new Map(
       loadDemoState().policies.map((policy) => [policy.typeCode.toUpperCase(), policy]),
@@ -382,7 +381,7 @@ export async function getPolicies(): Promise<LeavePolicy[]> {
 export async function restoreBuiltInLeaveType(policy: LeavePolicy): Promise<void> {
   const definition = builtInLeaveTypes.find((type) => type.code === policy.typeCode);
   if (!definition) throw new Error(`Unsupported built-in leave type: ${policy.typeCode}.`);
-  const year = new Date().getFullYear();
+  const year = policy.year ?? new Date().getFullYear() + 1;
   if (DEMO_MODE) {
     updateDemoState((state) => {
       const existing = state.policies.find((item) => item.typeCode === policy.typeCode);
@@ -466,7 +465,7 @@ export async function savePolicies(policies: LeavePolicy[]): Promise<void> {
     return;
   }
   try {
-    const year = new Date().getFullYear();
+    const defaultYear = new Date().getFullYear() + 1;
     await Promise.all(policies.map(async (policy) => {
       if (!policy.leaveTypeId) throw new Error(`Missing leaveTypeId for ${policy.typeName}.`);
       const definition = builtInLeaveTypes.find((type) => type.code === policy.typeCode);
@@ -478,7 +477,7 @@ export async function savePolicies(policies: LeavePolicy[]): Promise<void> {
         isActive: policy.isActive,
       });
       if (definition.deductsBalance && policy.daysPerYear !== null) {
-        const body = { leaveTypeId: policy.leaveTypeId, year: policy.year ?? year, daysPerYear: policy.daysPerYear };
+        const body = { leaveTypeId: policy.leaveTypeId, year: policy.year ?? defaultYear, daysPerYear: policy.daysPerYear };
         if (policy.policyId) await hrApi.put(`/api/v1/leave-policies/${policy.policyId}`, body);
         else await hrApi.post('/api/v1/leave-policies', body);
       }

@@ -50,7 +50,8 @@ public sealed class SqlRedisIntegrationTests : IClassFixture<SqlRedisIntegration
             var service = new LeaveCatalogService(
                 repository,
                 catalogCache,
-                new UnitOfWork(context));
+                new UnitOfWork(context),
+                TimeProvider.System);
 
             var leaveType = await service.CreateLeaveTypeAsync(
                 new CreateLeaveTypeRequest("SICK", "Integration leave", true, true));
