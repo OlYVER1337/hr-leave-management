@@ -22,6 +22,7 @@ vi.mock('../services/hrService', () => ({
 }));
 
 const department: Department = { id: 1, name: 'Kỹ thuật' };
+const secondDepartment: Department = { id: 2, name: 'Văn phòng Hà Nội' };
 const employees: Employee[] = Array.from({ length: 25 }, (_, index) => {
   const number = index + 1;
   const suffix = String(number).padStart(2, '0');
@@ -40,7 +41,7 @@ const employees: Employee[] = Array.from({ length: 25 }, (_, index) => {
   };
 });
 
-describe('EmployeesPage pagination', () => {
+describe('EmployeesPage filtering, sorting and pagination', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getEmployees).mockResolvedValue(employees);
@@ -86,6 +87,46 @@ describe('EmployeesPage pagination', () => {
     });
     expect(screen.getByRole('button', { name: 'Trang trước' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Trang sau' })).toBeDisabled();
+  });
+
+  it('sorts employees by name in ascending and descending order', async () => {
+    const user = userEvent.setup();
+    render(<EmployeesPage />);
+
+    await screen.findByText('Nhân viên 01');
+    const sortByName = screen.getByRole('button', { name: 'Sắp xếp theo họ tên' });
+    const rows = () => within(screen.getByRole('table')).getAllByRole('row');
+
+    await user.click(sortByName);
+    expect(within(rows()[1]).getByText('Nhân viên 25')).toBeInTheDocument();
+    expect(rows()[0].querySelector('th')).toHaveAttribute('aria-sort', 'descending');
+
+    await user.click(sortByName);
+    expect(within(rows()[1]).getByText('Nhân viên 01')).toBeInTheDocument();
+    expect(rows()[0].querySelector('th')).toHaveAttribute('aria-sort', 'ascending');
+  });
+
+  it('filters employees by the selected department name', async () => {
+    const user = userEvent.setup();
+    const employeesAcrossDepartments = employees.map((employee, index) =>
+      index % 2 === 0
+        ? employee
+        : { ...employee, departmentId: secondDepartment.id, departmentName: secondDepartment.name },
+    );
+    vi.mocked(getEmployees).mockResolvedValue(employeesAcrossDepartments);
+    vi.mocked(getDepartments).mockResolvedValue([department, secondDepartment]);
+
+    render(<EmployeesPage />);
+
+    await screen.findByText('Nhân viên 01');
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Lọc theo phòng ban' }),
+      String(secondDepartment.id),
+    );
+
+    expect(screen.getByText('Nhân viên 02')).toBeInTheDocument();
+    expect(screen.queryByText('Nhân viên 01')).not.toBeInTheDocument();
+    expect(document.querySelector('.table-footer')?.textContent).toContain('1–10 / 12');
   });
 
   it('shows the employee code as system-generated instead of editable input', async () => {
