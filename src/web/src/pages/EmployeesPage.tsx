@@ -177,7 +177,7 @@ export function EmployeesPage() {
             <ChevronDown size={14} />
           </label>
           <label className="select-wrap">
-            <select aria-label="Lọc theo trạng thái" value={activeFilter} onChange={(event) => { setActiveFilter(event.target.value as 'All' | 'Active' | 'Inactive); setPage(1); }}>
+            <select aria-label="Lọc theo trạng thái" value={activeFilter} onChange={(event) => { setActiveFilter(event.target.value as 'All' | 'Active' | 'Inactive'); setPage(1); }}>
               <option value="All">Tất cả trạng thái</option>
               <option value="Active">Đang hoạt động</option>
               <option value="Inactive">Đã vô hiệu hóa</option>
