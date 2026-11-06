@@ -1,97 +1,288 @@
-# Database design
+# Thiết kế cơ sở dữ liệu
 
-## Ownership and ERDs
+## Quyền sở hữu dữ liệu và ERD
 
-SQL Server hosts two databases. HR Service owns `HR_DB`; Leave Service owns
-`Leave_DB`. The diagrams are maintained in Mermaid:
+SQL Server chứa hai cơ sở dữ liệu:
 
-- [HR ERD](diagrams/png/erd-hr-db.png) ([source](diagrams/mermaid/erd-hr-db.mmd))
-- [Leave ERD](diagrams/png/erd-leave-db.png) ([source](diagrams/mermaid/erd-leave-db.mmd))
+- HR Service sở hữu `HR_DB`.
+- Leave Service sở hữu `Leave_DB`.
 
-Cross-service IDs in `Leave_DB` are references by convention, not SQL foreign
-keys. Only relationships fully owned by the same service have database
-constraints.
+Các sơ đồ được duy trì bằng Mermaid:
 
-## HR_DB schema
+- [HR ERD](diagrams/png/erd-hr-db.png) ([mã nguồn](diagrams/mermaid/erd-hr-db.mmd))
+- [Leave ERD](diagrams/png/erd-leave-db.png) ([mã nguồn](diagrams/mermaid/erd-leave-db.mmd))
 
-| Table | Purpose and important columns |
+Các ID tham chiếu giữa các service trong `Leave_DB` chỉ là **tham chiếu theo quy ước**, không phải SQL Foreign Key.
+
+Chỉ các mối quan hệ mà cùng một service sở hữu hoàn toàn mới được áp dụng database constraint trực tiếp.
+
+---
+
+# Cấu trúc HR_DB
+
+| Bảng | Mục đích và các cột quan trọng |
 |---|---|
-| `Departments` | Organization units: identity `Id`, required `Name` (100 chars) |
-| `Employees` | HR identity and account: GUID `Id`, `Code` (20), `FullName` (150), `Email` (200), `PasswordHash`, string `Role`, `HireDate`, `IsActive`, `DepartmentId`, optional `ManagerId` |
-| `LeaveTypes` | Catalog: identity `Id`, `Code` (20), `Name` (100), `IsPaid`, `DeductsBalance`, `IsActive` |
-| `LeavePolicies` | Annual entitlement: identity `Id`, `LeaveTypeId`, `Year`, `DaysPerYear` (`decimal(5,1)`) |
-| `Holidays` | Non-working dates: identity `Id`, `HolidayDate`, `Name` (150) |
-| `RefreshTokens` | Hashed refresh-token lifecycle: GUID `Id`, `EmployeeId`, `TokenHash`, creation/expiry/revocation timestamps and replacement hash |
+| `Departments` | Các đơn vị tổ chức: `Id` tự tăng, `Name` bắt buộc (tối đa 100 ký tự) |
+| `Employees` | Thông tin nhân sự và tài khoản: `Id` kiểu GUID, `Code` (20), `FullName` (150), `Email` (200), `PasswordHash`, `Role` dạng chuỗi, `HireDate`, `IsActive`, `DepartmentId`, `ManagerId` tùy chọn |
+| `LeaveTypes` | Danh mục loại nghỉ: `Id` tự tăng, `Code` (20), `Name` (100), `IsPaid`, `DeductsBalance`, `IsActive` |
+| `LeavePolicies` | Chính sách số ngày nghỉ theo năm: `Id` tự tăng, `LeaveTypeId`, `Year`, `DaysPerYear` (`decimal(5,1)`) |
+| `Holidays` | Các ngày không làm việc: `Id` tự tăng, `HolidayDate`, `Name` (150) |
+| `RefreshTokens` | Vòng đời Refresh Token đã được hash: `Id` GUID, `EmployeeId`, `TokenHash`, thời gian tạo/hết hạn/thu hồi và hash của token thay thế |
 
-Important keys and constraints:
+### Các khóa và ràng buộc quan trọng
 
-- Unique indexes: `Departments.Name`, `Employees.Code`, `Employees.Email`,
-  `LeaveTypes.Code`, `LeavePolicies(LeaveTypeId, Year)`,
-  `Holidays.HolidayDate`, and `RefreshTokens.TokenHash`.
-- `Employees.DepartmentId` references `Departments`; `Employees.ManagerId`
-  self-references `Employees`. Both use `Restrict` delete behavior.
-- `LeavePolicies.LeaveTypeId` references `LeaveTypes` with `Restrict`.
-- `RefreshTokens.EmployeeId` references `Employees` with cascade delete.
-- Supporting refresh-token index:
-  `(EmployeeId, RevokedAtUtc, ExpiresAtUtc)`.
+- Unique index:
+  - `Departments.Name`
+  - `Employees.Code`
+  - `Employees.Email`
+  - `LeaveTypes.Code`
+  - `LeavePolicies(LeaveTypeId, Year)`
+  - `Holidays.HolidayDate`
+  - `RefreshTokens.TokenHash`
 
-## Leave_DB schema
+- `Employees.DepartmentId` tham chiếu đến `Departments`.
 
-| Table | Purpose and important columns |
+- `Employees.ManagerId` tự tham chiếu đến `Employees`.
+
+Hai quan hệ trên sử dụng hành vi xóa:
+
+```text
+Restrict
+```
+
+- `LeavePolicies.LeaveTypeId` tham chiếu đến `LeaveTypes` với hành vi:
+
+```text
+Restrict
+```
+
+- `RefreshTokens.EmployeeId` tham chiếu đến `Employees` với hành vi:
+
+```text
+Cascade Delete
+```
+
+- Index hỗ trợ cho Refresh Token:
+
+```text
+(EmployeeId, RevokedAtUtc, ExpiresAtUtc)
+```
+
+---
+
+# Cấu trúc Leave_DB
+
+| Bảng | Mục đích và các cột quan trọng |
 |---|---|
-| `LeaveBalances` | Per employee/type/year entitlement and counters (`Entitled`, `Used`, `Pending`, `decimal(6,1)`); SQL `rowversion` |
-| `LeaveRequests` | Request data: employee/approver IDs, department snapshot, leave type ID, date range, total days, reason (1,000 chars), status, timestamps; SQL `rowversion` |
-| `LeaveRequestHistories` | Append-style action/status history, actor ID, optional note (1,000 chars), timestamp |
-| `LeaveRequestYearAllocations` | Days assigned to each calendar year for a request spanning years |
+| `LeaveBalances` | Số dư phép theo nhân viên/loại nghỉ/năm, bao gồm quyền được hưởng và các bộ đếm `Entitled`, `Used`, `Pending`, sử dụng `decimal(6,1)`; có SQL `rowversion` |
+| `LeaveRequests` | Thông tin đơn nghỉ: ID nhân viên/người phê duyệt, snapshot phòng ban, ID loại nghỉ, khoảng thời gian nghỉ, tổng số ngày, lý do (tối đa 1.000 ký tự), trạng thái và timestamps; có SQL `rowversion` |
+| `LeaveRequestHistories` | Lịch sử thao tác/trạng thái theo kiểu append, ID người thực hiện, ghi chú tùy chọn (tối đa 1.000 ký tự), thời gian thực hiện |
+| `LeaveRequestYearAllocations` | Số ngày được phân bổ cho từng năm dương lịch đối với đơn nghỉ kéo dài qua nhiều năm |
 
-Important keys and constraints:
+### Các khóa và ràng buộc quan trọng
 
-- Unique index `LeaveBalances(EmployeeId, LeaveTypeId, Year)` prevents duplicate
-  balances for the same employee, type and year.
-- `LeaveRequests(EmployeeId, Status, StartDate, EndDate)` supports employee
-  request and overlap queries.
-- `LeaveRequestHistories(LeaveRequestId, CreatedAtUtc)` supports chronological
-  history retrieval.
-- `LeaveRequestYearAllocations` has composite primary key
-  `(LeaveRequestId, Year)`.
-- History and yearly allocation rows reference `LeaveRequests` and cascade on
-  deletion. Employee, approver, department and leave type IDs are HR-owned
-  references without cross-database foreign keys.
-- Status values are persisted as strings. `LeaveRequestStatus` values are
-  `Pending`, `Approved`, `Rejected`, and `Cancelled`.
+- Unique index:
 
-## Migrations and initialization
+```text
+LeaveBalances(EmployeeId, LeaveTypeId, Year)
+```
 
-EF Core migrations are versioned with each owning Infrastructure project:
+Ngăn việc tạo trùng số dư phép cho cùng:
 
-- HR: `20261026043924_InitialHrSchema`,
-  `20261102014444_AddRefreshTokens`.
-- Leave: `20261027041915_InitialLeaveSchema`,
-  `20261027060954_AddApprovalAndYearAllocations`.
+- Nhân viên
+- Loại nghỉ
+- Năm
 
-The HR `DatabaseInitializer` applies migrations before seeding. The Leave API
-applies migrations before serving requests. Each project includes a model
-snapshot; add future changes as new migrations rather than editing applied
-migrations. The migration sources are under each service's
-`Infrastructure/Persistence/Migrations` directory.
+- Index:
 
-## Seed data
+```text
+LeaveRequests(EmployeeId, Status, StartDate, EndDate)
+```
 
-Seeders are idempotent and disabled unless configured:
+hỗ trợ truy vấn:
 
-- `INITIAL_HR_ENABLED=true` creates the initial HR account and its department
-  when the email is not present.
-- `DEMO_DATA_ENABLED=true` creates configured Manager/Employee demo accounts,
-  department, and the canonical Annual, Sick and Unpaid catalog entries and
-  applicable policies.
-- Load-test-only scale data is generated separately by
-  `scripts/load-test/seed-scale-data.sql`; never run it against production data.
+- Các đơn nghỉ của nhân viên.
+- Kiểm tra các khoảng thời gian nghỉ bị chồng chéo.
 
-Use unique local/demo passwords and keep them in an untracked `.env` or secret
-store. Seed settings are not a production account-management mechanism.
+- Index:
 
-## Source of schema truth
+```text
+LeaveRequestHistories(LeaveRequestId, CreatedAtUtc)
+```
 
-ERD images are a human-readable overview. EF Core model configuration and the
-migration files are authoritative for actual SQL types, indexes, constraints
-and deployed schema.
+hỗ trợ lấy lịch sử theo thứ tự thời gian.
+
+- `LeaveRequestYearAllocations` có Composite Primary Key:
+
+```text
+(LeaveRequestId, Year)
+```
+
+- Các bản ghi History và Year Allocation tham chiếu đến `LeaveRequests` và sử dụng:
+
+```text
+Cascade Delete
+```
+
+- Các ID:
+
+  - Employee
+  - Approver
+  - Department
+  - Leave Type
+
+là dữ liệu thuộc sở hữu của HR Service và chỉ được tham chiếu theo ID, **không có Cross-Database Foreign Key**.
+
+- Giá trị trạng thái được lưu dưới dạng chuỗi.
+
+Các giá trị của `LeaveRequestStatus` gồm:
+
+```text
+Pending
+Approved
+Rejected
+Cancelled
+```
+
+---
+
+# Migration và khởi tạo Database
+
+EF Core Migrations được version theo từng Infrastructure Project sở hữu database.
+
+### HR Service
+
+```text
+20261026043924_InitialHrSchema
+20261102014444_AddRefreshTokens
+```
+
+### Leave Service
+
+```text
+20261027041915_InitialLeaveSchema
+20261027060954_AddApprovalAndYearAllocations
+```
+
+`DatabaseInitializer` của HR Service sẽ:
+
+1. Áp dụng migrations.
+2. Sau đó thực hiện seeding dữ liệu.
+
+Leave API cũng áp dụng migrations trước khi bắt đầu phục vụ request.
+
+Mỗi project có một **Model Snapshot**.
+
+Đối với các thay đổi schema trong tương lai:
+
+> Cần tạo migration mới, không chỉnh sửa các migration đã được áp dụng.
+
+Source của migrations nằm trong thư mục:
+
+```text
+Infrastructure/Persistence/Migrations
+```
+
+của từng service.
+
+---
+
+# Seed Data
+
+Các Seeder có tính chất **idempotent** và sẽ không chạy nếu chưa được cấu hình bật.
+
+## Tài khoản HR ban đầu
+
+```text
+INITIAL_HR_ENABLED=true
+```
+
+sẽ tạo:
+
+- Tài khoản HR ban đầu.
+- Department tương ứng.
+
+Việc tạo chỉ diễn ra khi email chưa tồn tại trong hệ thống.
+
+---
+
+## Demo Data
+
+```text
+DEMO_DATA_ENABLED=true
+```
+
+sẽ tạo:
+
+- Tài khoản Manager demo.
+- Tài khoản Employee demo.
+- Department.
+- Các loại nghỉ chuẩn:
+
+```text
+Annual
+Sick
+Unpaid
+```
+
+- Các Leave Policy phù hợp.
+
+---
+
+## Dữ liệu Load Test
+
+Dữ liệu mở rộng phục vụ Load Test được tạo riêng bằng:
+
+```text
+scripts/load-test/seed-scale-data.sql
+```
+
+**Không được chạy script này trên dữ liệu Production.**
+
+---
+
+# Bảo mật Seed Data
+
+Nên sử dụng mật khẩu riêng cho:
+
+- Local environment.
+- Demo environment.
+
+Mật khẩu nên được lưu trong:
+
+- File `.env` không được commit.
+- Secret Store.
+
+Seed settings không phải là cơ chế quản lý tài khoản dành cho Production.
+
+---
+
+# Nguồn dữ liệu quyết định Schema
+
+Các hình ảnh ERD chỉ đóng vai trò:
+
+> Tổng quan trực quan dành cho con người.
+
+Nguồn quyết định chính xác cho các thông tin sau là:
+
+- EF Core Model Configuration.
+- EF Core Migration Files.
+
+Đây là nguồn dữ liệu authoritative cho:
+
+- SQL data types.
+- Indexes.
+- Constraints.
+- Schema thực tế được triển khai.
+
+Nói cách khác:
+
+```text
+ERD
+    ↓
+Tổng quan trực quan
+
+EF Core Configuration + Migrations
+    ↓
+Nguồn quyết định schema thực tế
+```
