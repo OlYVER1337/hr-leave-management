@@ -341,3 +341,35 @@ button:disabled { opacity: .58; cursor: not-allowed; }
   .approval-summary-grid { grid-template-columns: minmax(0,1fr); }.approval-summary { padding: 10px 13px; }.approval-summary > div { flex-direction: row; align-items: baseline; gap: 9px; }.approval-summary strong { font-size: 17px; }.approval-summary span:not(.approval-summary-icon) { font-size: 9px; }
   .login-form-side { padding-inline: 18px; }.login-legal { line-height: 1.8; }.demo-account-role { display: none; }.login-heading h2 { font-size: 21px; }
 }
+
+
+/* Sortable employee directory table headers */
+.table-sort-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.table-sort-button svg {
+  flex: 0 0 auto;
+  color: #7d8ca8;
+}
+
+.table-sort-button:hover {
+  color: #526fe1;
+}
+
+.table-sort-button:focus-visible {
+  outline: 2px solid #5276e8;
+  outline-offset: 3px;
+  border-radius: 3px;
+}
