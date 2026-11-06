@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, Download, Edit3, Plus, Search, UserCheck, UserMinus, Users } from 'lucide-react';
+import { ArrowDown, ArrowDownUp, ArrowUp, Building2, ChevronDown, ChevronLeft, ChevronRight, Download, Edit3, Plus, Search, UserCheck, UserMinus, Users } from 'lucide-react';
 import { Avatar, EmptyState, formatDate, PageHeader } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { useToast } from '../components/ToastProvider';
@@ -13,6 +13,8 @@ const today = () => {
 };
 const blankForm = (): EmployeeInput => ({ fullName: '', email: '', password: '', role: 'Employee', hireDate: today(), departmentId: 0, managerId: null });
 const pageSizeOptions = [10, 25, 50];
+type EmployeeSortField = 'fullName' | 'code' | 'departmentName' | 'role' | 'managerName' | 'hireDate' | 'isActive';
+type SortDirection = 'asc' | 'desc';
 
 export function EmployeesPage() {
   const notify = useToast();
@@ -23,6 +25,9 @@ export function EmployeesPage() {
   const [search, setSearch] = useState('');
   const [role, setRole] = useState<'All' | UserRole>('All');
   const [activeFilter, setActiveFilter] = useState<'All' | 'Active' | 'Inactive'>('All');
+  const [departmentFilter, setDepartmentFilter] = useState('All');
+  const [sortField, setSortField] = useState<EmployeeSortField>('fullName');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(pageSizeOptions[0]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -40,16 +45,77 @@ export function EmployeesPage() {
   useEffect(() => { void reload(); }, []);
 
   const filtered = useMemo(() => employees.filter((item) => {
-    const query = search.toLowerCase();
-    const textMatch = [item.fullName, item.code, item.email, item.departmentName].some((value) => value.toLowerCase().includes(query));
-    return textMatch && (role === 'All' || item.role === role) && (activeFilter === 'All' || (activeFilter === 'Active' ? item.isActive : !item.isActive));
-  }), [employees, search, role, activeFilter]);
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+    const query = search.trim().toLocaleLowerCase('vi-VN');
+    const textMatch = [item.fullName, item.code, item.email, item.departmentName ?? '']
+      .some((value) => value.toLocaleLowerCase('vi-VN').includes(query));
+    const roleMatch = role === 'All' || item.role === role;
+    const statusMatch = activeFilter === 'All' ||
+      (activeFilter === 'Active' ? item.isActive : !item.isActive);
+    const departmentMatch = departmentFilter === 'All' ||
+      item.departmentId === Number(departmentFilter);
+
+    return textMatch && roleMatch && statusMatch && departmentMatch;
+  }), [employees, search, role, activeFilter, departmentFilter]);
+
+  const sortedEmployees = useMemo(() => {
+    const collator = new Intl.Collator('vi', { sensitivity: 'base', numeric: true });
+    const direction = sortDirection === 'asc' ? 1 : -1;
+
+    return [...filtered].sort((left, right) => {
+      let comparison = 0;
+
+      switch (sortField) {
+        case 'fullName':
+          comparison = collator.compare(left.fullName, right.fullName);
+          break;
+        case 'code':
+          comparison = collator.compare(left.code, right.code);
+          break;
+        case 'departmentName':
+          comparison = collator.compare(left.departmentName ?? '', right.departmentName ?? '');
+          break;
+        case 'role':
+          comparison = collator.compare(left.role, right.role);
+          break;
+        case 'managerName':
+          comparison = collator.compare(left.managerName ?? '', right.managerName ?? '');
+          break;
+        case 'hireDate':
+          comparison = left.hireDate.localeCompare(right.hireDate);
+          break;
+        case 'isActive':
+          comparison = Number(left.isActive) - Number(right.isActive);
+          break;
+      }
+
+      if (comparison !== 0) return comparison * direction;
+      return collator.compare(left.fullName, right.fullName) || left.id.localeCompare(right.id);
+    });
+  }, [filtered, sortField, sortDirection]);
+
+  const pageCount = Math.max(1, Math.ceil(sortedEmployees.length / pageSize));
   const currentPage = Math.min(page, pageCount);
   const pageStart = (currentPage - 1) * pageSize;
-  const pageEmployees = filtered.slice(pageStart, pageStart + pageSize);
-  const firstVisibleEmployee = filtered.length === 0 ? 0 : pageStart + 1;
-  const lastVisibleEmployee = Math.min(pageStart + pageSize, filtered.length);
+  const pageEmployees = sortedEmployees.slice(pageStart, pageStart + pageSize);
+  const firstVisibleEmployee = sortedEmployees.length === 0 ? 0 : pageStart + 1;
+  const lastVisibleEmployee = Math.min(pageStart + pageSize, sortedEmployees.length);
+
+  function handleSort(field: EmployeeSortField) {
+    setPage(1);
+    if (sortField === field) {
+      setSortDirection((current) => current === 'asc' ? 'desc' : 'asc');
+      return;
+    }
+    setSortField(field);
+    setSortDirection('asc');
+  }
+
+  function renderSortIcon(field: EmployeeSortField) {
+    if (sortField !== field) return <ArrowDownUp size={13} aria-hidden="true" />;
+    return sortDirection === 'asc'
+      ? <ArrowUp size={13} aria-hidden="true" />
+      : <ArrowDown size={13} aria-hidden="true" />;
+  }
 
   function openCreate() {
   setEditing(null);
@@ -79,10 +145,75 @@ export function EmployeesPage() {
     <div className="page-summary-row"><div className="summary-metric"><span>Tổng số nhân viên</span><strong>{employees.length}</strong></div><div className="summary-metric"><span>Đang hoạt động</span><strong>{employees.filter((item) => item.isActive).length}</strong></div><div className="summary-metric"><span>Quản lý</span><strong>{employees.filter((item) => item.role === 'Manager' && item.isActive).length}</strong></div><div className="summary-metric"><span>Phòng ban</span><strong>{departments.length}</strong></div></div>
     {error && <div className="inline-alert alert-warning">{error}</div>}
     <section className="panel page-table-panel">
-      <div className="table-toolbar"><div className="search-field"><Search size={17} /><input placeholder="Tìm tên, email, mã nhân viên…" aria-label="Tìm nhân viên" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} /></div><div className="toolbar-filters"><label className="select-wrap"><Users size={15} /><select aria-label="Lọc theo vai trò" value={role} onChange={(event) => { setRole(event.target.value as 'All' | UserRole); setPage(1); }}><option value="All">Tất cả vai trò</option><option value="HR">Nhân sự</option><option value="Manager">Quản lý</option><option value="Employee">Nhân viên</option></select><ChevronDown size={14} /></label><label className="select-wrap"><select aria-label="Lọc theo trạng thái" value={activeFilter} onChange={(event) => { setActiveFilter(event.target.value as 'All' | 'Active' | 'Inactive'); setPage(1); }}><option value="All">Tất cả trạng thái</option><option value="Active">Đang hoạt động</option><option value="Inactive">Đã vô hiệu hóa</option></select><ChevronDown size={14} /></label></div></div>
-      {loading ? <div className="table-loading"><span /> Đang tải nhân viên…</div> : filtered.length === 0 ? <EmptyState title="Không tìm thấy nhân viên" description="Thử từ khóa khác hoặc thêm nhân viên mới." /> : <div className="table-scroll"><table className="data-table"><thead><tr><th>Nhân viên</th><th>Mã nhân viên</th><th>Phòng ban</th><th>Vai trò</th><th>Quản lý</th><th>Ngày vào làm</th><th>Trạng thái</th><th /></tr></thead><tbody>{pageEmployees.map((employee) => <tr key={employee.id}><td><div className="person-cell"><Avatar name={employee.fullName} size="sm" /><div><strong>{employee.fullName}</strong><small>{employee.email}</small></div></div></td><td><span className="code-pill">{employee.code}</span></td><td>{employee.departmentName || '—'}</td><td><span className={`role-pill role-${employee.role.toLowerCase()}`}>{employee.role === 'HR' ? 'Nhân sự' : employee.role === 'Manager' ? 'Quản lý' : 'Nhân viên'}</span></td><td>{employee.managerName || <span className="muted-copy">Chưa phân công</span>}</td><td>{formatDate(employee.hireDate)}</td><td><span className={`employee-status ${employee.isActive ? 'employee-active' : 'employee-inactive'}`}><i />{employee.isActive ? 'Đang hoạt động' : 'Đã vô hiệu hóa'}</span></td><td><div className="row-actions"><button className="icon-button" title="Sửa nhân viên" aria-label={`Sửa ${employee.fullName}`} onClick={() => openEdit(employee)}><Edit3 size={16} /></button>{employee.isActive && <button className="icon-button danger-icon" title="Vô hiệu hóa nhân viên" aria-label={`Vô hiệu hóa ${employee.fullName}`} onClick={() => void onDeactivate(employee)}><UserMinus size={16} /></button>}</div></td></tr>)}</tbody></table></div>}
+      <div className="table-toolbar">
+        <div className="search-field">
+          <Search size={17} />
+          <input
+            placeholder="Tìm tên, email, mã nhân viên…"
+            aria-label="Tìm nhân viên"
+            value={search}
+            onChange={(event) => { setSearch(event.target.value); setPage(1); }}
+          />
+        </div>
+        <div className="toolbar-filters">
+          <label className="select-wrap">
+            <Users size={15} />
+            <select aria-label="Lọc theo vai trò" value={role} onChange={(event) => { setRole(event.target.value as 'All' | UserRole); setPage(1); }}>
+              <option value="All">Tất cả vai trò</option>
+              <option value="HR">Nhân sự</option>
+              <option value="Manager">Quản lý</option>
+              <option value="Employee">Nhân viên</option>
+            </select>
+            <ChevronDown size={14} />
+          </label>
+          <label className="select-wrap">
+            <Building2 size={15} />
+            <select aria-label="Lọc theo phòng ban" value={departmentFilter} onChange={(event) => { setDepartmentFilter(event.target.value); setPage(1); }}>
+              <option value="All">Tất cả phòng ban</option>
+              {departments.map((department) => (
+                <option value={department.id} key={department.id}>{department.name}</option>
+              ))}
+            </select>
+            <ChevronDown size={14} />
+          </label>
+          <label className="select-wrap">
+            <select aria-label="Lọc theo trạng thái" value={activeFilter} onChange={(event) => { setActiveFilter(event.target.value as 'All' | 'Active' | 'Inactive'); setPage(1); }}>
+              <option value="All">Tất cả trạng thái</option>
+              <option value="Active">Đang hoạt động</option>
+              <option value="Inactive">Đã vô hiệu hóa</option>
+            </select>
+            <ChevronDown size={14} />
+          </label>
+        </div>
+      </div>
+      {loading ? <div className="table-loading"><span /> Đang tải nhân viên…</div> : filtered.length === 0 ? <EmptyState title="Không tìm thấy nhân viên" description="Thử từ khóa khác hoặc thêm nhân viên mới." /> : <div className="table-scroll"><table className="data-table"><thead>
+            <tr>
+              <th aria-sort={sortField === 'fullName' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                <button type="button" className="table-sort-button" aria-label="Sắp xếp theo họ tên" onClick={() => handleSort('fullName')}>Nhân viên {renderSortIcon('fullName')}</button>
+              </th>
+              <th aria-sort={sortField === 'code' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                <button type="button" className="table-sort-button" aria-label="Sắp xếp theo mã nhân viên" onClick={() => handleSort('code')}>Mã nhân viên {renderSortIcon('code')}</button>
+              </th>
+              <th aria-sort={sortField === 'departmentName' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                <button type="button" className="table-sort-button" aria-label="Sắp xếp theo phòng ban" onClick={() => handleSort('departmentName')}>Phòng ban {renderSortIcon('departmentName')}</button>
+              </th>
+              <th aria-sort={sortField === 'role' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                <button type="button" className="table-sort-button" aria-label="Sắp xếp theo vai trò" onClick={() => handleSort('role')}>Vai trò {renderSortIcon('role')}</button>
+              </th>
+              <th aria-sort={sortField === 'managerName' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                <button type="button" className="table-sort-button" aria-label="Sắp xếp theo quản lý" onClick={() => handleSort('managerName')}>Quản lý {renderSortIcon('managerName')}</button>
+              </th>
+              <th aria-sort={sortField === 'hireDate' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                <button type="button" className="table-sort-button" aria-label="Sắp xếp theo ngày vào làm" onClick={() => handleSort('hireDate')}>Ngày vào làm {renderSortIcon('hireDate')}</button>
+              </th>
+              <th aria-sort={sortField === 'isActive' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                <button type="button" className="table-sort-button" aria-label="Sắp xếp theo trạng thái" onClick={() => handleSort('isActive')}>Trạng thái {renderSortIcon('isActive')}</button>
+              </th>
+              <th />
+            </tr>
+          </thead><tbody>{pageEmployees.map((employee) => <tr key={employee.id}><td><div className="person-cell"><Avatar name={employee.fullName} size="sm" /><div><strong>{employee.fullName}</strong><small>{employee.email}</small></div></div></td><td><span className="code-pill">{employee.code}</span></td><td>{employee.departmentName || '—'}</td><td><span className={`role-pill role-${employee.role.toLowerCase()}`}>{employee.role === 'HR' ? 'Nhân sự' : employee.role === 'Manager' ? 'Quản lý' : 'Nhân viên'}</span></td><td>{employee.managerName || <span className="muted-copy">Chưa phân công</span>}</td><td>{formatDate(employee.hireDate)}</td><td><span className={`employee-status ${employee.isActive ? 'employee-active' : 'employee-inactive'}`}><i />{employee.isActive ? 'Đang hoạt động' : 'Đã vô hiệu hóa'}</span></td><td><div className="row-actions"><button className="icon-button" title="Sửa nhân viên" aria-label={`Sửa ${employee.fullName}`} onClick={() => openEdit(employee)}><Edit3 size={16} /></button>{employee.isActive && <button className="icon-button danger-icon" title="Vô hiệu hóa nhân viên" aria-label={`Vô hiệu hóa ${employee.fullName}`} onClick={() => void onDeactivate(employee)}><UserMinus size={16} /></button>}</div></td></tr>)}</tbody></table></div>}
       <div className="table-footer">
-        <span aria-live="polite">Đang hiển thị <strong>{firstVisibleEmployee}–{lastVisibleEmployee}</strong> / <strong>{filtered.length}</strong> nhân viên</span>
+        <span aria-live="polite">Đang hiển thị <strong>{firstVisibleEmployee}–{lastVisibleEmployee}</strong> / <strong>{sortedEmployees.length}</strong> nhân viên</span>
         <div className="employee-pagination">
           <label htmlFor="employee-page-size">Số dòng</label>
           <select id="employee-page-size" aria-label="Số nhân viên mỗi trang" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}>
