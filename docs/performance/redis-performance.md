@@ -74,6 +74,32 @@ và từ 1 đến 20 đơn mỗi nhân viên. Chạy lại script trên cùng t�
 làm mới các đơn và số dư phục vụ kiểm thử của tài khoản
 `loadtest.user.*@example.invalid`.
 
+### Seed 1.000 nhân viên: quy trình đầy đủ
+
+Script seed **không tự chạy** khi chỉ chạy `docker compose ... up`. Sau khi stack
+`hrbench` đã khởi động và database/service ở trạng thái sẵn sàng, cần thực hiện
+đúng hai bước: copy file SQL vào container SQL Server, sau đó chạy `sqlcmd`.
+
+Mặc định trong `scripts/load-test/seed-scale-data.sql`:
+
+```sql
+:setvar EmployeeCount "1000"
+:setvar RequestsPerEmployee "5"
+```
+
+Kết quả mong đợi là **1.000 load-test employees** và **5.000 leave requests**.
+Có thể kiểm tra ngay sau khi seed:
+
+```powershell
+docker compose -p hrbench -f docker-compose.yml -f docker-compose.loadtest.yml exec -T sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P $env:SA_PASSWORD -C -d HR_DB -Q "SELECT COUNT(*) AS EmployeeCount FROM dbo.Employees WHERE Email LIKE 'loadtest.user.%@example.invalid';"
+
+docker compose -p hrbench -f docker-compose.yml -f docker-compose.loadtest.yml exec -T sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P $env:SA_PASSWORD -C -d Leave_DB -Q "SELECT COUNT(*) AS LoadTestRequests FROM dbo.LeaveRequests WHERE Reason LIKE 'LOADTEST:%';"
+```
+
+Hai kết quả mong đợi lần lượt là **1000** và **5000**. Nếu chưa có Manager đang
+hoạt động hoặc chưa có leave type `ANNUAL` đang hoạt động, script sẽ dừng với lỗi
+thay vì tạo dữ liệu không đầy đủ.
+
 Mỗi lượt kiểm thử kéo dài 5 phút và gửi các yêu cầu đọc có xác thực tới endpoint
 loại nghỉ, chính sách năm và ngày lễ. Script k6 đã khai báo scenario, do đó cần
 truyền số VU và thời lượng qua biến môi trường `VUS` và `DURATION`; các tùy chọn
