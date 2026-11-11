@@ -8,6 +8,8 @@ const vuCount = Number(__ENV.VUS || 50);
 const duration = __ENV.DURATION || '5m';
 const year = Number(__ENV.YEAR || new Date().getUTCFullYear());
 const httpErrors = new Counter('workforce_http_errors');
+const workforceRequests = new Counter('workforce_requests');
+const workforceDuration = new Trend('workforce_request_duration_ms');
 const leaveApiRequests = new Counter('leave_api_requests');
 
 // Direct requests to HR API.
@@ -110,6 +112,10 @@ export default function (tokens) {
     tags: { endpoint: route.name },
   });
 
+  // Custom metrics below include only measured iterations, not setup/login/warm-up.
+  workforceRequests.add(1);
+  workforceDuration.add(response.timings.duration);
+
   if (route.name === 'employees') {
     hrDirectRequests.add(1);
     hrDirectDuration.add(response.timings.duration);
@@ -137,13 +143,12 @@ export default function (tokens) {
 }
 
 export function handleSummary(data) {
-  const durationMetrics = data.metrics.http_req_duration?.values || {};
-  const requestMetrics = data.metrics.http_reqs?.values || {};
-  const failureMetrics = data.metrics.http_req_failed?.values || {};
+  const durationMetrics = data.metrics.workforce_request_duration_ms?.values || {};
   const hrDirectMetrics = data.metrics.hr_direct_duration_ms?.values || {};
   const leaveToHrMetrics = data.metrics.leave_to_hr_call_duration_ms?.values || {};
-  const requests = requestMetrics.count || 0;
+  const requests = data.metrics.workforce_requests?.values?.count || 0;
   const leaveRequests = data.metrics.leave_api_requests?.values?.count || 0;
+  const errorCount = data.metrics.workforce_http_errors?.values?.count || 0;
   const durationValue = Number.parseFloat(duration);
   const durationUnit = duration.slice(-1);
   const measuredSeconds = durationUnit === 'm'
@@ -162,11 +167,11 @@ export function handleSummary(data) {
     duration,
     year,
     requests,
-    rps: requestMetrics.rate || 0,
+    rps: measuredSeconds > 0 ? requests / measuredSeconds : 0,
     p50_ms: durationMetrics.med || 0,
     p95_ms: durationMetrics['p(95)'] || 0,
-    error_rate: failureMetrics.rate || 0,
-    http_errors: data.metrics.workforce_http_errors?.values?.count || 0,
+    error_rate: requests > 0 ? errorCount / requests : 0,
+    http_errors: errorCount,
     hr_direct_requests: data.metrics.hr_direct_requests?.values?.count || 0,
     hr_direct_avg_ms: hrDirectMetrics.avg || 0,
     hr_direct_p95_ms: hrDirectMetrics['p(95)'] || 0,
