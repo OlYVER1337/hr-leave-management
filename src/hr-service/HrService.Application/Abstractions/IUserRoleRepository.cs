@@ -36,6 +36,10 @@ public interface IUserRoleRepository
         DateTime utcNow,
         CancellationToken cancellationToken = default);
 
+    Task BeginSerializableTransactionAsync(CancellationToken cancellationToken = default);
+    Task CommitTransactionAsync(CancellationToken cancellationToken = default);
+    Task RollbackTransactionAsync(CancellationToken cancellationToken = default);
+
     void Add(UserRole assignment);
     void Add(AuthzAuditLog auditLog);
 }

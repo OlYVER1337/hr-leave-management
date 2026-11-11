@@ -182,8 +182,8 @@ LeaveRequests.ApproverId là snapshot tại thời điểm tạo đơn, chỉ ph
 4. Phát perm claim từ HR login/refresh; cập nhật token tests.
 5. Refactor HR Employees API đọc (GET list/detail) và /api/v1/me/team sang Permission + Scope; thao tác ghi sẽ chuyển sau khi UserRoles được quản lý đầy đủ.
 6. Cung cấp API quản lý UserRoles có kiểm tra quyền hiện tại, chống leo thang đặc quyền, audit và bảo vệ quản trị viên cuối cùng.
-6. Refactor Leave read visibility dùng Scope và HR team lookup; giữ HR lookup tại thời điểm approve/reject.
-7. Cập nhật characterization/integration tests, sau đó benchmark 50/100 VU.
+7. Refactor Leave read visibility dùng Scope và HR team lookup; giữ HR lookup tại thời điểm approve/reject.
+8. Cập nhật characterization/integration tests, sau đó benchmark 50/100 VU.
 
 Outbox, asynchronous read model, backfill/reconciliation giữa hai service không thuộc V1; chỉ xem xét nếu benchmark chứng minh HTTP lookup là nút thắt.
 

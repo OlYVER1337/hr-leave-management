@@ -114,7 +114,7 @@ public sealed class UserRoleServiceTests
         Assert.Equal(actorId, existing.GrantedByEmployeeId);
         Assert.Null(existing.RevokedAtUtc);
         Assert.Equal("USER_ROLE_RENEWED", audit?.Action);
-        Assert.Contains(Now.AddDays(-1).UtcDateTime.ToString("O"), audit?.BeforeJson);
+        Assert.Contains(Now.AddDays(-1).ToString("yyyy-MM-dd"), audit!.BeforeJson!);
         repository.Verify(item => item.Add(It.IsAny<UserRole>()), Times.Never);
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -294,6 +294,16 @@ public sealed class UserRoleServiceTests
         Mock<IUnitOfWork> unitOfWork,
         IReadOnlyList<PermissionScopeGrant> actorGrants)
     {
+        repository
+            .Setup(item => item.BeginSerializableTransactionAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        repository
+            .Setup(item => item.CommitTransactionAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        repository
+            .Setup(item => item.RollbackTransactionAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
         var authorizationRepository = new Mock<IAuthorizationRepository>();
         authorizationRepository
             .Setup(item => item.GetEffectivePermissionScopesAsync(

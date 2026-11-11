@@ -1,12 +1,66 @@
+using System.Data;
 using HrService.Application.Abstractions;
 using HrService.Application.Dtos;
 using HrService.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace HrService.Infrastructure.Persistence.Repositories;
 
 public sealed class UserRoleRepository(HrDbContext dbContext) : IUserRoleRepository
 {
+    private IDbContextTransaction? _transaction;
+
+    public async Task BeginSerializableTransactionAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (_transaction is not null)
+        {
+            throw new InvalidOperationException("A UserRoles transaction is already active.");
+        }
+
+        _transaction = await dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+    }
+
+    public async Task CommitTransactionAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var transaction = _transaction
+            ?? throw new InvalidOperationException("No UserRoles transaction is active.");
+
+        try
+        {
+            await transaction.CommitAsync(cancellationToken);
+        }
+        finally
+        {
+            await transaction.DisposeAsync();
+            _transaction = null;
+        }
+    }
+
+    public async Task RollbackTransactionAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var transaction = _transaction;
+        if (transaction is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await transaction.RollbackAsync(cancellationToken);
+        }
+        finally
+        {
+            await transaction.DisposeAsync();
+            _transaction = null;
+        }
+    }
+
     public Task<Employee?> GetEmployeeByIdAsync(
         Guid employeeId,
         CancellationToken cancellationToken = default)
