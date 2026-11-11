@@ -11,6 +11,7 @@ const iterationsPerVu = Number(__ENV.ITERATIONS_PER_VU || 10);
 const approvalRequests = new Counter('approval_requests');
 const approvalSuccesses = new Counter('approval_successes');
 const approvalErrors = new Counter('approval_http_errors');
+const approvalDuration = new Trend('approval_request_duration_ms');
 const leaveToHrCalls = new Counter('approval_leave_to_hr_calls');
 const leaveToHrDuration = new Trend('approval_leave_to_hr_call_duration_ms');
 const leaveToHrTotalDuration = new Counter('approval_leave_to_hr_total_duration_ms');
@@ -104,7 +105,9 @@ export default function ({ token, ids }) {
     },
   );
 
+  // Record only decision iterations; login and inbox setup are excluded.
   approvalRequests.add(1);
+  approvalDuration.add(response.timings.duration);
   recordHrCalls(response);
 
   if (response.status !== 200) {
@@ -120,22 +123,21 @@ export default function ({ token, ids }) {
 }
 
 export function handleSummary(data) {
-  const requestMetrics = data.metrics.http_reqs?.values || {};
-  const durationMetrics = data.metrics.http_req_duration?.values || {};
+  const durationMetrics = data.metrics.approval_request_duration_ms?.values || {};
   const hrMetrics = data.metrics.approval_leave_to_hr_call_duration_ms?.values || {};
+  const attempts = data.metrics.approval_requests?.values?.count || 0;
+  const errors = data.metrics.approval_http_errors?.values?.count || 0;
   const summary = {
     workload: 'manager-approval-and-hr-lookup',
     vus: vuCount,
     iterations_per_vu: iterationsPerVu,
     planned_approvals: vuCount * iterationsPerVu,
-    approval_attempts: data.metrics.approval_requests?.values?.count || 0,
+    approval_attempts: attempts,
     completed_approvals: data.metrics.approval_successes?.values?.count || 0,
-    requests: requestMetrics.count || 0,
-    rps: requestMetrics.rate || 0,
     p50_ms: durationMetrics.med || 0,
     p95_ms: durationMetrics['p(95)'] || 0,
-    error_rate: data.metrics.http_req_failed?.values?.rate || 0,
-    approval_errors: data.metrics.approval_http_errors?.values?.count || 0,
+    error_rate: attempts > 0 ? errors / attempts : 0,
+    approval_errors: errors,
     leave_to_hr_calls: data.metrics.approval_leave_to_hr_calls?.values?.count || 0,
     leave_to_hr_total_time_ms: data.metrics.approval_leave_to_hr_total_duration_ms?.values?.count || 0,
     leave_to_hr_avg_ms: hrMetrics.avg || 0,
