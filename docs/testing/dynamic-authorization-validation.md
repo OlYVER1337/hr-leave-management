@@ -62,9 +62,9 @@ docker compose @compose run --rm -e VUS=100 -e DURATION=5m k6 run /scripts/workf
 
 Đọc các trường trong JSON summary:
 
-- `hr_direct_requests`, `hr_direct_avg_ms`, `hr_direct_p95_ms`: request trực tiếp tới HR API và thời gian phản hồi.
+- `hr_direct_requests`, `hr_direct_total_time_ms`, `hr_direct_avg_ms`, `hr_direct_p95_ms`: số request trực tiếp tới HR API, tổng thời gian, trung bình và p95.
 - `leave_to_hr_calls`, `leave_to_hr_calls_per_second`: tổng outbound HR calls phát sinh bên trong Leave Service.
-- `leave_to_hr_total_time_ms`, `leave_to_hr_avg_ms`, `leave_to_hr_p95_ms`: tổng và phân vị thời gian thực hiện từng HTTP call Leave → HR.
+- `leave_to_hr_total_time_ms`, `leave_to_hr_avg_ms`, `leave_to_hr_p95_ms`: tổng thời gian tích lũy và phân vị thời gian từng HTTP call Leave → HR.
 - `p95_ms`, `error_rate`: độ trễ và tỷ lệ lỗi của workload tổng.
 
 Các số liệu outbound HR được đọc từ response headers chỉ bật trong Compose benchmark. Header không được bật ở cấu hình thông thường.
@@ -89,7 +89,7 @@ docker compose @compose exec -T sqlserver /bin/bash -c '/opt/mssql-tools18/bin/s
 docker compose @compose run --rm -e VUS=100 -e ITERATIONS_PER_VU=10 -e DURATION=5m k6 run /scripts/approval.js
 ```
 
-Đọc `approval_attempts`, `completed_approvals`, `approval_errors`, `leave_to_hr_calls`, `leave_to_hr_total_time_ms`, `leave_to_hr_avg_ms` và `leave_to_hr_p95_ms`. Với mỗi lần approve Team, kỳ vọng một HR lookup để xác nhận ManagerId hiện tại; Scope All không thực hiện lookup này.
+Đọc `approval_attempts`, `completed_approvals`, `approval_errors`, `p50_ms`, `p95_ms`, `leave_to_hr_calls`, `leave_to_hr_total_time_ms`, `leave_to_hr_avg_ms` và `leave_to_hr_p95_ms`. P50/p95 chỉ tính thời gian approve trong workload, không tính login và lần đọc inbox ở setup. Với mỗi lần approve Team, kỳ vọng một HR lookup để xác nhận ManagerId hiện tại; Scope All không thực hiện lookup này.
 
 ## 6. Cách ghi nhận kết quả
 
