@@ -5,6 +5,12 @@ namespace HrService.Application.Abstractions;
 public interface IEmployeeRepository
 {
     Task<IReadOnlyList<Employee>> ListAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Employee>> ListVisibleAsync(
+        Guid actorId,
+        bool includeSelf,
+        bool includeTeam,
+        bool includeAll,
+        CancellationToken cancellationToken = default);
     Task<Employee?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<bool> IsDirectManagerOfAsync(
         Guid managerId,

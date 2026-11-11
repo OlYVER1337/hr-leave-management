@@ -1,3 +1,4 @@
+using HrService.Api.Authorization;
 using HrService.Api.Controllers;
 using HrService.Api.Middleware;
 using HrService.Application.Abstractions;
@@ -32,11 +33,11 @@ public sealed class ApiIntegrationTests
     }
 
     [Fact]
-    public async Task EmployeeList_RequiresHrRole()
+    public async Task EmployeeList_RejectsLegacyHrRoleWithoutPermissionClaim()
     {
         using var host = await CreateHostAsync();
         using var client = host.GetTestClient();
-        client.DefaultRequestHeaders.Add("X-Test-Role", "Employee");
+        client.DefaultRequestHeaders.Add("X-Test-Role", "HR");
 
         var response = await client.GetAsync("/api/v1/employees");
 
@@ -44,20 +45,63 @@ public sealed class ApiIntegrationTests
     }
 
     [Fact]
-    public async Task EmployeeList_ReturnsOkForHrRole()
+    public async Task EmployeeList_ReturnsAllEmployeesForAllScopeWithoutRoleClaim()
     {
+        var actorId = Guid.NewGuid();
         var employeeRepository = new Mock<IEmployeeRepository>();
         employeeRepository
-            .Setup(repository => repository.ListAsync(It.IsAny<CancellationToken>()))
+            .Setup(repository => repository.ListVisibleAsync(
+                actorId, false, false, true, It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
         using var host = await CreateHostAsync(employeeRepository);
         using var client = host.GetTestClient();
-        client.DefaultRequestHeaders.Add("X-Test-Role", "HR");
+        AddPermissionHeaders(client, actorId, """[{"p":"employees.read","s":["All"]}]""");
 
         var response = await client.GetAsync("/api/v1/employees");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("[]", await response.Content.ReadAsStringAsync());
+        employeeRepository.Verify(
+            repository => repository.ListVisibleAsync(
+                actorId, false, false, true, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task EmployeeList_CombinesSelfAndTeamScopes()
+    {
+        var actorId = Guid.NewGuid();
+        var employeeRepository = new Mock<IEmployeeRepository>();
+        employeeRepository
+            .Setup(repository => repository.ListVisibleAsync(
+                actorId, true, true, false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        using var host = await CreateHostAsync(employeeRepository);
+        using var client = host.GetTestClient();
+        AddPermissionHeaders(client, actorId, """[{"p":"employees.read","s":["Self","Team"]}]""");
+
+        var response = await client.GetAsync("/api/v1/employees");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        employeeRepository.Verify(
+            repository => repository.ListVisibleAsync(
+                actorId, true, true, false, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task EmployeeList_RejectsUnsupportedDepartmentScope()
+    {
+        using var host = await CreateHostAsync();
+        using var client = host.GetTestClient();
+        AddPermissionHeaders(
+            client,
+            Guid.NewGuid(),
+            """[{"p":"employees.read","s":["Department"]}]""");
+
+        var response = await client.GetAsync("/api/v1/employees");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]
@@ -143,6 +187,16 @@ public sealed class ApiIntegrationTests
         Assert.DoesNotContain("refreshToken", body, StringComparison.OrdinalIgnoreCase);
     }
 
+    private static void AddPermissionHeaders(
+        HttpClient client,
+        Guid employeeId,
+        string permissions)
+    {
+        client.DefaultRequestHeaders.Add("X-Test-Employee-Id", employeeId.ToString());
+        client.DefaultRequestHeaders.Add("X-Test-Authz-Version", "1");
+        client.DefaultRequestHeaders.Add("X-Test-Permissions", permissions);
+    }
+
     private static async Task<IHost> CreateHostAsync(
         Mock<IEmployeeRepository>? employeeRepository = null,
         Mock<IPasswordHasher>? passwordHasher = null,
@@ -184,7 +238,7 @@ public sealed class ApiIntegrationTests
                     .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(
                         TestAuthenticationHandler.SchemeName,
                         _ => { });
-                    services.AddAuthorization();
+                    services.AddPermissionAuthorization();
                     services.AddScoped<DepartmentService>();
                     services.AddScoped<EmployeeService>();
                     services.AddScoped<LeaveCatalogService>();
@@ -227,16 +281,33 @@ public sealed class ApiIntegrationTests
         protected override Task<AuthenticateResult> HandleAuthenticateAsync()
         {
             var role = Request.Headers["X-Test-Role"].FirstOrDefault();
-            if (string.IsNullOrWhiteSpace(role))
+            var employeeIdValue = Request.Headers["X-Test-Employee-Id"].FirstOrDefault();
+            var authzVersion = Request.Headers["X-Test-Authz-Version"].FirstOrDefault();
+            var permissions = Request.Headers["X-Test-Permissions"].FirstOrDefault();
+
+            if (string.IsNullOrWhiteSpace(role) &&
+                string.IsNullOrWhiteSpace(employeeIdValue) &&
+                string.IsNullOrWhiteSpace(authzVersion) &&
+                string.IsNullOrWhiteSpace(permissions))
             {
                 return Task.FromResult(AuthenticateResult.NoResult());
             }
 
-            var claims = new[]
+            var employeeId = Guid.TryParse(employeeIdValue, out var parsedEmployeeId)
+                ? parsedEmployeeId
+                : Guid.NewGuid();
+            var claims = new List<Claim>
             {
-                new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()),
-                new Claim(ClaimTypes.Role, role)
+                new(ClaimTypes.NameIdentifier, employeeId.ToString())
             };
+
+            if (!string.IsNullOrWhiteSpace(role))
+                claims.Add(new Claim(ClaimTypes.Role, role));
+            if (!string.IsNullOrWhiteSpace(authzVersion))
+                claims.Add(new Claim("authz_v", authzVersion));
+            if (!string.IsNullOrWhiteSpace(permissions))
+                claims.Add(new Claim("perm", permissions));
+
             var identity = new ClaimsIdentity(claims, SchemeName);
             var principal = new ClaimsPrincipal(identity);
             var ticket = new AuthenticationTicket(principal, SchemeName);

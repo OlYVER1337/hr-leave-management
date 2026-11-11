@@ -1,3 +1,4 @@
+using HrService.Api.Authorization;
 using HrService.Application.Dtos;
 using HrService.Application.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -26,7 +27,7 @@ public sealed class CurrentEmployeeController(EmployeeService employeeService) :
     }
 
     [HttpGet("team")]
-    [Authorize(Roles = "Manager")]
+    [Authorize(Policy = PermissionPolicies.EmployeesReadTeam)]
     public async Task<ActionResult<IReadOnlyList<EmployeeResponse>>> GetTeam(
         CancellationToken cancellationToken)
     {

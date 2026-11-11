@@ -16,6 +16,28 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Employee>> ListVisibleAsync(
+        Guid actorId,
+        bool includeSelf,
+        bool includeTeam,
+        bool includeAll,
+        CancellationToken cancellationToken = default)
+    {
+        if (actorId == Guid.Empty || (!includeSelf && !includeTeam && !includeAll))
+            return Array.Empty<Employee>();
+
+        return await dbContext.Employees
+            .AsNoTracking()
+            .Include(employee => employee.Department)
+            .Include(employee => employee.Manager)
+            .Where(employee =>
+                includeAll ||
+                (includeSelf && employee.Id == actorId) ||
+                (includeTeam && employee.IsActive && employee.ManagerId == actorId))
+            .OrderBy(employee => employee.FullName)
+            .ToListAsync(cancellationToken);
+    }
+
     public Task<Employee?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         return dbContext.Employees

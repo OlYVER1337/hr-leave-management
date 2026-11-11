@@ -25,6 +25,42 @@ public sealed class EmployeeService(
         return employees.Select(ToResponse).ToArray();
     }
 
+    public async Task<IReadOnlyList<EmployeeResponse>> GetVisibleAsync(
+        Guid actorId,
+        EffectiveAuthorization authorization,
+        CancellationToken cancellationToken = default)
+    {
+        var scopes = GetEmployeeReadScopes(actorId, authorization);
+        var employees = await employeeRepository.ListVisibleAsync(
+            actorId,
+            scopes.IncludeSelf,
+            scopes.IncludeTeam,
+            scopes.IncludeAll,
+            cancellationToken);
+        return employees.Select(ToResponse).ToArray();
+    }
+
+    public async Task<EmployeeResponse> GetVisibleByIdAsync(
+        Guid id,
+        Guid actorId,
+        EffectiveAuthorization authorization,
+        CancellationToken cancellationToken = default)
+    {
+        var scopes = GetEmployeeReadScopes(actorId, authorization);
+        var employee = await employeeRepository.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException($"Employee with id '{id}' was not found.");
+
+        var isVisible =
+            scopes.IncludeAll ||
+            (scopes.IncludeSelf && employee.Id == actorId) ||
+            (scopes.IncludeTeam && employee.IsActive && employee.ManagerId == actorId);
+
+        if (!isVisible)
+            throw new NotFoundException($"Employee with id '{id}' was not found.");
+
+        return ToResponse(employee);
+    }
+
     public async Task<EmployeeResponse> GetByIdAsync(
         Guid id,
         CancellationToken cancellationToken = default)
@@ -342,6 +378,29 @@ public sealed class EmployeeService(
             cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
+
+    private static EmployeeReadScopes GetEmployeeReadScopes(
+        Guid actorId,
+        EffectiveAuthorization authorization)
+    {
+        if (actorId == Guid.Empty || !authorization.HasPermission("employees.read"))
+            throw new ForbiddenException();
+
+        var scopes = authorization.GetScopes("employees.read");
+        var includeSelf = scopes.Contains("Self", StringComparer.OrdinalIgnoreCase);
+        var includeTeam = scopes.Contains("Team", StringComparer.OrdinalIgnoreCase);
+        var includeAll = scopes.Contains("All", StringComparer.OrdinalIgnoreCase);
+
+        if (!includeSelf && !includeTeam && !includeAll)
+            throw new ForbiddenException();
+
+        return new EmployeeReadScopes(includeSelf, includeTeam, includeAll);
+    }
+
+    private readonly record struct EmployeeReadScopes(
+        bool IncludeSelf,
+        bool IncludeTeam,
+        bool IncludeAll);
 
     private static bool IsValidEmail(string email)
     {

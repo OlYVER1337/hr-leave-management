@@ -1,4 +1,5 @@
 using System.Reflection;
+using HrService.Api.Authorization;
 using HrService.Api.Controllers;
 using HrService.Application.Abstractions;
 using HrService.Application.Common;
@@ -14,6 +15,58 @@ namespace HrService.Tests;
 public sealed class EmployeeServiceTests
 {
     [Fact]
+    public async Task GetVisibleAsync_CombinesSelfAndTeamScopes()
+    {
+        var actorId = Guid.NewGuid();
+        var employees = new[]
+        {
+            CreateEmployee(actorId),
+            CreateEmployee(Guid.NewGuid(), actorId)
+        };
+        var repository = new Mock<IEmployeeRepository>();
+        repository
+            .Setup(item => item.ListVisibleAsync(
+                actorId, true, true, false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(employees);
+        var authorization = new EffectiveAuthorization(
+        [
+            new EffectivePermission("employees.read", ["Self"]),
+            new EffectivePermission("employees.read", ["Team"])
+        ]);
+        var service = CreateService(repository);
+
+        var result = await service.GetVisibleAsync(actorId, authorization);
+
+        Assert.Equal(2, result.Count);
+        repository.Verify(
+            item => item.ListVisibleAsync(
+                actorId, true, true, false, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task GetVisibleAsync_RejectsAuthorizationWithoutSupportedReadScope()
+    {
+        var actorId = Guid.NewGuid();
+        var repository = new Mock<IEmployeeRepository>();
+        var authorization = new EffectiveAuthorization(
+            [new EffectivePermission("employees.read", ["Department"])]);
+        var service = CreateService(repository);
+
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => service.GetVisibleAsync(actorId, authorization));
+
+        repository.Verify(
+            item => item.ListVisibleAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<bool>(),
+                It.IsAny<bool>(),
+                It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
     public void GetTeamEndpoint_RequiresManagerRole()
     {
         var method = typeof(CurrentEmployeeController).GetMethod(nameof(CurrentEmployeeController.GetTeam));
@@ -22,7 +75,8 @@ public sealed class EmployeeServiceTests
         var authorization = method!.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
             .Cast<AuthorizeAttribute>();
 
-        Assert.Contains(authorization, attribute => attribute.Roles == "Manager");
+        Assert.Contains(authorization, attribute =>
+            attribute.Policy == PermissionPolicies.EmployeesReadTeam && attribute.Roles is null);
     }
 
     [Fact]

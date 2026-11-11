@@ -1,3 +1,4 @@
+using HrService.Api.Authorization;
 using HrService.Api.Middleware;
 using HrService.Application.Services;
 using HrService.Infrastructure.Authentication;
@@ -44,7 +45,7 @@ builder.Services
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddPermissionAuthorization();
 
 var app = builder.Build();
 

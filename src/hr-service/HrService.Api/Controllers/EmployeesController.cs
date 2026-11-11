@@ -1,3 +1,4 @@
+using HrService.Api.Authorization;
 using HrService.Application.Dtos;
 using HrService.Application.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -6,28 +7,43 @@ using Microsoft.AspNetCore.Mvc;
 namespace HrService.Api.Controllers;
 
 [ApiController]
-[Authorize(Roles = "HR")]
+[Authorize]
 [Route("api/v1/employees")]
 public sealed class EmployeesController(EmployeeService employeeService) : ControllerBase
 {
     [HttpGet]
+    [Authorize(Policy = PermissionPolicies.EmployeesRead)]
     public async Task<ActionResult<IReadOnlyList<EmployeeResponse>>> GetAll(
         CancellationToken cancellationToken)
     {
-        var employees = await employeeService.GetAllAsync(cancellationToken);
+        var actorId = AuthorizationClaimReader.GetEmployeeId(User);
+        if (!actorId.HasValue)
+            return Unauthorized();
+
+        var authorization = AuthorizationClaimReader.Read(User);
+        var employees = await employeeService.GetVisibleAsync(
+            actorId.Value, authorization, cancellationToken);
         return Ok(employees);
     }
 
     [HttpGet("{id:guid}")]
+    [Authorize(Policy = PermissionPolicies.EmployeesRead)]
     public async Task<ActionResult<EmployeeResponse>> GetById(
         Guid id,
         CancellationToken cancellationToken)
     {
-        var employee = await employeeService.GetByIdAsync(id, cancellationToken);
+        var actorId = AuthorizationClaimReader.GetEmployeeId(User);
+        if (!actorId.HasValue)
+            return Unauthorized();
+
+        var authorization = AuthorizationClaimReader.Read(User);
+        var employee = await employeeService.GetVisibleByIdAsync(
+            id, actorId.Value, authorization, cancellationToken);
         return Ok(employee);
     }
 
     [HttpPost]
+    [Authorize(Policy = PermissionPolicies.EmployeesCreate)]
     public async Task<ActionResult<EmployeeResponse>> Create(
         [FromBody] CreateEmployeeRequest request,
         CancellationToken cancellationToken)
@@ -37,6 +53,7 @@ public sealed class EmployeesController(EmployeeService employeeService) : Contr
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = PermissionPolicies.EmployeesUpdate)]
     public async Task<ActionResult<EmployeeResponse>> Update(
         Guid id,
         [FromBody] UpdateEmployeeRequest request,
@@ -47,6 +64,7 @@ public sealed class EmployeesController(EmployeeService employeeService) : Contr
     }
 
     [HttpPost("{id:guid}/deactivate")]
+    [Authorize(Policy = PermissionPolicies.EmployeesDeactivate)]
     public async Task<ActionResult<EmployeeResponse>> Deactivate(
         Guid id,
         CancellationToken cancellationToken)
@@ -56,6 +74,7 @@ public sealed class EmployeesController(EmployeeService employeeService) : Contr
     }
 
     [HttpPut("{id:guid}/password")]
+    [Authorize(Policy = PermissionPolicies.EmployeesPasswordReset)]
     public async Task<IActionResult> ResetPassword(
         Guid id,
         [FromBody] ResetEmployeePasswordRequest request,

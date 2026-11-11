@@ -128,7 +128,11 @@ Repository chỉ trả các cặp Permission/Scope khi đáp ứng toàn bộ đ
 
 Authorization Service hợp các Scope trùng Permission giữa nhiều Role, loại bỏ Scope trùng và mặc định không có quyền nếu không có Scope hợp lệ. V1 hiện hỗ trợ Self, Team và All; Department bị từ chối cho đến khi có bộ lọc thực thi theo từng resource.
 
-Authorization Service đã được nối vào luồng phát access token của AuthenticationService. Cả login và refresh đều gọi lại GetEffectiveAuthorizationAsync trước khi phát JWT; refresh không sao chép claim perm từ access token cũ. Controller authorization theo Permission + Scope được thực hiện ở bước tiếp theo.
+Authorization Service đã được nối vào luồng phát access token của AuthenticationService. Cả login và refresh đều gọi lại GetEffectiveAuthorizationAsync trước khi phát JWT; refresh không sao chép claim perm từ access token cũ.
+
+HR Employees API đã chuyển sang Permission + Scope: GET collection và GET theo ID dùng employees.read; collection được lọc trong SQL theo hợp Self/Team/All, còn truy cập một nhân viên cụ thể được giới hạn theo cùng Scope. Các thao tác create/update/deactivate/reset-password yêu cầu Permission tương ứng với Scope All. /api/v1/me/team yêu cầu employees.read với Scope Team. Các policy kiểm tra authz_v=1 và perm; claim role không cấp quyền cho các endpoint này.
+
+Các controller Departments, Holidays, LeavePolicies và LeaveTypes vẫn còn policy Role cũ; cần chuyển lần lượt sang Permission ở các bước tiếp theo. Không coi toàn bộ HR API đã hoàn tất migration khỏi Role cho đến khi các endpoint này được chuyển.
 
 ## 7. JWT và hiệu lực quyền
 
@@ -159,7 +163,7 @@ LeaveRequests.ApproverId là snapshot tại thời điểm tạo đơn, chỉ ph
 2. Seed Role/Permission/Scope baseline và backfill UserRoles từ Employee.Role.
 3. Thêm Authorization Service để hợp Permission và Scope, mặc định deny.
 4. Phát perm claim từ HR login/refresh; cập nhật token tests.
-5. Refactor HR GET employees dùng Permission + Scope.
+5. Refactor HR Employees API dùng Permission + Scope (GET list/detail và các thao tác ghi).
 6. Refactor Leave read visibility dùng Scope và HR team lookup; giữ HR lookup tại thời điểm approve/reject.
 7. Cập nhật characterization/integration tests, sau đó benchmark 50/100 VU.
 
