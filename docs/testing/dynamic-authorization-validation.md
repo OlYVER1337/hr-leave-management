@@ -95,12 +95,12 @@ docker compose @compose run --rm -e VUS=100 -e ITERATIONS_PER_VU=10 -e DURATION=
 
 Ghi bốn workload thành bốn dòng riêng, không gộp workforce và approval thành một RPS vì thao tác và số lần HR lookup khác nhau.
 
-| Workload | VU | Planned | Actual requests/approvals | HR calls | HR total time (ms) | HR avg (ms) | HR p95 (ms) | Error rate |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Workforce | 50 | 5 phút | | | | | | |
-| Workforce | 100 | 5 phút | | | | | | |
-| Approval | 50 | 500 approvals | | | | | | |
-| Approval | 100 | 1.000 approvals | | | | | | |
+| Workload | VU | Planned | Actual | Direct HR calls | Direct HR total (ms) | Leave → HR calls | Leave → HR total (ms) | Leave → HR avg/p95 (ms) | Request p95 (ms) | Error rate |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Workforce | 50 | 5 phút | | | | | | | | |
+| Workforce | 100 | 5 phút | | | | | | | | |
+| Approval | 50 | 500 approvals | | 0 | 0 | | | | | |
+| Approval | 100 | 1.000 approvals | | 0 | 0 | | | | | |
 
 Raw k6 summaries được lưu trong `docs/testing/evidence/dynamic-authorization/` với bốn file `workforce-50.json`, `workforce-100.json`, `approval-50.json` và `approval-100.json`. Không sử dụng kết quả benchmark lịch sử trước Dynamic RBAC làm kết quả của phiên bản này. Ghi rõ commit SHA, thời điểm, cấu hình cache, số nhân viên/đơn và kết quả lỗi cùng với bảng.
 
