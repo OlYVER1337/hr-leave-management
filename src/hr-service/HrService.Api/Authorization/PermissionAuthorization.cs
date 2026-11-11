@@ -47,9 +47,14 @@ public static class AuthorizationClaimReader
         }
     }
 
-    private sealed record PermissionClaim(
-        [property: JsonPropertyName("p")] string? PermissionCode,
-        [property: JsonPropertyName("s")] string[]? Scopes);
+    private sealed class PermissionClaim
+    {
+        [JsonPropertyName("p")]
+        public string? PermissionCode { get; set; }
+
+        [JsonPropertyName("s")]
+        public string[]? Scopes { get; set; }
+    }
 }
 
 public static class PermissionPolicies
