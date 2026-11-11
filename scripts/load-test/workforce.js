@@ -143,7 +143,7 @@ export function handleSummary(data) {
   const hrDirectMetrics = data.metrics.hr_direct_duration_ms?.values || {};
   const leaveToHrMetrics = data.metrics.leave_to_hr_call_duration_ms?.values || {};
   const requests = requestMetrics.count || 0;
-  const leaveRequests = data.metrics.leave_api_requests?.values?.count || 0;
+  const leaveRequests = data.metrics.leave_api_requests?.values?.sum || 0;
   const durationValue = Number.parseFloat(duration);
   const durationUnit = duration.slice(-1);
   const measuredSeconds = durationUnit === 'm'
@@ -167,7 +167,7 @@ export function handleSummary(data) {
     p50_ms: durationMetrics.med || 0,
     p95_ms: durationMetrics['p(95)'] || 0,
     error_rate: failureMetrics.rate || 0,
-    http_errors: data.metrics.workforce_http_errors?.values?.count || 0,
+    http_errors: data.metrics.workforce_http_errors?.values?.sum || 0,
     hr_direct_requests: data.metrics.hr_direct_requests?.values?.sum || 0,
     hr_direct_avg_ms: hrDirectMetrics.avg || 0,
     hr_direct_p95_ms: hrDirectMetrics['p(95)'] || 0,
