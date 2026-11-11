@@ -66,6 +66,7 @@ public static class PermissionPolicies
 {
     public const string EmployeesRead = "permission:employees.read";
     public const string EmployeesReadTeam = "permission:employees.read:team";
+    public const string RolesManage = "permission:roles.manage";
 }
 
 public sealed class PermissionRequirement : IAuthorizationRequirement
@@ -115,6 +116,9 @@ public static class PermissionAuthorizationExtensions
             options.AddPolicy(PermissionPolicies.EmployeesReadTeam, policy =>
                 policy.RequireAuthenticatedUser()
                     .AddRequirements(new PermissionRequirement("employees.read", "Team")));
+            options.AddPolicy(PermissionPolicies.RolesManage, policy =>
+                policy.RequireAuthenticatedUser()
+                    .AddRequirements(new PermissionRequirement("roles.manage", "All")));
         });
         return services;
     }

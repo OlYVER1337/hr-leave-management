@@ -132,6 +132,23 @@ Authorization Service đã được nối vào luồng phát access token của 
 
 HR Employees API đã chuyển sang Permission + Scope: GET collection và GET theo ID dùng employees.read; collection được lọc trong SQL theo hợp Self/Team/All, còn truy cập một nhân viên cụ thể được giới hạn theo cùng Scope. Các thao tác create/update/deactivate/reset-password tạm thời vẫn yêu cầu Role HR vì EmployeeService hiện ghi Employee.Role enum và chưa đồng bộ thay đổi Role sang UserRoles. Chỉ chuyển thao tác ghi sang Permission sau khi hoàn thành luồng quản lý UserRoles, tránh để Role enum và quyền động lệch nhau. /api/v1/me/team yêu cầu employees.read với Scope Team. Các endpoint đọc đã chuyển kiểm tra authz_v=1 và perm; claim role không cấp quyền cho các endpoint đọc này.
 
+### API quản lý gán Role
+
+Các endpoint quản lý UserRoles:
+
+- GET /api/v1/roles: liệt kê Role đang hoạt động để giao diện chọn.
+- GET /api/v1/employees/{employeeId}/roles: xem các Role đang hiệu lực của nhân viên.
+- POST /api/v1/employees/{employeeId}/roles: gán Role, có thể kèm ExpiresAtUtc.
+- DELETE /api/v1/employees/{employeeId}/roles/{roleCode}: thu hồi Role.
+
+Toàn bộ endpoint yêu cầu roles.manage với Scope All trong JWT và service đọc lại quyền hiện tại từ HR_DB trước khi thực hiện. Không cho phép thao tác trên tài khoản của chính người gọi, nhân viên đích phải đang hoạt động khi gán Role, Role đích phải đang hoạt động.
+
+Khi gán, mọi cặp Permission/Scope của Role đích phải nằm trong quyền hiện tại của người cấp; Scope All của người cấp được xem là bao phủ các Scope hẹp hơn của cùng Permission. Vì vậy người cấp không thể trao quyền mà bản thân không có. Role có roles.manage:All không được đặt thời hạn tự hết hiệu lực; khi thu hồi, hệ thống từ chối nếu đó là gán Role quản trị cuối cùng còn hiệu lực.
+
+Mọi thao tác gán, gia hạn và thu hồi ghi AuthzAuditLog cùng lần SaveChanges với thay đổi UserRoles. Nếu một gán đã hết hạn nhưng chưa bị thu hồi, thao tác gán lại cập nhật bản ghi hiện tại và lưu trạng thái trước/sau trong audit để không vi phạm unique index có filter RevokedAtUtc IS NULL. API này quản lý gán Role đã tồn tại; tạo Role mới và chỉnh RolePermissions/RolePermissionScopes là phạm vi quản trị danh mục riêng.
+
+Quyền trong access token đã phát không bị thay đổi tại chỗ. Login/refresh tiếp theo tính lại Permission từ UserRoles; access token cũ vẫn có hiệu lực đến khi hết hạn.
+
 Các controller Departments, Holidays, LeavePolicies và LeaveTypes vẫn còn policy Role cũ; cần chuyển lần lượt sang Permission ở các bước tiếp theo. Không coi toàn bộ HR API đã hoàn tất migration khỏi Role cho đến khi các endpoint này được chuyển.
 
 ## 7. JWT và hiệu lực quyền
@@ -164,6 +181,7 @@ LeaveRequests.ApproverId là snapshot tại thời điểm tạo đơn, chỉ ph
 3. Thêm Authorization Service để hợp Permission và Scope, mặc định deny.
 4. Phát perm claim từ HR login/refresh; cập nhật token tests.
 5. Refactor HR Employees API đọc (GET list/detail) và /api/v1/me/team sang Permission + Scope; thao tác ghi sẽ chuyển sau khi UserRoles được quản lý đầy đủ.
+6. Cung cấp API quản lý UserRoles có kiểm tra quyền hiện tại, chống leo thang đặc quyền, audit và bảo vệ quản trị viên cuối cùng.
 6. Refactor Leave read visibility dùng Scope và HR team lookup; giữ HR lookup tại thời điểm approve/reject.
 7. Cập nhật characterization/integration tests, sau đó benchmark 50/100 VU.
 

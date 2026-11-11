@@ -22,6 +22,7 @@ builder.Services.AddScoped<EmployeeService>();
 builder.Services.AddScoped<LeaveCatalogService>();
 builder.Services.AddScoped<AuthenticationService>();
 builder.Services.AddScoped<AuthorizationService>();
+builder.Services.AddScoped<UserRoleService>();
 builder.Services.AddInfrastructure(connectionString, builder.Configuration);
 
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
