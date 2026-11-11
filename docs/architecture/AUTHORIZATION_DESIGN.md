@@ -130,7 +130,7 @@ Authorization Service hợp các Scope trùng Permission giữa nhiều Role, lo
 
 Authorization Service đã được nối vào luồng phát access token của AuthenticationService. Cả login và refresh đều gọi lại GetEffectiveAuthorizationAsync trước khi phát JWT; refresh không sao chép claim perm từ access token cũ.
 
-HR Employees API đã chuyển sang Permission + Scope: GET collection và GET theo ID dùng employees.read; collection được lọc trong SQL theo hợp Self/Team/All, còn truy cập một nhân viên cụ thể được giới hạn theo cùng Scope. Các thao tác create/update/deactivate/reset-password yêu cầu Permission tương ứng với Scope All. /api/v1/me/team yêu cầu employees.read với Scope Team. Các policy kiểm tra authz_v=1 và perm; claim role không cấp quyền cho các endpoint này.
+HR Employees API đã chuyển sang Permission + Scope: GET collection và GET theo ID dùng employees.read; collection được lọc trong SQL theo hợp Self/Team/All, còn truy cập một nhân viên cụ thể được giới hạn theo cùng Scope. Các thao tác create/update/deactivate/reset-password yêu cầu Permission tương ứng với Scope All. /api/v1/me/team yêu cầu employees.read với Scope Team. Các endpoint đọc đã chuyển kiểm tra authz_v=1 và perm; claim role không cấp quyền cho các endpoint đọc này.
 
 Các controller Departments, Holidays, LeavePolicies và LeaveTypes vẫn còn policy Role cũ; cần chuyển lần lượt sang Permission ở các bước tiếp theo. Không coi toàn bộ HR API đã hoàn tất migration khỏi Role cho đến khi các endpoint này được chuyển.
 
@@ -142,7 +142,7 @@ HR Service phát Permission và Scope hiệu lực vào JWT dưới dạng claim
 - perm là một mảng JSON; mỗi phần tử có p là mã Permission và s là danh sách Scope.
 - Ví dụ: [{"p":"leaves.read","s":["Self","Team"]}].
 - Không có Permission hiệu lực thì không phát claim perm.
-- Claim role được giữ tạm cho giao diện tương thích, nhưng không được dùng cho bất kỳ quyết định authorization nào của V1.
+- Claim role được giữ tạm cho giao diện và các controller HR chưa chuyển đổi. Các endpoint đã chuyển sang Permission + Scope không sử dụng claim role để authorization. Mục tiêu cuối cùng của V1 vẫn là loại bỏ Role claim khỏi mọi quyết định authorization.
 
 Login và refresh đều gọi lại AuthorizationService.GetEffectiveAuthorizationAsync trước khi phát token. Vì vậy sau khi Role bị thu hồi, access token phát lại từ refresh chỉ chứa Permission còn hiệu lực; không sao chép quyền từ token cũ.
 
@@ -163,7 +163,7 @@ LeaveRequests.ApproverId là snapshot tại thời điểm tạo đơn, chỉ ph
 2. Seed Role/Permission/Scope baseline và backfill UserRoles từ Employee.Role.
 3. Thêm Authorization Service để hợp Permission và Scope, mặc định deny.
 4. Phát perm claim từ HR login/refresh; cập nhật token tests.
-5. Refactor HR Employees API dùng Permission + Scope (GET list/detail và các thao tác ghi).
+5. Refactor HR Employees API đọc (GET list/detail) và /api/v1/me/team sang Permission + Scope; thao tác ghi sẽ chuyển sau khi UserRoles được quản lý đầy đủ.
 6. Refactor Leave read visibility dùng Scope và HR team lookup; giữ HR lookup tại thời điểm approve/reject.
 7. Cập nhật characterization/integration tests, sau đó benchmark 50/100 VU.
 
