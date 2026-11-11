@@ -43,7 +43,7 @@ public sealed class EmployeesController(EmployeeService employeeService) : Contr
     }
 
     [HttpPost]
-    [Authorize(Policy = PermissionPolicies.EmployeesCreate)]
+    [Authorize(Roles = "HR")]
     public async Task<ActionResult<EmployeeResponse>> Create(
         [FromBody] CreateEmployeeRequest request,
         CancellationToken cancellationToken)
@@ -53,7 +53,7 @@ public sealed class EmployeesController(EmployeeService employeeService) : Contr
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Policy = PermissionPolicies.EmployeesUpdate)]
+    [Authorize(Roles = "HR")]
     public async Task<ActionResult<EmployeeResponse>> Update(
         Guid id,
         [FromBody] UpdateEmployeeRequest request,
@@ -64,7 +64,7 @@ public sealed class EmployeesController(EmployeeService employeeService) : Contr
     }
 
     [HttpPost("{id:guid}/deactivate")]
-    [Authorize(Policy = PermissionPolicies.EmployeesDeactivate)]
+    [Authorize(Roles = "HR")]
     public async Task<ActionResult<EmployeeResponse>> Deactivate(
         Guid id,
         CancellationToken cancellationToken)
@@ -74,7 +74,7 @@ public sealed class EmployeesController(EmployeeService employeeService) : Contr
     }
 
     [HttpPut("{id:guid}/password")]
-    [Authorize(Policy = PermissionPolicies.EmployeesPasswordReset)]
+    [Authorize(Roles = "HR")]
     public async Task<IActionResult> ResetPassword(
         Guid id,
         [FromBody] ResetEmployeePasswordRequest request,

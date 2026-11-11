@@ -66,10 +66,6 @@ public static class PermissionPolicies
 {
     public const string EmployeesRead = "permission:employees.read";
     public const string EmployeesReadTeam = "permission:employees.read:team";
-    public const string EmployeesCreate = "permission:employees.create";
-    public const string EmployeesUpdate = "permission:employees.update";
-    public const string EmployeesDeactivate = "permission:employees.deactivate";
-    public const string EmployeesPasswordReset = "permission:employees.password.reset";
 }
 
 public sealed class PermissionRequirement : IAuthorizationRequirement
@@ -119,18 +115,6 @@ public static class PermissionAuthorizationExtensions
             options.AddPolicy(PermissionPolicies.EmployeesReadTeam, policy =>
                 policy.RequireAuthenticatedUser()
                     .AddRequirements(new PermissionRequirement("employees.read", "Team")));
-            options.AddPolicy(PermissionPolicies.EmployeesCreate, policy =>
-                policy.RequireAuthenticatedUser()
-                    .AddRequirements(new PermissionRequirement("employees.create", "All")));
-            options.AddPolicy(PermissionPolicies.EmployeesUpdate, policy =>
-                policy.RequireAuthenticatedUser()
-                    .AddRequirements(new PermissionRequirement("employees.update", "All")));
-            options.AddPolicy(PermissionPolicies.EmployeesDeactivate, policy =>
-                policy.RequireAuthenticatedUser()
-                    .AddRequirements(new PermissionRequirement("employees.deactivate", "All")));
-            options.AddPolicy(PermissionPolicies.EmployeesPasswordReset, policy =>
-                policy.RequireAuthenticatedUser()
-                    .AddRequirements(new PermissionRequirement("employees.password.reset", "All")));
         });
         return services;
     }

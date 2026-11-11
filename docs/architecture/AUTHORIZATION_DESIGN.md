@@ -130,7 +130,7 @@ Authorization Service hợp các Scope trùng Permission giữa nhiều Role, lo
 
 Authorization Service đã được nối vào luồng phát access token của AuthenticationService. Cả login và refresh đều gọi lại GetEffectiveAuthorizationAsync trước khi phát JWT; refresh không sao chép claim perm từ access token cũ.
 
-HR Employees API đã chuyển sang Permission + Scope: GET collection và GET theo ID dùng employees.read; collection được lọc trong SQL theo hợp Self/Team/All, còn truy cập một nhân viên cụ thể được giới hạn theo cùng Scope. Các thao tác create/update/deactivate/reset-password yêu cầu Permission tương ứng với Scope All. /api/v1/me/team yêu cầu employees.read với Scope Team. Các endpoint đọc đã chuyển kiểm tra authz_v=1 và perm; claim role không cấp quyền cho các endpoint đọc này.
+HR Employees API đã chuyển sang Permission + Scope: GET collection và GET theo ID dùng employees.read; collection được lọc trong SQL theo hợp Self/Team/All, còn truy cập một nhân viên cụ thể được giới hạn theo cùng Scope. Các thao tác create/update/deactivate/reset-password tạm thời vẫn yêu cầu Role HR vì EmployeeService hiện ghi Employee.Role enum và chưa đồng bộ thay đổi Role sang UserRoles. Chỉ chuyển thao tác ghi sang Permission sau khi hoàn thành luồng quản lý UserRoles, tránh để Role enum và quyền động lệch nhau. /api/v1/me/team yêu cầu employees.read với Scope Team. Các endpoint đọc đã chuyển kiểm tra authz_v=1 và perm; claim role không cấp quyền cho các endpoint đọc này.
 
 Các controller Departments, Holidays, LeavePolicies và LeaveTypes vẫn còn policy Role cũ; cần chuyển lần lượt sang Permission ở các bước tiếp theo. Không coi toàn bộ HR API đã hoàn tất migration khỏi Role cho đến khi các endpoint này được chuyển.
 
