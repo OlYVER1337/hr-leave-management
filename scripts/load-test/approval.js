@@ -83,7 +83,15 @@ function recordHrCalls(response) {
     .map((value) => Number(value))
     .filter((value) => Number.isFinite(value) && value >= 0);
 
-  leaveToHrCalls.add(durations.length);
+  const countHeader = response.headers['X-HR-Call-Count']
+    || response.headers['x-hr-call-count'];
+  const declaredCallCount = Number(countHeader);
+  const callCount = countHeader !== undefined && countHeader !== ''
+    && Number.isFinite(declaredCallCount) && declaredCallCount >= 0
+    ? declaredCallCount
+    : durations.length;
+
+  leaveToHrCalls.add(callCount);
   for (const durationMs of durations) {
     leaveToHrDuration.add(durationMs);
     leaveToHrTotalDuration.add(durationMs);
