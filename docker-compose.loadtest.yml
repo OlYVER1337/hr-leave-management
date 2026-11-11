@@ -37,3 +37,4 @@ services:
       MANAGER_PASSWORD: ${DEMO_MANAGER_PASSWORD}
     volumes:
       - ./scripts/load-test:/scripts:ro
+      - ./docs/testing/evidence/dynamic-authorization:/reports
