@@ -55,9 +55,9 @@ Lệnh SQL lấy mật khẩu từ biến môi trường trong container SQL Ser
 Workload phân phối request đến HR Employees, Leave Requests, Leave Calendar và Manager Approval Inbox. Metric tách biệt request trực tiếp vào HR và các HTTP call nội bộ từ Leave Service sang HR.
 
 ```powershell
-docker compose @compose run --rm -e VUS=50 -e DURATION=5m k6 run /scripts/workforce.js
+docker compose @compose run --rm -e VUS=50 -e DURATION=5m -e REPORT_JSON=/reports/workforce-50.json k6 run /scripts/workforce.js
 
-docker compose @compose run --rm -e VUS=100 -e DURATION=5m k6 run /scripts/workforce.js
+docker compose @compose run --rm -e VUS=100 -e DURATION=5m -e REPORT_JSON=/reports/workforce-100.json k6 run /scripts/workforce.js
 ```
 
 Đọc các trường trong JSON summary:
@@ -76,7 +76,7 @@ Workload này đo riêng lookup HR tại thời điểm duyệt. Mỗi VU duyệ
 Chạy 50 VU:
 
 ```powershell
-docker compose @compose run --rm -e VUS=50 -e ITERATIONS_PER_VU=10 -e DURATION=5m k6 run /scripts/approval.js
+docker compose @compose run --rm -e VUS=50 -e ITERATIONS_PER_VU=10 -e DURATION=5m -e REPORT_JSON=/reports/approval-50.json k6 run /scripts/approval.js
 ```
 
 Phải seed lại để khôi phục trạng thái Pending trước lượt 100 VU:
@@ -86,7 +86,7 @@ docker compose @compose cp .\scripts\load-test\seed-scale-data.sql sqlserver:/tm
 
 docker compose @compose exec -T sqlserver /bin/bash -c '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -d master -i /tmp/seed-scale-data.sql'
 
-docker compose @compose run --rm -e VUS=100 -e ITERATIONS_PER_VU=10 -e DURATION=5m k6 run /scripts/approval.js
+docker compose @compose run --rm -e VUS=100 -e ITERATIONS_PER_VU=10 -e DURATION=5m -e REPORT_JSON=/reports/approval-100.json k6 run /scripts/approval.js
 ```
 
 Đọc `approval_attempts`, `completed_approvals`, `approval_errors`, `p50_ms`, `p95_ms`, `leave_to_hr_calls`, `leave_to_hr_total_time_ms`, `leave_to_hr_avg_ms` và `leave_to_hr_p95_ms`. P50/p95 chỉ tính thời gian approve trong workload, không tính login và lần đọc inbox ở setup. Với mỗi lần approve Team, kỳ vọng một HR lookup để xác nhận ManagerId hiện tại; Scope All không thực hiện lookup này.
@@ -102,7 +102,7 @@ Ghi bốn workload thành bốn dòng riêng, không gộp workforce và approva
 | Approval | 50 | 500 approvals | | | | | | |
 | Approval | 100 | 1.000 approvals | | | | | | |
 
-Không sử dụng kết quả benchmark lịch sử trước Dynamic RBAC làm kết quả của phiên bản này. Ghi rõ commit SHA, thời điểm, cấu hình cache, số nhân viên/đơn và kết quả lỗi cùng với bảng.
+Raw k6 summaries được lưu trong `docs/testing/evidence/dynamic-authorization/` với bốn file `workforce-50.json`, `workforce-100.json`, `approval-50.json` và `approval-100.json`. Không sử dụng kết quả benchmark lịch sử trước Dynamic RBAC làm kết quả của phiên bản này. Ghi rõ commit SHA, thời điểm, cấu hình cache, số nhân viên/đơn và kết quả lỗi cùng với bảng.
 
 ## 7. Giới hạn và an toàn
 
