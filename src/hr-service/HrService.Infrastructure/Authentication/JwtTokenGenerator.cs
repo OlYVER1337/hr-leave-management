@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
 
 namespace HrService.Infrastructure.Authentication;
 
@@ -15,18 +16,40 @@ public sealed class JwtTokenGenerator(
 {
     private readonly JwtOptions _jwtOptions = options.Value;
 
-    public AuthenticationResponse GenerateToken(Employee employee)
+    public AuthenticationResponse GenerateToken(
+        Employee employee,
+        EffectiveAuthorization authorization)
     {
+        ArgumentNullException.ThrowIfNull(employee);
+        ArgumentNullException.ThrowIfNull(authorization);
+
         var now = timeProvider.GetUtcNow();
         var expiresAtUtc = now.AddMinutes(_jwtOptions.AccessTokenMinutes);
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, employee.Id.ToString()),
-            new Claim(JwtRegisteredClaimNames.Name, employee.FullName),
-            new Claim(JwtRegisteredClaimNames.Email, employee.Email),
-            new Claim(ClaimTypes.Role, employee.Role.ToString()),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            new(JwtRegisteredClaimNames.Sub, employee.Id.ToString()),
+            new(JwtRegisteredClaimNames.Name, employee.FullName),
+            new(JwtRegisteredClaimNames.Email, employee.Email),
+            // Temporary compatibility claim for UI only. Authorization decisions
+            // must use authz_v + perm, not the legacy role claim.
+            new(ClaimTypes.Role, employee.Role.ToString()),
+            new("authz_v", "1"),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
+
+        if (authorization.Permissions.Count > 0)
+        {
+            var permissions = authorization.Permissions
+                .Select(permission => new JwtPermission(
+                    permission.Code,
+                    permission.Scopes))
+                .ToArray();
+
+            claims.Add(new Claim(
+                "perm",
+                JsonSerializer.Serialize(permissions)));
+        }
+
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtOptions.SigningKey));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
@@ -50,4 +73,6 @@ public sealed class JwtTokenGenerator(
             Role: employee.Role.ToString()
         );
     }
+
+    private sealed record JwtPermission(string p, IReadOnlyList<string> s);
 }

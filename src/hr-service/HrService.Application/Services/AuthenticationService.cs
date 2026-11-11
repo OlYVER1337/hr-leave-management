@@ -13,6 +13,7 @@ public sealed class AuthenticationService(
     IJwtTokenGenerator jwtTokenGenerator,
     IRefreshTokenRepository refreshTokenRepository,
     IUnitOfWork unitOfWork,
+    AuthorizationService authorizationService,
     TimeProvider timeProvider)
 {
     private const string InvalidCredentialsMessage = "Invalid email or password.";
@@ -38,13 +39,17 @@ public sealed class AuthenticationService(
             throw new UnauthorizedException(InvalidCredentialsMessage);
         }
 
+        var authorization = await authorizationService.GetEffectiveAuthorizationAsync(
+            employee.Id,
+            cancellationToken);
+
         var now = timeProvider.GetUtcNow();
         var refreshToken = CreateRefreshToken(employee.Id, now);
         refreshTokenRepository.Add(refreshToken.Entity);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return new AuthenticationSession(
-            jwtTokenGenerator.GenerateToken(employee),
+            jwtTokenGenerator.GenerateToken(employee, authorization),
             refreshToken.Token,
             now.Add(RefreshTokenLifetime));
     }
@@ -70,8 +75,14 @@ public sealed class AuthenticationService(
             throw new UnauthorizedException(InvalidCredentialsMessage);
         }
 
+        // Always resolve authorization again. Never copy permission claims from
+        // the previous access token.
+        var authorization = await authorizationService.GetEffectiveAuthorizationAsync(
+            employee.Id,
+            cancellationToken);
+
         return new AuthenticationSession(
-            jwtTokenGenerator.GenerateToken(employee),
+            jwtTokenGenerator.GenerateToken(employee, authorization),
             replacement.Token,
             now.Add(RefreshTokenLifetime));
     }

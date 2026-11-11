@@ -128,11 +128,19 @@ Repository chỉ trả các cặp Permission/Scope khi đáp ứng toàn bộ đ
 
 Authorization Service hợp các Scope trùng Permission giữa nhiều Role, loại bỏ Scope trùng và mặc định không có quyền nếu không có Scope hợp lệ. V1 hiện hỗ trợ Self, Team và All; Department bị từ chối cho đến khi có bộ lọc thực thi theo từng resource.
 
-Authorization Service đã được đăng ký DI nhưng chưa được nối vào JWT hoặc Controller. Các bước tích hợp đó được thực hiện riêng sau khi unit test và SQL integration test của resolver/repository được xác nhận.
+Authorization Service đã được nối vào luồng phát access token của AuthenticationService. Cả login và refresh đều gọi lại GetEffectiveAuthorizationAsync trước khi phát JWT; refresh không sao chép claim perm từ access token cũ. Controller authorization theo Permission + Scope được thực hiện ở bước tiếp theo.
 
 ## 7. JWT và hiệu lực quyền
 
-HR Service phát Permission và Scope hiệu lực vào JWT dưới dạng claim có cấu trúc và phiên bản schema. Không phát danh sách Role làm căn cứ authorization cho V1.
+HR Service phát Permission và Scope hiệu lực vào JWT dưới dạng claim có cấu trúc và phiên bản schema:
+
+- authz_v = 1.
+- perm là một mảng JSON; mỗi phần tử có p là mã Permission và s là danh sách Scope.
+- Ví dụ: [{"p":"leaves.read","s":["Self","Team"]}].
+- Không có Permission hiệu lực thì không phát claim perm.
+- Claim role được giữ tạm cho giao diện tương thích, nhưng không được dùng cho bất kỳ quyết định authorization nào của V1.
+
+Login và refresh đều gọi lại AuthorizationService.GetEffectiveAuthorizationAsync trước khi phát token. Vì vậy sau khi Role bị thu hồi, access token phát lại từ refresh chỉ chứa Permission còn hiệu lực; không sao chép quyền từ token cũ.
 
 Access JWT được kiểm tra cục bộ tại mỗi service. Thay đổi Role/Permission có hiệu lực khi access token mới được phát hành; thu hồi refresh token không vô hiệu hóa access token đã được cấp. V1 giữ access-token lifetime ngắn hiện có và ghi nhận giới hạn này.
 

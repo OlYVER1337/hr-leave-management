@@ -5,5 +5,7 @@ namespace HrService.Application.Abstractions;
 
 public interface IJwtTokenGenerator
 {
-    AuthenticationResponse GenerateToken(Employee employee);
+    AuthenticationResponse GenerateToken(
+        Employee employee,
+        EffectiveAuthorization authorization);
 }

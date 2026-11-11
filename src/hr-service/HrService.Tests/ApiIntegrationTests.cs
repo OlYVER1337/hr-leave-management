@@ -109,7 +109,9 @@ public sealed class ApiIntegrationTests
             .ReturnsAsync(1);
         var tokenGenerator = new Mock<IJwtTokenGenerator>();
         tokenGenerator
-            .Setup(generator => generator.GenerateToken(employee))
+            .Setup(generator => generator.GenerateToken(
+                employee,
+                It.IsAny<HrService.Application.Dtos.EffectiveAuthorization>()))
             .Returns(new HrService.Application.Dtos.AuthenticationResponse(
                 "access-token",
                 DateTimeOffset.UtcNow.AddMinutes(15),
@@ -151,6 +153,7 @@ public sealed class ApiIntegrationTests
         employeeRepository ??= new Mock<IEmployeeRepository>();
         var departmentRepository = new Mock<IDepartmentRepository>();
         var leaveCatalogRepository = new Mock<ILeaveCatalogRepository>();
+        var authorizationRepository = new Mock<IAuthorizationRepository>();
         var cache = new Mock<ILeaveCatalogCache>();
         unitOfWork ??= new Mock<IUnitOfWork>();
         passwordHasher ??= new Mock<IPasswordHasher>();
@@ -179,10 +182,12 @@ public sealed class ApiIntegrationTests
                     services.AddScoped<DepartmentService>();
                     services.AddScoped<EmployeeService>();
                     services.AddScoped<LeaveCatalogService>();
+                    services.AddScoped<HrService.Application.Services.AuthorizationService>();
                     services.AddScoped<HrService.Application.Services.AuthenticationService>();
                     services.AddSingleton<IEmployeeRepository>(employeeRepository.Object);
                     services.AddSingleton<IDepartmentRepository>(departmentRepository.Object);
                     services.AddSingleton<ILeaveCatalogRepository>(leaveCatalogRepository.Object);
+                    services.AddSingleton<IAuthorizationRepository>(authorizationRepository.Object);
                     services.AddSingleton<ILeaveCatalogCache>(cache.Object);
                     services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
                     services.AddSingleton<IPasswordHasher>(passwordHasher.Object);
