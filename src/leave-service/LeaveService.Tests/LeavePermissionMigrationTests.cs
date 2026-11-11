@@ -89,6 +89,23 @@ public sealed class LeavePermissionMigrationTests
         Assert.False(LeaveAccess.FromClaims(oldTokenPrincipal).CanDecide);
     }
 
+
+    [Fact]
+    public void LeaveAccess_DoesNotGrantAccessFromLegacyHrRoleClaim()
+    {
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim(ClaimTypes.Role, "HR"),
+            new Claim("role", "HR")
+        ], "test"));
+
+        var access = LeaveAccess.FromClaims(principal);
+
+        Assert.False(access.CanReadAll);
+        Assert.False(access.CanDecideAll);
+        Assert.False(access.CanDecide);
+    }
+
     private static void AssertNoBooleanParameters(string methodName)
     {
         var method = typeof(LeaveRequestService).GetMethod(methodName);
