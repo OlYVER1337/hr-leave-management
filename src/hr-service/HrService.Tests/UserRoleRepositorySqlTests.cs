@@ -166,6 +166,11 @@ public sealed class UserRoleRepositorySqlTests : IClassFixture<AuthorizationSeed
                 {
                     Assert.Equal("employees.read", grant.PermissionCode);
                     Assert.Equal("Team", grant.Scope);
+                },
+                grant =>
+                {
+                    Assert.Equal("leaves.decide", grant.PermissionCode);
+                    Assert.Equal("Team", grant.Scope);
                 });
 
             Assert.True(await repository.HasOtherActiveRoleManagersAsync(
