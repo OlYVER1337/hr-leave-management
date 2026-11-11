@@ -154,6 +154,12 @@ public sealed class ApiIntegrationTests
         var departmentRepository = new Mock<IDepartmentRepository>();
         var leaveCatalogRepository = new Mock<ILeaveCatalogRepository>();
         var authorizationRepository = new Mock<IAuthorizationRepository>();
+        authorizationRepository
+            .Setup(repository => repository.GetEffectivePermissionScopesAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
         var cache = new Mock<ILeaveCatalogCache>();
         unitOfWork ??= new Mock<IUnitOfWork>();
         passwordHasher ??= new Mock<IPasswordHasher>();

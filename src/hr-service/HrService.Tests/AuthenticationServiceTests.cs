@@ -20,8 +20,6 @@ public sealed class AuthenticationServiceTests
             FullName = "Test Employee",
             Role = Role.Employee
         };
-        var authorization = new EffectiveAuthorization(
-            [new EffectivePermission("leaves.read", ["Self"])]);
         var response = new AuthenticationResponse(
             "access-token",
             DateTimeOffset.UtcNow.AddMinutes(15),
@@ -52,7 +50,10 @@ public sealed class AuthenticationServiceTests
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync([new PermissionScopeGrant("leaves.read", "Self")]);
         tokenGenerator
-            .Setup(item => item.GenerateToken(employee, authorization))
+            .Setup(item => item.GenerateToken(
+                employee,
+                It.Is<EffectiveAuthorization>(
+                    value => value.HasScope("leaves.read", "Self"))))
             .Returns(response);
         refreshTokenRepository
             .Setup(item => item.Add(It.IsAny<RefreshToken>()))
