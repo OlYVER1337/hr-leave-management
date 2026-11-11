@@ -67,7 +67,7 @@ public sealed class EmployeeServiceTests
     }
 
     [Fact]
-    public void GetTeamEndpoint_RequiresManagerRole()
+    public void GetTeamEndpoint_RequiresEmployeesReadTeamScope()
     {
         var method = typeof(CurrentEmployeeController).GetMethod(nameof(CurrentEmployeeController.GetTeam));
         Assert.NotNull(method);
