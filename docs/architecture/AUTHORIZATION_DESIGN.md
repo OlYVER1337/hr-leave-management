@@ -58,7 +58,7 @@ Scope được lưu dưới dạng chuỗi có constraint: Self, Team, Departmen
 
 ## 5. Permission baseline
 
-Permission sử dụng mã resource.action, ví dụ:
+Permission sử dụng mã resource.action:
 
 - employees.read
 - employees.create
@@ -73,7 +73,45 @@ Permission sử dụng mã resource.action, ví dụ:
 
 V1 sử dụng leaves.decide cho cả approve và reject; thao tác quyết định vẫn ghi rõ trạng thái và Actor vào LeaveRequestHistory.
 
-Danh mục này cần được đối chiếu với toàn bộ endpoint hiện có trước khi seed chính thức.
+### Role và Scope được seed trong V1
+
+Các Role hệ thống ban đầu là Employee, Manager, HR và Auditor. Bảng dưới đây là baseline quyền; Scope chỉ được hợp nhất giữa các Role mà người dùng đang sở hữu.
+
+| Role | Permission | Scope |
+|---|---|---|
+| Employee | employees.read | Self |
+| Employee | leaves.read | Self |
+| Employee | leaves.create | Self |
+| Employee | leaves.cancel | Self |
+| Manager | employees.read | Self, Team |
+| Manager | leaves.read | Self, Team |
+| Manager | leaves.create | Self |
+| Manager | leaves.cancel | Self |
+| Manager | leaves.decide | Team |
+| HR | employees.read | All |
+| HR | employees.create | All |
+| HR | employees.update | All |
+| HR | employees.deactivate | All |
+| HR | employees.password.reset | All |
+| HR | leaves.read | All |
+| HR | leaves.create | Self |
+| HR | leaves.decide | All |
+| HR | leaves.cancel | Self |
+| HR | roles.manage | All |
+| Auditor | employees.read | All |
+| Auditor | leaves.read | All |
+
+Danh mục Scope hợp lệ của V1:
+
+- employees.read: Self, Team, All.
+- leaves.read: Self, Team, All.
+- leaves.decide: Team, All.
+- employees.create, employees.update, employees.deactivate, employees.password.reset, roles.manage: All.
+- leaves.create, leaves.cancel: Self.
+
+Department chưa được cấp cho Permission nào trong V1. Chỉ mở Scope này sau khi chốt và triển khai quy tắc Department theo từng resource.
+
+Backfill từ Employee.Role chỉ tạo UserRole nếu cặp EmployeeId/RoleId chưa từng tồn tại. Bản ghi đã thu hồi hoặc hết hạn không bị seeder tự động khôi phục; điều này bảo đảm khởi động lại ứng dụng không cấp lại quyền đã bị thu hồi. Seeder có thể chạy lặp lại mà không nhân bản Role, Permission, Scope hoặc Role assignment.
 
 ## 6. JWT và hiệu lực quyền
 

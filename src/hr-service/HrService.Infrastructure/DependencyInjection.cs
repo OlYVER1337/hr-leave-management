@@ -31,6 +31,7 @@ public static class DependencyInjection
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<InitialHrSeeder>();
         services.AddScoped<DemoDataSeeder>();
+        services.AddScoped<AuthorizationSeeder>();
         services.AddSingleton<DatabaseInitializer>();
 
         services.AddSingleton<IValidateOptions<JwtOptions>, JwtOptionsValidator>();
