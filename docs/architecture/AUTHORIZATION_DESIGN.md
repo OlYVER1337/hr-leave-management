@@ -208,7 +208,7 @@ LeaveRequests.ApproverId là snapshot tại thời điểm tạo đơn, chỉ ph
 5. Refactor HR Employees API và /api/v1/me/team sang Permission + Scope.
 6. Cung cấp API quản lý UserRoles có kiểm tra quyền hiện tại, chống leo thang đặc quyền, audit và bảo vệ quản trị viên cuối cùng.
 7. Chuyển HR write endpoints và EmployeeLookupController sang policy Permission; chuyển Leave API/repository sang LeaveAccess từ perm, giữ HR lookup cho Team inbox và quyết định Team.
-8. Chạy toàn bộ test SQL/Redis với skipped = 0; benchmark workforce và approval lookup ở 50/100 VU.
+8. Chạy toàn bộ test SQL/Redis với skipped = 0; benchmark workforce và approval lookup ở 50/100 VU theo [hướng dẫn xác minh và benchmark](../testing/dynamic-authorization-validation.md).
 
 Outbox, asynchronous read model, backfill/reconciliation giữa hai service không thuộc V1; chỉ xem xét nếu benchmark chứng minh HTTP lookup là nút thắt.
 
