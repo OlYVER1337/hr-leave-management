@@ -22,6 +22,56 @@ namespace HrService.Infrastructure.Persistence.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("HrService.Domain.Entities.AuthzAuditLog", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<Guid>("ActorEmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("AfterJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("BeforeJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("TargetEmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("TargetId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("TargetType")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorEmployeeId", "CreatedAtUtc");
+
+                    b.HasIndex("TargetEmployeeId", "CreatedAtUtc");
+
+                    b.ToTable("AuthzAuditLog", (string)null);
+                });
+
             modelBuilder.Entity("HrService.Domain.Entities.Department", b =>
                 {
                     b.Property<int>("Id")
@@ -185,6 +235,56 @@ namespace HrService.Infrastructure.Persistence.Migrations
                     b.ToTable("LeaveTypes");
                 });
 
+            modelBuilder.Entity("HrService.Domain.Entities.Permission", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("Permissions", (string)null);
+                });
+
+            modelBuilder.Entity("HrService.Domain.Entities.PermissionScopeRule", b =>
+                {
+                    b.Property<int>("PermissionId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Scope")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("PermissionId", "Scope");
+
+                    b.ToTable("PermissionScopeRules", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PermissionScopeRules_Scope", "[Scope] IN (N'Self', N'Team', N'Department', N'All')");
+                        });
+                });
+
             modelBuilder.Entity("HrService.Domain.Entities.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -222,6 +322,150 @@ namespace HrService.Infrastructure.Persistence.Migrations
                     b.ToTable("RefreshTokens");
                 });
 
+            modelBuilder.Entity("HrService.Domain.Entities.RolePermission", b =>
+                {
+                    b.Property<int>("RoleId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PermissionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("GrantedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("GrantedByEmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("RoleId", "PermissionId");
+
+                    b.HasIndex("GrantedByEmployeeId");
+
+                    b.HasIndex("PermissionId");
+
+                    b.ToTable("RolePermissions", (string)null);
+                });
+
+            modelBuilder.Entity("HrService.Domain.Entities.RolePermissionScope", b =>
+                {
+                    b.Property<int>("RoleId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PermissionId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Scope")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.HasKey("RoleId", "PermissionId", "Scope");
+
+                    b.HasIndex("PermissionId", "Scope");
+
+                    b.ToTable("RolePermissionScopes", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_RolePermissionScopes_Scope", "[Scope] IN (N'Self', N'Team', N'Department', N'All')");
+                        });
+                });
+
+            modelBuilder.Entity("HrService.Domain.Entities.SecurityRole", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSystem")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("Roles", (string)null);
+                });
+
+            modelBuilder.Entity("HrService.Domain.Entities.UserRole", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ExpiresAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("GrantedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("GrantedByEmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("RevokedByEmployeeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("RoleId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GrantedByEmployeeId");
+
+                    b.HasIndex("RevokedByEmployeeId");
+
+                    b.HasIndex("RoleId");
+
+                    b.HasIndex("EmployeeId", "RoleId")
+                        .IsUnique()
+                        .HasFilter("[RevokedAtUtc] IS NULL");
+
+                    b.HasIndex("EmployeeId", "RevokedAtUtc", "ExpiresAtUtc");
+
+                    b.ToTable("UserRoles", (string)null);
+                });
+
+            modelBuilder.Entity("HrService.Domain.Entities.AuthzAuditLog", b =>
+                {
+                    b.HasOne("HrService.Domain.Entities.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("ActorEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HrService.Domain.Entities.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("TargetEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("HrService.Domain.Entities.Employee", b =>
                 {
                     b.HasOne("HrService.Domain.Entities.Department", "Department")
@@ -251,6 +495,17 @@ namespace HrService.Infrastructure.Persistence.Migrations
                     b.Navigation("LeaveType");
                 });
 
+            modelBuilder.Entity("HrService.Domain.Entities.PermissionScopeRule", b =>
+                {
+                    b.HasOne("HrService.Domain.Entities.Permission", "Permission")
+                        .WithMany("ScopeRules")
+                        .HasForeignKey("PermissionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Permission");
+                });
+
             modelBuilder.Entity("HrService.Domain.Entities.RefreshToken", b =>
                 {
                     b.HasOne("HrService.Domain.Entities.Employee", "Employee")
@@ -262,6 +517,78 @@ namespace HrService.Infrastructure.Persistence.Migrations
                     b.Navigation("Employee");
                 });
 
+            modelBuilder.Entity("HrService.Domain.Entities.RolePermission", b =>
+                {
+                    b.HasOne("HrService.Domain.Entities.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("GrantedByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HrService.Domain.Entities.Permission", "Permission")
+                        .WithMany("RolePermissions")
+                        .HasForeignKey("PermissionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HrService.Domain.Entities.SecurityRole", "Role")
+                        .WithMany("RolePermissions")
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Permission");
+
+                    b.Navigation("Role");
+                });
+
+            modelBuilder.Entity("HrService.Domain.Entities.RolePermissionScope", b =>
+                {
+                    b.HasOne("HrService.Domain.Entities.PermissionScopeRule", "PermissionScopeRule")
+                        .WithMany("RolePermissionScopes")
+                        .HasForeignKey("PermissionId", "Scope")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HrService.Domain.Entities.RolePermission", "RolePermission")
+                        .WithMany("Scopes")
+                        .HasForeignKey("RoleId", "PermissionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("PermissionScopeRule");
+
+                    b.Navigation("RolePermission");
+                });
+
+            modelBuilder.Entity("HrService.Domain.Entities.UserRole", b =>
+                {
+                    b.HasOne("HrService.Domain.Entities.Employee", "Employee")
+                        .WithMany("UserRoles")
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HrService.Domain.Entities.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("GrantedByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HrService.Domain.Entities.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("RevokedByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HrService.Domain.Entities.SecurityRole", "Role")
+                        .WithMany("UserRoles")
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("Role");
+                });
+
             modelBuilder.Entity("HrService.Domain.Entities.Department", b =>
                 {
                     b.Navigation("Employees");
@@ -270,11 +597,37 @@ namespace HrService.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("HrService.Domain.Entities.Employee", b =>
                 {
                     b.Navigation("Subordinates");
+
+                    b.Navigation("UserRoles");
                 });
 
             modelBuilder.Entity("HrService.Domain.Entities.LeaveType", b =>
                 {
                     b.Navigation("Policies");
+                });
+
+            modelBuilder.Entity("HrService.Domain.Entities.Permission", b =>
+                {
+                    b.Navigation("RolePermissions");
+
+                    b.Navigation("ScopeRules");
+                });
+
+            modelBuilder.Entity("HrService.Domain.Entities.PermissionScopeRule", b =>
+                {
+                    b.Navigation("RolePermissionScopes");
+                });
+
+            modelBuilder.Entity("HrService.Domain.Entities.RolePermission", b =>
+                {
+                    b.Navigation("Scopes");
+                });
+
+            modelBuilder.Entity("HrService.Domain.Entities.SecurityRole", b =>
+                {
+                    b.Navigation("RolePermissions");
+
+                    b.Navigation("UserRoles");
                 });
 #pragma warning restore 612, 618
         }
