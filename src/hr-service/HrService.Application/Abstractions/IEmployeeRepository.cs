@@ -26,7 +26,10 @@ public interface IEmployeeRepository
         string email,
         Guid? excludeEmployeeId = null,
         CancellationToken cancellationToken = default);
-    Task<Employee?> GetActiveManagerByIdAsync(Guid managerId, CancellationToken cancellationToken = default);
+    Task<Employee?> GetActiveManagerByIdAsync(
+        Guid managerId,
+        DateTime utcNow,
+        CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Employee>> GetDirectReportsAsync(
         Guid managerId,
         CancellationToken cancellationToken = default);

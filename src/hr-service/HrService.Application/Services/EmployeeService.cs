@@ -196,12 +196,13 @@ public sealed class EmployeeService(
         {
             manager = await employeeRepository.GetActiveManagerByIdAsync(
                 request.ManagerId.Value,
+                timeProvider.GetUtcNow().UtcDateTime,
                 cancellationToken);
             if (manager is null)
             {
                 throw new RequestValidationException(new Dictionary<string, string[]>
                 {
-                    ["managerId"] = ["Manager must reference an active employee with the Manager role."]
+                    ["managerId"] = ["Manager must be active and have leaves.decide with Team or All scope."]
                 });
             }
         }
@@ -311,10 +312,11 @@ public sealed class EmployeeService(
 
             manager = await employeeRepository.GetActiveManagerByIdAsync(
                 request.ManagerId.Value,
+                timeProvider.GetUtcNow().UtcDateTime,
                 cancellationToken);
             if (manager is null)
             {
-                throw Problems.Invalid("managerId", "Manager must reference an active employee with the Manager role.");
+                throw Problems.Invalid("managerId", "Manager must be active and have leaves.decide with Team or All scope.");
             }
         }
 

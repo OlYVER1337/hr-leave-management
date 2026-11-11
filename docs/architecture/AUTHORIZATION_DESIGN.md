@@ -167,6 +167,8 @@ Access JWT được kiểm tra cục bộ tại mỗi service. Thay đổi Role/
 
 ## 8. Quy tắc Team
 
+Một nhân viên chỉ đủ điều kiện được chọn làm ManagerId khi đang hoạt động và có UserRole hiệu lực cấp leaves.decide với Scope Team hoặc All; không kiểm tra Employee.Role enum.
+
 Team được định nghĩa theo quan hệ quản lý hiện tại:
 
 - Employees Team: Employees.ManagerId == ActorId.

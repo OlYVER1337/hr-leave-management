@@ -52,7 +52,13 @@ public sealed class UserRoleRepositorySqlTests : IClassFixture<AuthorizationSeed
                 Name = "Read employees",
                 IsActive = true
             };
-            context.Permissions.AddRange(rolesManage, employeeRead);
+            var leaveDecide = new Permission
+            {
+                Code = "leaves.decide",
+                Name = "Decide leaves",
+                IsActive = true
+            };
+            context.Permissions.AddRange(rolesManage, employeeRead, leaveDecide);
             await context.SaveChangesAsync();
 
             adminRoleId = adminRole.Id;
@@ -60,7 +66,8 @@ public sealed class UserRoleRepositorySqlTests : IClassFixture<AuthorizationSeed
 
             context.PermissionScopeRules.AddRange(
                 new PermissionScopeRule { PermissionId = rolesManage.Id, Scope = "All" },
-                new PermissionScopeRule { PermissionId = employeeRead.Id, Scope = "Team" });
+                new PermissionScopeRule { PermissionId = employeeRead.Id, Scope = "Team" },
+                new PermissionScopeRule { PermissionId = leaveDecide.Id, Scope = "Team" });
 
             context.RolePermissions.AddRange(
                 new RolePermission
@@ -73,6 +80,12 @@ public sealed class UserRoleRepositorySqlTests : IClassFixture<AuthorizationSeed
                 {
                     RoleId = targetRole.Id,
                     PermissionId = employeeRead.Id,
+                    GrantedAtUtc = now
+                },
+                new RolePermission
+                {
+                    RoleId = targetRole.Id,
+                    PermissionId = leaveDecide.Id,
                     GrantedAtUtc = now
                 });
 
@@ -89,6 +102,12 @@ public sealed class UserRoleRepositorySqlTests : IClassFixture<AuthorizationSeed
                 {
                     RoleId = targetRole.Id,
                     PermissionId = employeeRead.Id,
+                    Scope = "Team"
+                },
+                new RolePermissionScope
+                {
+                    RoleId = targetRole.Id,
+                    PermissionId = leaveDecide.Id,
                     Scope = "Team"
                 });
 
@@ -121,6 +140,8 @@ public sealed class UserRoleRepositorySqlTests : IClassFixture<AuthorizationSeed
             var repository = new UserRoleRepository(context);
 
             Assert.NotNull(await repository.GetEmployeeByIdAsync(targetId));
+            Assert.NotNull(await new EmployeeRepository(context)
+                .GetActiveManagerByIdAsync(targetId, now));
 
             var roles = await repository.ListActiveRolesAsync();
             Assert.Contains(roles, role => role.Id == adminRoleId);
@@ -158,6 +179,9 @@ public sealed class UserRoleRepositorySqlTests : IClassFixture<AuthorizationSeed
             var adminAssignment = await context.UserRoles.SingleAsync(
                 assignment => assignment.EmployeeId == actorId && assignment.RoleId == adminRoleId);
             adminAssignment.RevokedAtUtc = now;
+            var targetAssignment = await context.UserRoles.SingleAsync(
+                assignment => assignment.EmployeeId == targetId && assignment.RoleId == targetRoleId);
+            targetAssignment.RevokedAtUtc = now;
             await context.SaveChangesAsync();
         }
 
@@ -168,6 +192,8 @@ public sealed class UserRoleRepositorySqlTests : IClassFixture<AuthorizationSeed
                 targetId,
                 targetRoleId,
                 now));
+            Assert.Null(await new EmployeeRepository(context)
+                .GetActiveManagerByIdAsync(targetId, now));
         }
     }
 

@@ -114,12 +114,24 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
 
     public Task<Employee?> GetActiveManagerByIdAsync(
         Guid managerId,
+        DateTime utcNow,
         CancellationToken cancellationToken = default)
     {
         return dbContext.Employees
             .Include(employee => employee.Department)
             .FirstOrDefaultAsync(
-                employee => employee.Id == managerId && employee.Role == Role.Manager && employee.IsActive,
+                employee =>
+                    employee.Id == managerId &&
+                    employee.IsActive &&
+                    employee.UserRoles.Any(assignment =>
+                        assignment.RevokedAtUtc == null &&
+                        (assignment.ExpiresAtUtc == null || assignment.ExpiresAtUtc > utcNow) &&
+                        assignment.Role.IsActive &&
+                        assignment.Role.RolePermissions.Any(rolePermission =>
+                            rolePermission.Permission.IsActive &&
+                            rolePermission.Permission.Code == "leaves.decide" &&
+                            rolePermission.Scopes.Any(scope =>
+                                scope.Scope == "Team" || scope.Scope == "All"))),
                 cancellationToken);
     }
 
