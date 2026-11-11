@@ -15,6 +15,7 @@ const leaveApiRequests = new Counter('leave_api_requests');
 // Direct requests to HR API.
 const hrDirectRequests = new Counter('hr_direct_requests');
 const hrDirectDuration = new Trend('hr_direct_duration_ms');
+const hrDirectTotalDuration = new Counter('hr_direct_total_duration_ms');
 
 // Outbound HR HTTP calls made internally by Leave Service. The Leave API
 // returns their count and individual durations in X-HR-Call-* response headers.
@@ -119,6 +120,7 @@ export default function (tokens) {
   if (route.name === 'employees') {
     hrDirectRequests.add(1);
     hrDirectDuration.add(response.timings.duration);
+    hrDirectTotalDuration.add(response.timings.duration);
   } else {
     leaveApiRequests.add(1);
   }
@@ -173,6 +175,7 @@ export function handleSummary(data) {
     error_rate: requests > 0 ? errorCount / requests : 0,
     http_errors: errorCount,
     hr_direct_requests: data.metrics.hr_direct_requests?.values?.count || 0,
+    hr_direct_total_time_ms: data.metrics.hr_direct_total_duration_ms?.values?.count || 0,
     hr_direct_avg_ms: hrDirectMetrics.avg || 0,
     hr_direct_p95_ms: hrDirectMetrics['p(95)'] || 0,
     leave_to_hr_calls: leaveToHrCallCount,
