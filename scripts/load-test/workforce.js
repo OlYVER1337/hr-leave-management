@@ -143,7 +143,7 @@ export function handleSummary(data) {
   const hrDirectMetrics = data.metrics.hr_direct_duration_ms?.values || {};
   const leaveToHrMetrics = data.metrics.leave_to_hr_call_duration_ms?.values || {};
   const requests = requestMetrics.count || 0;
-  const leaveRequests = data.metrics.leave_api_requests?.values?.sum || 0;
+  const leaveRequests = data.metrics.leave_api_requests?.values?.count || 0;
   const durationValue = Number.parseFloat(duration);
   const durationUnit = duration.slice(-1);
   const measuredSeconds = durationUnit === 'm'
@@ -153,9 +153,8 @@ export function handleSummary(data) {
       : durationUnit === 'h'
         ? durationValue * 3600
         : 0;
-  // Counter.sum is the total number of HR calls; Counter.count is only the
-  // number of samples (responses) submitted to the metric.
-  const leaveToHrCallCount = data.metrics.leave_to_hr_calls?.values?.sum || 0;
+  // For k6 Counter summaries, values.count is the accumulated counter value.
+  const leaveToHrCallCount = data.metrics.leave_to_hr_calls?.values?.count || 0;
 
   const summary = {
     workload: 'employee-and-leave-reads',
@@ -167,15 +166,15 @@ export function handleSummary(data) {
     p50_ms: durationMetrics.med || 0,
     p95_ms: durationMetrics['p(95)'] || 0,
     error_rate: failureMetrics.rate || 0,
-    http_errors: data.metrics.workforce_http_errors?.values?.sum || 0,
-    hr_direct_requests: data.metrics.hr_direct_requests?.values?.sum || 0,
+    http_errors: data.metrics.workforce_http_errors?.values?.count || 0,
+    hr_direct_requests: data.metrics.hr_direct_requests?.values?.count || 0,
     hr_direct_avg_ms: hrDirectMetrics.avg || 0,
     hr_direct_p95_ms: hrDirectMetrics['p(95)'] || 0,
     leave_to_hr_calls: leaveToHrCallCount,
     leave_to_hr_calls_per_second: measuredSeconds > 0 ? leaveToHrCallCount / measuredSeconds : 0,
-    leave_api_requests: data.metrics.leave_api_requests?.values?.sum || 0,
+    leave_api_requests: data.metrics.leave_api_requests?.values?.count || 0,
     leave_to_hr_calls_per_leave_request: leaveRequests > 0 ? leaveToHrCallCount / leaveRequests : 0,
-    leave_to_hr_total_time_ms: data.metrics.leave_to_hr_total_duration_ms?.values?.sum || 0,
+    leave_to_hr_total_time_ms: data.metrics.leave_to_hr_total_duration_ms?.values?.count || 0,
     leave_to_hr_avg_ms: leaveToHrMetrics.avg || 0,
     leave_to_hr_p95_ms: leaveToHrMetrics['p(95)'] || 0,
   };
