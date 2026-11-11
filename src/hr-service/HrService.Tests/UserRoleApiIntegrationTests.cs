@@ -5,6 +5,7 @@ using HrService.Application.Abstractions;
 using HrService.Application.Dtos;
 using HrService.Application.Services;
 using HrService.Domain.Entities;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
