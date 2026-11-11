@@ -5,7 +5,7 @@ namespace LeaveService.Api.Middleware;
 
 /// <summary>
 /// Exposes outbound HR call metrics as response headers when load-test metrics are enabled.
-/// Normal environments do not emit these headers.
+/// The headers are registered before the response starts so they are observable by k6.
 /// </summary>
 public sealed class HrCallMetricsMiddleware(RequestDelegate next)
 {
@@ -17,19 +17,20 @@ public sealed class HrCallMetricsMiddleware(RequestDelegate next)
             return;
         }
 
-        try
+        context.Response.OnStarting(static state =>
         {
-            await next(context);
-        }
-        finally
-        {
-            if (!context.Response.HasStarted)
-            {
-                var durations = metrics.GetDurations();
-                context.Response.Headers["X-HR-Call-Count"] =
-                    durations.Count.ToString(CultureInfo.InvariantCulture);
-                context.Response.Headers["X-HR-Call-Durations-Ms"] = metrics.GetDurationsHeader();
-            }
-        }
+            var (httpContext, requestMetrics) = ((HttpContext Context, HrCallMetrics Metrics))state;
+            var durations = requestMetrics.GetDurations();
+
+            httpContext.Response.Headers["X-HR-Call-Count"] =
+                durations.Count.ToString(CultureInfo.InvariantCulture);
+            httpContext.Response.Headers["X-HR-Call-Durations-Ms"] =
+                string.Join(",", durations.Select(duration =>
+                    duration.ToString("F2", CultureInfo.InvariantCulture)));
+
+            return Task.CompletedTask;
+        }, (context, metrics));
+
+        await next(context);
     }
 }
