@@ -113,13 +113,30 @@ Department chưa được cấp cho Permission nào trong V1. Chỉ mở Scope n
 
 Backfill từ Employee.Role chỉ tạo UserRole nếu cặp EmployeeId/RoleId chưa từng tồn tại. Bản ghi đã thu hồi hoặc hết hạn không bị seeder tự động khôi phục; điều này bảo đảm khởi động lại ứng dụng không cấp lại quyền đã bị thu hồi. Seeder có thể chạy lặp lại mà không nhân bản Role, Permission, Scope hoặc Role assignment.
 
-## 6. JWT và hiệu lực quyền
+## 6. Authorization Service — trạng thái triển khai
+
+Authorization Service nằm ở Application layer và chỉ đọc quyền hiệu lực qua IAuthorizationRepository.
+
+Repository chỉ trả các cặp Permission/Scope khi đáp ứng toàn bộ điều kiện:
+
+- Nhân viên đang hoạt động.
+- UserRole chưa bị thu hồi.
+- UserRole chưa hết hạn tại thời điểm truy vấn (ExpiresAtUtc > UTC now).
+- Role đang hoạt động.
+- Permission đang hoạt động.
+- Role-Permission có Scope được gán.
+
+Authorization Service hợp các Scope trùng Permission giữa nhiều Role, loại bỏ Scope trùng và mặc định không có quyền nếu không có Scope hợp lệ. V1 hiện hỗ trợ Self, Team và All; Department bị từ chối cho đến khi có bộ lọc thực thi theo từng resource.
+
+Authorization Service đã được đăng ký DI nhưng chưa được nối vào JWT hoặc Controller. Các bước tích hợp đó được thực hiện riêng sau khi unit test và SQL integration test của resolver/repository được xác nhận.
+
+## 7. JWT và hiệu lực quyền
 
 HR Service phát Permission và Scope hiệu lực vào JWT dưới dạng claim có cấu trúc và phiên bản schema. Không phát danh sách Role làm căn cứ authorization cho V1.
 
 Access JWT được kiểm tra cục bộ tại mỗi service. Thay đổi Role/Permission có hiệu lực khi access token mới được phát hành; thu hồi refresh token không vô hiệu hóa access token đã được cấp. V1 giữ access-token lifetime ngắn hiện có và ghi nhận giới hạn này.
 
-## 7. Quy tắc Team
+## 8. Quy tắc Team
 
 Team được định nghĩa theo quan hệ quản lý hiện tại:
 
@@ -128,7 +145,7 @@ Team được định nghĩa theo quan hệ quản lý hiện tại:
 
 LeaveRequests.ApproverId là snapshot tại thời điểm tạo đơn, chỉ phục vụ lịch sử. Không dùng trường này làm điều kiện authorization hoặc Team filter.
 
-## 8. Thứ tự triển khai V1
+## 9. Thứ tự triển khai V1
 
 1. Thêm schema authorization và migration HR_DB; giữ tương thích Role enum.
 2. Seed Role/Permission/Scope baseline và backfill UserRoles từ Employee.Role.
@@ -140,7 +157,7 @@ LeaveRequests.ApproverId là snapshot tại thời điểm tạo đơn, chỉ ph
 
 Outbox, asynchronous read model, backfill/reconciliation giữa hai service không thuộc V1; chỉ xem xét nếu benchmark chứng minh HTTP lookup là nút thắt.
 
-## 9. Ràng buộc bảo mật
+## 10. Ràng buộc bảo mật
 
 - Không cho phép gán Role hoặc Permission vượt quá quyền người cấp.
 - Không cho phép người dùng tự cấp quyền cho chính mình.
