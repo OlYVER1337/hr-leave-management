@@ -1,3 +1,4 @@
+using HrService.Api.Authorization;
 using HrService.Application.Dtos;
 using HrService.Application.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -34,7 +35,7 @@ public sealed class LeavePoliciesController(LeaveCatalogService catalogService) 
         return Ok(policy);
     }
 
-    [Authorize(Roles = "HR")]
+    [Authorize(Policy = PermissionPolicies.LeavePolicyCreate)]
     [HttpPost]
     public async Task<ActionResult<LeavePolicyResponse>> Create(
         [FromBody] LeavePolicyRequest request,
@@ -44,7 +45,7 @@ public sealed class LeavePoliciesController(LeaveCatalogService catalogService) 
         return CreatedAtAction(nameof(GetById), new { id = policy.Id }, policy);
     }
 
-    [Authorize(Roles = "HR")]
+    [Authorize(Policy = PermissionPolicies.LeavePolicyUpdate)]
     [HttpPut("{id:int}")]
     public async Task<ActionResult<LeavePolicyResponse>> Update(
         int id,

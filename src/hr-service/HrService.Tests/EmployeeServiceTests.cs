@@ -86,7 +86,10 @@ public sealed class EmployeeServiceTests
         var service = CreateService(repository);
 
         await Assert.ThrowsAsync<ForbiddenException>(
-            () => service.GetLookupAsync(Guid.NewGuid(), Guid.NewGuid(), requesterIsHr: false));
+            () => service.GetLookupAsync(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                EffectiveAuthorization.Empty));
 
         repository.Verify(
             item => item.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
@@ -111,12 +114,36 @@ public sealed class EmployeeServiceTests
             .ReturnsAsync(employee);
         var service = CreateService(repository);
 
-        var result = await service.GetLookupAsync(employeeId, managerId, requesterIsHr: false);
+        var managerAuthorization = new EffectiveAuthorization(
+            [new EffectivePermission("employees.read", ["Team"])]);
+        var result = await service.GetLookupAsync(employeeId, managerId, managerAuthorization);
 
         Assert.Equal(employeeId, result.Id);
         Assert.Equal(employee.Code, result.Code);
         Assert.Equal(employee.ManagerId, result.ManagerId);
         Assert.DoesNotContain("Email", typeof(EmployeeLookupResponse).GetProperties().Select(property => property.Name));
+    }
+
+    [Fact]
+    public async Task GetLookupAsync_AllowsAllScopeWithoutManagerRelationship()
+    {
+        var employeeId = Guid.NewGuid();
+        var requesterId = Guid.NewGuid();
+        var employee = CreateEmployee(employeeId);
+        var repository = new Mock<IEmployeeRepository>();
+        repository.Setup(item => item.GetByIdAsync(employeeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(employee);
+        var service = CreateService(repository);
+        var authorization = new EffectiveAuthorization(
+            [new EffectivePermission("employees.read", ["All"])]);
+
+        var result = await service.GetLookupAsync(employeeId, requesterId, authorization);
+
+        Assert.Equal(employeeId, result.Id);
+        repository.Verify(
+            item => item.IsDirectManagerOfAsync(
+                It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     [Fact]

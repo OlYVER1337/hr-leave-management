@@ -74,12 +74,18 @@ public sealed class EmployeeService(
     public async Task<EmployeeLookupResponse> GetLookupAsync(
         Guid id,
         Guid requesterId,
-        bool requesterIsHr,
+        EffectiveAuthorization authorization,
         CancellationToken cancellationToken = default)
     {
-        if (!requesterIsHr &&
-            requesterId != id &&
-            !await employeeRepository.IsDirectManagerOfAsync(requesterId, id, cancellationToken))
+        var scopes = authorization.GetScopes("employees.read");
+        var canReadAll = scopes.Contains("All", StringComparer.OrdinalIgnoreCase);
+        var canReadSelf = scopes.Contains("Self", StringComparer.OrdinalIgnoreCase);
+        var canReadTeam = scopes.Contains("Team", StringComparer.OrdinalIgnoreCase);
+        var isSelf = requesterId == id;
+        var isDirectReport = canReadTeam &&
+            await employeeRepository.IsDirectManagerOfAsync(requesterId, id, cancellationToken);
+
+        if (!canReadAll && !(canReadSelf && isSelf) && !isDirectReport)
         {
             throw new ForbiddenException();
         }

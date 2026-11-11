@@ -26,7 +26,17 @@ public sealed class AuthorizationSeeder(
         new("leaves.create", "Tạo đơn nghỉ", "Tạo đơn nghỉ cho bản thân.", ["Self"]),
         new("leaves.decide", "Quyết định đơn nghỉ", "Duyệt hoặc từ chối đơn nghỉ.", ["Team", "All"]),
         new("leaves.cancel", "Hủy đơn nghỉ", "Hủy đơn nghỉ của bản thân khi còn hợp lệ.", ["Self"]),
-        new("roles.manage", "Quản lý vai trò", "Quản lý gán vai trò và quyền trong hệ thống.", ["All"])
+        new("roles.manage", "Quản lý vai trò", "Quản lý gán vai trò và quyền trong hệ thống.", ["All"]),
+        new("departments.create", "Tạo phòng ban", "Tạo phòng ban mới.", ["All"]),
+        new("departments.update", "Cập nhật phòng ban", "Cập nhật thông tin phòng ban.", ["All"]),
+        new("departments.delete", "Xóa phòng ban", "Xóa phòng ban chưa có nhân viên.", ["All"]),
+        new("holidays.create", "Tạo ngày nghỉ lễ", "Thêm ngày nghỉ lễ.", ["All"]),
+        new("holidays.update", "Cập nhật ngày nghỉ lễ", "Cập nhật ngày nghỉ lễ.", ["All"]),
+        new("holidays.delete", "Xóa ngày nghỉ lễ", "Xóa ngày nghỉ lễ.", ["All"]),
+        new("leave-policies.create", "Tạo chính sách nghỉ", "Tạo chính sách ngày nghỉ theo năm.", ["All"]),
+        new("leave-policies.update", "Cập nhật chính sách nghỉ", "Cập nhật chính sách ngày nghỉ.", ["All"]),
+        new("leave-types.create", "Tạo loại nghỉ", "Tạo loại nghỉ được hỗ trợ.", ["All"]),
+        new("leave-types.update", "Cập nhật loại nghỉ", "Cập nhật loại nghỉ được hỗ trợ.", ["All"])
     ];
 
     private static readonly RoleSeed[] RoleSeeds =
@@ -66,7 +76,17 @@ public sealed class AuthorizationSeeder(
                 new("leaves.create", ["Self"]),
                 new("leaves.decide", ["All"]),
                 new("leaves.cancel", ["Self"]),
-                new("roles.manage", ["All"])
+                new("roles.manage", ["All"]),
+                new("departments.create", ["All"]),
+                new("departments.update", ["All"]),
+                new("departments.delete", ["All"]),
+                new("holidays.create", ["All"]),
+                new("holidays.update", ["All"]),
+                new("holidays.delete", ["All"]),
+                new("leave-policies.create", ["All"]),
+                new("leave-policies.update", ["All"]),
+                new("leave-types.create", ["All"]),
+                new("leave-types.update", ["All"])
             ]),
         new(
             "Auditor",

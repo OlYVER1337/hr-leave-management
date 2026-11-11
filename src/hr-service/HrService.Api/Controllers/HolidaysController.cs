@@ -1,3 +1,4 @@
+using HrService.Api.Authorization;
 using HrService.Application.Dtos;
 using HrService.Application.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -35,7 +36,7 @@ public sealed class HolidaysController(LeaveCatalogService catalogService) : Con
         return Ok(holiday);
     }
 
-    [Authorize(Roles = "HR")]
+    [Authorize(Policy = PermissionPolicies.HolidayCreate)]
     [HttpPost]
     public async Task<ActionResult<HolidayResponse>> Create(
         [FromBody] HolidayRequest request,
@@ -45,7 +46,7 @@ public sealed class HolidaysController(LeaveCatalogService catalogService) : Con
         return CreatedAtAction(nameof(GetById), new { id = holiday.Id }, holiday);
     }
 
-    [Authorize(Roles = "HR")]
+    [Authorize(Policy = PermissionPolicies.HolidayUpdate)]
     [HttpPut("{id:int}")]
     public async Task<ActionResult<HolidayResponse>> Update(
         int id,
@@ -56,7 +57,7 @@ public sealed class HolidaysController(LeaveCatalogService catalogService) : Con
         return Ok(holiday);
     }
 
-    [Authorize(Roles = "HR")]
+    [Authorize(Policy = PermissionPolicies.HolidayDelete)]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
     {

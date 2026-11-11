@@ -1,3 +1,4 @@
+using HrService.Api.Authorization;
 using HrService.Application.Dtos;
 using HrService.Application.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -12,6 +13,7 @@ namespace HrService.Api.Controllers;
 public sealed class EmployeeLookupController(EmployeeService employeeService) : ControllerBase
 {
     [HttpGet("{id:guid}")]
+    [Authorize(Policy = PermissionPolicies.EmployeesRead)]
     public async Task<ActionResult<EmployeeLookupResponse>> GetById(
         Guid id,
         CancellationToken cancellationToken)
@@ -25,12 +27,13 @@ public sealed class EmployeeLookupController(EmployeeService employeeService) : 
         var employee = await employeeService.GetLookupAsync(
             id,
             requesterId.Value,
-            User.IsInRole("HR"),
+            AuthorizationClaimReader.Read(User),
             cancellationToken);
         return Ok(employee);
     }
 
     [HttpGet("{managerId:guid}/team")]
+    [Authorize(Policy = PermissionPolicies.EmployeesReadTeamOrAll)]
     public async Task<ActionResult<IReadOnlyList<EmployeeLookupResponse>>> GetTeam(
         Guid managerId,
         CancellationToken cancellationToken)
@@ -41,7 +44,11 @@ public sealed class EmployeeLookupController(EmployeeService employeeService) : 
             return Unauthorized();
         }
 
-        if (requesterId.Value != managerId && !User.IsInRole("HR"))
+        var authorization = AuthorizationClaimReader.Read(User);
+        var canReadAll = authorization.HasScope("employees.read", "All");
+        var canReadOwnTeam = requesterId.Value == managerId &&
+            authorization.HasScope("employees.read", "Team");
+        if (!canReadAll && !canReadOwnTeam)
         {
             return Forbid();
         }

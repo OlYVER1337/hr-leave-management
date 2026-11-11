@@ -67,6 +67,21 @@ public static class PermissionPolicies
     public const string EmployeesRead = "permission:employees.read";
     public const string EmployeesReadTeam = "permission:employees.read:team";
     public const string RolesManage = "permission:roles.manage";
+    public const string EmployeesReadTeamOrAll = "permission:employees.read:team-or-all";
+    public const string EmployeeCreate = "permission:employees.create";
+    public const string EmployeeUpdate = "permission:employees.update";
+    public const string EmployeeDeactivate = "permission:employees.deactivate";
+    public const string EmployeePasswordReset = "permission:employees.password.reset";
+    public const string DepartmentCreate = "permission:departments.create";
+    public const string DepartmentUpdate = "permission:departments.update";
+    public const string DepartmentDelete = "permission:departments.delete";
+    public const string HolidayCreate = "permission:holidays.create";
+    public const string HolidayUpdate = "permission:holidays.update";
+    public const string HolidayDelete = "permission:holidays.delete";
+    public const string LeavePolicyCreate = "permission:leave-policies.create";
+    public const string LeavePolicyUpdate = "permission:leave-policies.update";
+    public const string LeaveTypeCreate = "permission:leave-types.create";
+    public const string LeaveTypeUpdate = "permission:leave-types.update";
 }
 
 public sealed class PermissionRequirement : IAuthorizationRequirement
@@ -119,6 +134,51 @@ public static class PermissionAuthorizationExtensions
             options.AddPolicy(PermissionPolicies.RolesManage, policy =>
                 policy.RequireAuthenticatedUser()
                     .AddRequirements(new PermissionRequirement("roles.manage", "All")));
+            options.AddPolicy(PermissionPolicies.EmployeesReadTeamOrAll, policy =>
+                policy.RequireAuthenticatedUser()
+                    .AddRequirements(new PermissionRequirement("employees.read", "Team", "All")));
+            options.AddPolicy(PermissionPolicies.EmployeeCreate, policy =>
+                policy.RequireAuthenticatedUser()
+                    .AddRequirements(new PermissionRequirement("employees.create", "All")));
+            options.AddPolicy(PermissionPolicies.EmployeeUpdate, policy =>
+                policy.RequireAuthenticatedUser()
+                    .AddRequirements(new PermissionRequirement("employees.update", "All")));
+            options.AddPolicy(PermissionPolicies.EmployeeDeactivate, policy =>
+                policy.RequireAuthenticatedUser()
+                    .AddRequirements(new PermissionRequirement("employees.deactivate", "All")));
+            options.AddPolicy(PermissionPolicies.EmployeePasswordReset, policy =>
+                policy.RequireAuthenticatedUser()
+                    .AddRequirements(new PermissionRequirement("employees.password.reset", "All")));
+            options.AddPolicy(PermissionPolicies.DepartmentCreate, policy =>
+                policy.RequireAuthenticatedUser()
+                    .AddRequirements(new PermissionRequirement("departments.create", "All")));
+            options.AddPolicy(PermissionPolicies.DepartmentUpdate, policy =>
+                policy.RequireAuthenticatedUser()
+                    .AddRequirements(new PermissionRequirement("departments.update", "All")));
+            options.AddPolicy(PermissionPolicies.DepartmentDelete, policy =>
+                policy.RequireAuthenticatedUser()
+                    .AddRequirements(new PermissionRequirement("departments.delete", "All")));
+            options.AddPolicy(PermissionPolicies.HolidayCreate, policy =>
+                policy.RequireAuthenticatedUser()
+                    .AddRequirements(new PermissionRequirement("holidays.create", "All")));
+            options.AddPolicy(PermissionPolicies.HolidayUpdate, policy =>
+                policy.RequireAuthenticatedUser()
+                    .AddRequirements(new PermissionRequirement("holidays.update", "All")));
+            options.AddPolicy(PermissionPolicies.HolidayDelete, policy =>
+                policy.RequireAuthenticatedUser()
+                    .AddRequirements(new PermissionRequirement("holidays.delete", "All")));
+            options.AddPolicy(PermissionPolicies.LeavePolicyCreate, policy =>
+                policy.RequireAuthenticatedUser()
+                    .AddRequirements(new PermissionRequirement("leave-policies.create", "All")));
+            options.AddPolicy(PermissionPolicies.LeavePolicyUpdate, policy =>
+                policy.RequireAuthenticatedUser()
+                    .AddRequirements(new PermissionRequirement("leave-policies.update", "All")));
+            options.AddPolicy(PermissionPolicies.LeaveTypeCreate, policy =>
+                policy.RequireAuthenticatedUser()
+                    .AddRequirements(new PermissionRequirement("leave-types.create", "All")));
+            options.AddPolicy(PermissionPolicies.LeaveTypeUpdate, policy =>
+                policy.RequireAuthenticatedUser()
+                    .AddRequirements(new PermissionRequirement("leave-types.update", "All")));
         });
         return services;
     }

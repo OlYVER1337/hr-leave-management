@@ -57,10 +57,10 @@ public sealed class AuthorizationSeederSqlTests : IClassFixture<AuthorizationSee
         await using (var context = _fixture.CreateContext())
         {
             Assert.Equal(4, await context.Roles.CountAsync());
-            Assert.Equal(10, await context.Permissions.CountAsync());
-            Assert.Equal(15, await context.PermissionScopeRules.CountAsync());
-            Assert.Equal(21, await context.RolePermissions.CountAsync());
-            Assert.Equal(23, await context.RolePermissionScopes.CountAsync());
+            Assert.Equal(20, await context.Permissions.CountAsync());
+            Assert.Equal(25, await context.PermissionScopeRules.CountAsync());
+            Assert.Equal(31, await context.RolePermissions.CountAsync());
+            Assert.Equal(33, await context.RolePermissionScopes.CountAsync());
             Assert.Equal(3, await context.UserRoles.CountAsync());
 
             auditorRoleId = await context.Roles
@@ -141,10 +141,10 @@ public sealed class AuthorizationSeederSqlTests : IClassFixture<AuthorizationSee
         await using (var context = _fixture.CreateContext())
         {
             Assert.Equal(4, await context.Roles.CountAsync());
-            Assert.Equal(10, await context.Permissions.CountAsync());
-            Assert.Equal(15, await context.PermissionScopeRules.CountAsync());
-            Assert.Equal(21, await context.RolePermissions.CountAsync());
-            Assert.Equal(23, await context.RolePermissionScopes.CountAsync());
+            Assert.Equal(20, await context.Permissions.CountAsync());
+            Assert.Equal(25, await context.PermissionScopeRules.CountAsync());
+            Assert.Equal(31, await context.RolePermissions.CountAsync());
+            Assert.Equal(33, await context.RolePermissionScopes.CountAsync());
             Assert.Equal(4, await context.UserRoles.CountAsync());
 
             var managerAssignment = await context.UserRoles.SingleAsync(
