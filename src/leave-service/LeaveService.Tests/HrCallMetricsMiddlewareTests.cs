@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Http;
 using LeaveService.Api.Middleware;
 using LeaveService.Infrastructure.Clients;
 using Microsoft.AspNetCore.Http;
