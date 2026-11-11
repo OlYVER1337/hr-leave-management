@@ -35,8 +35,9 @@ public static class AuthorizationClaimReader
             if (permissions is null)
                 return EffectiveAuthorization.Empty;
 
-            return new EffectiveAuthorization(permissions.Select(permission =>
-                new EffectivePermission(
+            return new EffectiveAuthorization(permissions
+                .Where(permission => permission is not null)
+                .Select(permission => new EffectivePermission(
                     permission.PermissionCode ?? string.Empty,
                     permission.Scopes ?? Array.Empty<string>())));
         }
@@ -49,6 +50,10 @@ public static class AuthorizationClaimReader
 
     private sealed class PermissionClaim
     {
+        public PermissionClaim()
+        {
+        }
+
         [JsonPropertyName("p")]
         public string? PermissionCode { get; set; }
 
