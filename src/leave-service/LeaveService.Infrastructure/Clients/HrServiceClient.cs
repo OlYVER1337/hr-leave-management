@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -7,7 +8,7 @@ using LeaveService.Application.Dtos;
 
 namespace LeaveService.Infrastructure.Clients;
 
-public sealed class HrServiceClient(HttpClient httpClient) : ILeaveHrClient
+public sealed class HrServiceClient(HttpClient httpClient, HrCallMetrics? metrics = null) : ILeaveHrClient
 {
     public Task<HrEmployeeSnapshot> GetEmployeeAsync(
         Guid employeeId,
@@ -66,6 +67,7 @@ public sealed class HrServiceClient(HttpClient httpClient) : ILeaveHrClient
         string resource,
         CancellationToken cancellationToken)
     {
+        var startedAt = Stopwatch.GetTimestamp();
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, path);
@@ -104,6 +106,13 @@ public sealed class HrServiceClient(HttpClient httpClient) : ILeaveHrClient
         catch (TaskCanceledException exception) when (!cancellationToken.IsCancellationRequested)
         {
             throw new DependencyUnavailableException("HR service", exception);
+        }
+        finally
+        {
+            if (metrics?.Enabled == true)
+            {
+                metrics.Record(Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+            }
         }
     }
 }

@@ -49,8 +49,14 @@ public sealed class LeaveReassignmentTests : IClassFixture<LeaveSqlIntegrationFi
     {
         await using var context = _fixture.CreateContext();
         var service = new LeaveRequestService(new LeaveRequestRepository(context), hr.Object, TimeProvider.System);
-        return await service.DecideAsync(actor, Auth, requestId, approve, false, null);
+        return await service.DecideAsync(actor, Auth, requestId, approve, ManagerAccess(), null);
     }
+
+    private static LeaveAccess ManagerAccess() =>
+        new([
+            new LeavePermissionGrant("leaves.read", ["Self", "Team"]),
+            new LeavePermissionGrant("leaves.decide", ["Team"])
+        ]);
 
     private async Task<LeaveRequest> StoredAsync(Guid requestId)
     {

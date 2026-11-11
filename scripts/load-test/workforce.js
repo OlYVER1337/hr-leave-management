@@ -1,6 +1,6 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
-import { Counter } from 'k6/metrics';
+import { Counter, Trend } from 'k6/metrics';
 
 const hrBaseUrl = __ENV.HR_BASE_URL || 'http://host.docker.internal:18081';
 const leaveBaseUrl = __ENV.LEAVE_BASE_URL || 'http://host.docker.internal:18082';
@@ -8,6 +8,18 @@ const vuCount = Number(__ENV.VUS || 50);
 const duration = __ENV.DURATION || '5m';
 const year = Number(__ENV.YEAR || new Date().getUTCFullYear());
 const httpErrors = new Counter('workforce_http_errors');
+const leaveApiRequests = new Counter('leave_api_requests');
+
+// Direct requests to HR API.
+const hrDirectRequests = new Counter('hr_direct_requests');
+const hrDirectDuration = new Trend('hr_direct_duration_ms');
+
+// Outbound HR HTTP calls made internally by Leave Service. The Leave API
+// returns their count and individual durations in X-HR-Call-* response headers.
+const leaveToHrCalls = new Counter('leave_to_hr_calls');
+const leaveToHrDuration = new Trend('leave_to_hr_call_duration_ms');
+const leaveToHrTotalDuration = new Counter('leave_to_hr_total_duration_ms');
+
 const reportedFailures = new Set();
 const authorizationHeader = (token) => ['Bearer', token].join(' ');
 
@@ -75,12 +87,40 @@ export function setup() {
   return tokens;
 }
 
+function recordHrCalls(response) {
+  const header = response.headers['X-HR-Call-Durations-Ms']
+    || response.headers['x-hr-call-durations-ms']
+    || '';
+  const durations = String(header)
+    .split(',')
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value) && value >= 0);
+
+  leaveToHrCalls.add(durations.length);
+  for (const durationMs of durations) {
+    leaveToHrDuration.add(durationMs);
+    leaveToHrTotalDuration.add(durationMs);
+  }
+}
+
 export default function (tokens) {
   const route = routes[(__VU + __ITER) % routes.length];
   const response = http.get(route.url, {
     headers: { Authorization: authorizationHeader(tokens[route.token]) },
     tags: { endpoint: route.name },
   });
+
+  if (route.name === 'employees') {
+    hrDirectRequests.add(1);
+    hrDirectDuration.add(response.timings.duration);
+  } else {
+    leaveApiRequests.add(1);
+  }
+
+  // Setup/warm-up requests are intentionally excluded: only calls observed
+  // during the measured VU workload are added to custom HR metrics.
+  recordHrCalls(response);
+
   if (response.status < 200 || response.status >= 300) {
     httpErrors.add(1);
     if (!reportedFailures.has(`${route.name}:${response.status}`)) {
@@ -100,17 +140,42 @@ export function handleSummary(data) {
   const durationMetrics = data.metrics.http_req_duration?.values || {};
   const requestMetrics = data.metrics.http_reqs?.values || {};
   const failureMetrics = data.metrics.http_req_failed?.values || {};
+  const hrDirectMetrics = data.metrics.hr_direct_duration_ms?.values || {};
+  const leaveToHrMetrics = data.metrics.leave_to_hr_call_duration_ms?.values || {};
+  const requests = requestMetrics.count || 0;
+  const leaveRequests = data.metrics.leave_api_requests?.values?.count || 0;
+  const durationValue = Number.parseFloat(duration);
+  const durationUnit = duration.slice(-1);
+  const measuredSeconds = durationUnit === 'm'
+    ? durationValue * 60
+    : durationUnit === 's'
+      ? durationValue
+      : durationUnit === 'h'
+        ? durationValue * 3600
+        : 0;
+  const leaveToHrCallCount = data.metrics.leave_to_hr_calls?.values?.count || 0;
+
   const summary = {
     workload: 'employee-and-leave-reads',
     vus: vuCount,
     duration,
     year,
-    requests: requestMetrics.count || 0,
+    requests,
     rps: requestMetrics.rate || 0,
     p50_ms: durationMetrics.med || 0,
     p95_ms: durationMetrics['p(95)'] || 0,
     error_rate: failureMetrics.rate || 0,
     http_errors: data.metrics.workforce_http_errors?.values?.count || 0,
+    hr_direct_requests: data.metrics.hr_direct_requests?.values?.count || 0,
+    hr_direct_avg_ms: hrDirectMetrics.avg || 0,
+    hr_direct_p95_ms: hrDirectMetrics['p(95)'] || 0,
+    leave_to_hr_calls: leaveToHrCallCount,
+    leave_to_hr_calls_per_second: measuredSeconds > 0 ? leaveToHrCallCount / measuredSeconds : 0,
+    leave_api_requests: leaveRequests,
+    leave_to_hr_calls_per_leave_request: leaveRequests > 0 ? leaveToHrCallCount / leaveRequests : 0,
+    leave_to_hr_total_time_ms: data.metrics.leave_to_hr_total_duration_ms?.values?.count || 0,
+    leave_to_hr_avg_ms: leaveToHrMetrics.avg || 0,
+    leave_to_hr_p95_ms: leaveToHrMetrics['p(95)'] || 0,
   };
   const output = JSON.stringify(summary, null, 2);
   if (__ENV.REPORT_JSON) {

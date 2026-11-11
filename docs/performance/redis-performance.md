@@ -158,6 +158,55 @@ Kết quả smoke-test 1 VU/10 giây là 45 request, 0 lỗi; không dùng smoke
 thay thế cho các lượt 5 phút. Tóm tắt có thể tái kiểm tra tại
 [workforce load summary](../testing/evidence/workforce-load-summary.json).
 
+### Đo số lần gọi và thời gian HR Service
+
+Trong Compose override cho load test, Leave Service bật
+`LoadTest__EnableHrCallMetrics=true`. HrServiceClient đo thời gian mỗi HTTP call
+đến HR Service; middleware trả các giá trị theo từng request của Leave API qua
+`X-HR-Call-Count` và `X-HR-Call-Durations-Ms`. Cấu hình thường không bật
+telemetry này và không thêm các response header trên.
+
+`workforce.js` tổng hợp riêng:
+- `hr_direct_requests`, `hr_direct_avg_ms`, `hr_direct_p95_ms`: các request
+  trực tiếp vào HR API, ví dụ GET employees.
+- `leave_to_hr_calls`, `leave_to_hr_total_time_ms`, `leave_to_hr_avg_ms`,
+  `leave_to_hr_p95_ms`: số lượng và thời gian các HTTP call nội bộ từ Leave
+  Service sang HR Service. Route manager_approvals sẽ gọi HR để lấy Team hiện tại.
+
+Để đo HR lookup tại thời điểm approve, dùng thêm
+`scripts/load-test/approval.js`. Script lấy danh sách đơn LOADTEST đang Pending
+trong setup, sau đó mỗi VU duyệt các request ID riêng biệt. Mỗi lần approve của
+Manager phải gọi HR Service để xác minh ManagerId hiện tại. Mặc định mỗi VU duyệt
+10 đơn; với 50 VU là 500 quyết định và 100 VU là 1.000 quyết định. Script không
+lặp lại một request đã duyệt. Hãy chạy lại seed SQL trước mỗi lượt approval để
+khôi phục các đơn Pending; 1.000 nhân viên × 5 request tạo khoảng 1.250 đơn
+Pending theo fixture hiện tại.
+
+Chạy workforce reads 50 và 100 VU:
+
+```powershell
+docker compose @compose run --rm -e VUS=50 -e DURATION=5m k6 run /scripts/workforce.js
+docker compose @compose run --rm -e VUS=100 -e DURATION=5m k6 run /scripts/workforce.js
+```
+
+Chạy decision/approval 50 VU; trước lượt 100 VU, seed lại dữ liệu để khôi phục
+trạng thái Pending:
+
+```powershell
+docker compose @compose run --rm -e VUS=50 -e ITERATIONS_PER_VU=10 -e DURATION=5m k6 run /scripts/approval.js
+
+docker compose @compose cp .\scripts\load-test\seed-scale-data.sql sqlserver:/tmp/seed-scale-data.sql
+docker compose @compose exec -T sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P $env:SA_PASSWORD -C -d master -i /tmp/seed-scale-data.sql
+
+docker compose @compose run --rm -e VUS=100 -e ITERATIONS_PER_VU=10 -e DURATION=5m k6 run /scripts/approval.js
+```
+
+Cả hai script in JSON summary có số HR call, tổng thời gian, trung bình và p95.
+Khi ghi báo cáo 50/100 VU, giữ kết quả workforce và approval thành hai workload
+riêng: workload đầu đo lookup hộp chờ (GetTeam), workload sau đo lookup khi quyết
+định (GetEmployee). Không cộng hai tập số liệu thành một RPS chung vì số operation
+và hành vi DB khác nhau.
+
 Sau khi đổi `CACHE_ENABLED`, cần đợi `hr-service` healthy. Khôi phục cache ON cho
 stack benchmark rồi chỉ xóa Compose project `hrbench` cùng các volume của project:
 

@@ -135,7 +135,7 @@ public sealed class LeaveRequestServiceTests
         await Assert.ThrowsAsync<LeaveValidationException>(() =>
             service.GetVisibleAsync(
                 Guid.NewGuid(),
-                isHr: false,
+                ManagerAccess(),
                 calendarOnly: true,
                 from: new DateOnly(2026, 2, 2),
                 to: new DateOnly(2026, 2, 1)));
@@ -220,7 +220,7 @@ public sealed class LeaveRequestServiceTests
             .Setup(item => item.TransitionAsync(
                 request.Id,
                 actorId,
-                false,
+                It.IsAny<LeaveAccess>(),
                 expectedStatus,
                 "Reviewed",
                 It.IsAny<DateTime>(),
@@ -242,7 +242,7 @@ public sealed class LeaveRequestServiceTests
             "Bearer manager",
             request.Id,
             approve,
-            isHr: false,
+            ManagerAccess(),
             " Reviewed ");
 
         Assert.Equal(expectedStatus, result.Status);
@@ -250,12 +250,15 @@ public sealed class LeaveRequestServiceTests
             item => item.TransitionAsync(
                 request.Id,
                 actorId,
-                false,
+                It.IsAny<LeaveAccess>(),
                 expectedStatus,
                 "Reviewed",
                 It.IsAny<DateTime>(),
                 (Guid?)actorId,
                 It.IsAny<CancellationToken>()),
+            Times.Once);
+        hrClient.Verify(
+            item => item.GetEmployeeAsync(employeeId, "Bearer manager", It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -282,7 +285,7 @@ public sealed class LeaveRequestServiceTests
         var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
 
         await Assert.ThrowsAsync<LeaveForbiddenException>(() =>
-            service.DecideAsync(actorId, "Bearer manager", request.Id, approve: true, isHr: false, note: null));
+            service.DecideAsync(actorId, "Bearer manager", request.Id, approve: true, ManagerAccess(), note: null));
 
         AssertNoTransition(repository);
     }
@@ -307,7 +310,7 @@ public sealed class LeaveRequestServiceTests
             .Setup(item => item.TransitionAsync(
                 request.Id,
                 newManagerId,
-                false,
+                It.IsAny<LeaveAccess>(),
                 LeaveRequestStatus.Approved,
                 null,
                 It.IsAny<DateTime>(),
@@ -325,7 +328,7 @@ public sealed class LeaveRequestServiceTests
         var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
 
         var result = await service.DecideAsync(
-            newManagerId, "Bearer manager", request.Id, approve: true, isHr: false, note: null);
+            newManagerId, "Bearer manager", request.Id, approve: true, ManagerAccess(), note: null);
 
         Assert.Equal(LeaveRequestStatus.Approved, result.Status);
     }
@@ -333,7 +336,7 @@ public sealed class LeaveRequestServiceTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task DecideAsync_RejectsDecidingYourOwnRequest(bool isHr)
+    public async Task DecideAsync_RejectsDecidingYourOwnRequest(bool hasGlobalAccess)
     {
         var actorId = Guid.NewGuid();
         var request = new LeaveRequest
@@ -351,7 +354,13 @@ public sealed class LeaveRequestServiceTests
         var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
 
         await Assert.ThrowsAsync<LeaveForbiddenException>(() =>
-            service.DecideAsync(actorId, "Bearer token", request.Id, approve: true, isHr, note: null));
+            service.DecideAsync(
+                actorId,
+                "Bearer token",
+                request.Id,
+                approve: true,
+                hasGlobalAccess ? GlobalAccess() : ManagerAccess(),
+                note: null));
 
         hrClient.VerifyNoOtherCalls();
         AssertNoTransition(repository);
@@ -377,6 +386,109 @@ public sealed class LeaveRequestServiceTests
     }
 
     [Fact]
+    public async Task GetVisibleAsync_RejectsMissingReadPermissionBeforeRepository()
+    {
+        var repository = new Mock<ILeaveRequestRepository>();
+        var service = new LeaveRequestService(
+            repository.Object,
+            new Mock<ILeaveHrClient>().Object,
+            TimeProvider.System);
+
+        await Assert.ThrowsAsync<LeaveForbiddenException>(() =>
+            service.GetVisibleAsync(
+                Guid.NewGuid(),
+                LeaveAccess.Empty,
+                calendarOnly: false,
+                from: null,
+                to: null));
+
+        repository.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetPendingAsync_ForGlobalDeciderDoesNotCallHr()
+    {
+        var actorId = Guid.NewGuid();
+        var repository = new Mock<ILeaveRequestRepository>();
+        repository.Setup(item => item.ListPendingAsync(null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        var hrClient = new Mock<ILeaveHrClient>();
+        var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
+
+        var result = await service.GetPendingAsync(actorId, "Bearer global", GlobalAccess());
+
+        Assert.Empty(result);
+        repository.Verify(item => item.ListPendingAsync(null, It.IsAny<CancellationToken>()), Times.Once);
+        repository.Verify(
+            item => item.ListPendingByEmployeesAsync(
+                It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+        hrClient.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetPendingAsync_RejectsCallerWithoutDecisionPermission()
+    {
+        var repository = new Mock<ILeaveRequestRepository>();
+        var hrClient = new Mock<ILeaveHrClient>();
+        var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
+
+        await Assert.ThrowsAsync<LeaveForbiddenException>(() =>
+            service.GetPendingAsync(Guid.NewGuid(), "Bearer token", LeaveAccess.Empty));
+
+        repository.VerifyNoOtherCalls();
+        hrClient.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task DecideAsync_ForGlobalDeciderDoesNotCallHr()
+    {
+        var actorId = Guid.NewGuid();
+        var employeeId = Guid.NewGuid();
+        var request = new LeaveRequest
+        {
+            Id = Guid.NewGuid(),
+            EmployeeId = employeeId,
+            ApproverId = Guid.NewGuid(),
+            Status = LeaveRequestStatus.Pending
+        };
+        var repository = new Mock<ILeaveRequestRepository>();
+        repository.Setup(item => item.GetForDecisionAsync(request.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(request);
+        repository.Setup(item => item.TransitionAsync(
+                request.Id,
+                actorId,
+                It.IsAny<LeaveAccess>(),
+                LeaveRequestStatus.Approved,
+                null,
+                It.IsAny<DateTime>(),
+                (Guid?)null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() =>
+            {
+                request.Status = LeaveRequestStatus.Approved;
+                return (request, (IReadOnlyList<LeaveBalance>)[]);
+            });
+        var hrClient = new Mock<ILeaveHrClient>();
+        var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
+
+        var result = await service.DecideAsync(
+            actorId, "Bearer global", request.Id, approve: true, GlobalAccess(), note: null);
+
+        Assert.Equal(LeaveRequestStatus.Approved, result.Status);
+        repository.Verify(item => item.TransitionAsync(
+            request.Id,
+            actorId,
+            It.Is<LeaveAccess>(access => access.CanDecideAll),
+            LeaveRequestStatus.Approved,
+            null,
+            It.IsAny<DateTime>(),
+            (Guid?)null,
+            It.IsAny<CancellationToken>()), Times.Once);
+        hrClient.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task GetPendingAsync_ForManagerUsesCurrentTeamFromHr()
     {
         var managerId = Guid.NewGuid();
@@ -393,7 +505,7 @@ public sealed class LeaveRequestServiceTests
             .ReturnsAsync([new HrEmployeeSnapshot(memberId, "E2", "Member", "Employee", true, 1, managerId)]);
         var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
 
-        var result = await service.GetPendingAsync(managerId, "Bearer manager", isHr: false);
+        var result = await service.GetPendingAsync(managerId, "Bearer manager", ManagerAccess());
 
         Assert.Empty(result);
         repository.Verify(
@@ -404,6 +516,9 @@ public sealed class LeaveRequestServiceTests
         repository.Verify(
             item => item.ListPendingAsync(It.IsAny<Guid?>(), It.IsAny<CancellationToken>()),
             Times.Never);
+        hrClient.Verify(
+            item => item.GetTeamAsync(managerId, "Bearer manager", It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     private static void AssertNoTransition(Mock<ILeaveRequestRepository> repository) =>
@@ -411,7 +526,7 @@ public sealed class LeaveRequestServiceTests
             item => item.TransitionAsync(
                 It.IsAny<Guid>(),
                 It.IsAny<Guid>(),
-                It.IsAny<bool>(),
+                It.IsAny<LeaveAccess>(),
                 It.IsAny<LeaveRequestStatus>(),
                 It.IsAny<string?>(),
                 It.IsAny<DateTime>(),
@@ -455,6 +570,18 @@ public sealed class LeaveRequestServiceTests
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }
+
+    private static LeaveAccess ManagerAccess() =>
+        new([
+            new LeavePermissionGrant("leaves.read", ["Self", "Team"]),
+            new LeavePermissionGrant("leaves.decide", ["Team"])
+        ]);
+
+    private static LeaveAccess GlobalAccess() =>
+        new([
+            new LeavePermissionGrant("leaves.read", ["All"]),
+            new LeavePermissionGrant("leaves.decide", ["All"])
+        ]);
 
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
     {

@@ -16,6 +16,8 @@ services:
   leave-service:
     ports: !override
       - "127.0.0.1:18082:8080"
+    environment:
+      LoadTest__EnableHrCallMetrics: "true"
 
   web:
     ports: !override
@@ -28,6 +30,7 @@ services:
     entrypoint: ["k6"]
     environment:
       HR_BASE_URL: http://hr-service:8080
+      LEAVE_BASE_URL: http://leave-service:8080
       HR_EMAIL: ${INITIAL_HR_EMAIL}
       HR_PASSWORD: ${INITIAL_HR_PASSWORD}
       MANAGER_EMAIL: ${DEMO_MANAGER_EMAIL}

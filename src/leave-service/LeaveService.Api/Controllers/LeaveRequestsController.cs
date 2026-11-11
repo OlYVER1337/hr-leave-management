@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using LeaveService.Api.Authorization;
 using LeaveService.Application.Dtos;
 using LeaveService.Application.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -12,6 +13,7 @@ namespace LeaveService.Api.Controllers;
 public sealed class LeaveRequestsController(LeaveRequestService leaveRequestService) : ControllerBase
 {
     [HttpGet]
+    [Authorize(Policy = LeavePermissionPolicies.LeavesRead)]
     public async Task<ActionResult<IReadOnlyList<LeaveRequestResponse>>> GetVisible(
         CancellationToken cancellationToken)
     {
@@ -23,7 +25,7 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
 
         var requests = await leaveRequestService.GetVisibleAsync(
             employeeId.Value,
-            User.IsInRole("HR"),
+            LeaveAccess.FromClaims(User),
             calendarOnly: false,
             from: null,
             to: null,
@@ -32,6 +34,7 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
     }
 
     [HttpGet("calendar")]
+    [Authorize(Policy = LeavePermissionPolicies.LeavesRead)]
     public async Task<ActionResult<IReadOnlyList<LeaveRequestResponse>>> GetCalendar(
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
@@ -45,7 +48,7 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
 
         var requests = await leaveRequestService.GetVisibleAsync(
             employeeId.Value,
-            User.IsInRole("HR"),
+            LeaveAccess.FromClaims(User),
             calendarOnly: true,
             from,
             to,
@@ -54,6 +57,7 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
     }
 
     [HttpGet("{id:guid}")]
+    [Authorize(Policy = LeavePermissionPolicies.LeavesRead)]
     public async Task<ActionResult<LeaveRequestResponse>> GetById(
         Guid id,
         CancellationToken cancellationToken)
@@ -72,6 +76,7 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
     }
 
     [HttpGet("mine")]
+    [Authorize(Policy = LeavePermissionPolicies.LeavesRead)]
     public async Task<ActionResult<IReadOnlyList<LeaveRequestResponse>>> GetMine(
         CancellationToken cancellationToken)
     {
@@ -86,6 +91,7 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
     }
 
     [HttpPost]
+    [Authorize(Policy = LeavePermissionPolicies.LeavesCreate)]
     public async Task<ActionResult<LeaveRequestResponse>> Create(
         [FromBody] CreateLeaveRequest request,
         CancellationToken cancellationToken)
@@ -105,7 +111,7 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
-    [Authorize(Roles = "Manager,HR")]
+    [Authorize(Policy = LeavePermissionPolicies.LeavesDecide)]
     [HttpGet("pending-approval")]
     public async Task<ActionResult<IReadOnlyList<LeaveRequestResponse>>> GetPendingApproval(
         CancellationToken cancellationToken)
@@ -120,12 +126,12 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
         var requests = await leaveRequestService.GetPendingAsync(
             actorId.Value,
             authorization,
-            User.IsInRole("HR"),
+            LeaveAccess.FromClaims(User),
             cancellationToken);
         return Ok(requests);
     }
 
-    [Authorize(Roles = "Manager,HR")]
+    [Authorize(Policy = LeavePermissionPolicies.LeavesDecide)]
     [HttpPost("{id:guid}/approve")]
     public Task<ActionResult<LeaveRequestResponse>> Approve(
         Guid id,
@@ -133,7 +139,7 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
         CancellationToken cancellationToken) =>
         DecideAsync(id, request, approve: true, cancellationToken);
 
-    [Authorize(Roles = "Manager,HR")]
+    [Authorize(Policy = LeavePermissionPolicies.LeavesDecide)]
     [HttpPost("{id:guid}/reject")]
     public Task<ActionResult<LeaveRequestResponse>> Reject(
         Guid id,
@@ -142,6 +148,7 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
         DecideAsync(id, request, approve: false, cancellationToken);
 
     [HttpPost("{id:guid}/cancel")]
+    [Authorize(Policy = LeavePermissionPolicies.LeavesCancel)]
     public async Task<ActionResult<LeaveRequestResponse>> Cancel(
         Guid id,
         [FromBody] CancelLeaveRequest request,
@@ -179,7 +186,7 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
             authorization,
             id,
             approve,
-            User.IsInRole("HR"),
+            LeaveAccess.FromClaims(User),
             request.Note,
             cancellationToken);
         return Ok(updated);

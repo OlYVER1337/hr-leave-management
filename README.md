@@ -271,14 +271,19 @@ Chạy test của Leave Service:
 dotnet test src/leave-service/LeaveService.slnx
 ```
 
-Một số integration test cần SQL Server hoặc Redis riêng dành cho kiểm thử. Theo cấu hình của test, có thể cần các biến môi trường:
+Một số integration test cần SQL Server hoặc Redis riêng dành cho kiểm thử. Nếu thiếu dịch vụ hoặc biến môi trường cần thiết, test tích hợp có thể được đánh dấu `Skipped`; điều đó không đồng nghĩa với việc chức năng tích hợp đã được kiểm thử thành công. Không trỏ các test có khả năng tạo/xóa database hoặc xóa cache vào môi trường production.
 
-```text
-HR_TEST_SQL_CONNECTION_STRING
-HR_TEST_REDIS_CONNECTION_STRING
+Trên Windows PowerShell, có thể chạy cả hai solution và yêu cầu `skipped = 0` bằng script:
+
+```powershell
+# Dùng cổng mặc định của docker-compose.yml: SQL 1433, Redis 6379
+.\scripts\test\run-all-tests.ps1
+
+# Nếu đang chạy stack hrbench theo docker-compose.loadtest.yml:
+.\scripts\test\run-all-tests.ps1 -SqlServer "localhost,11433" -RedisServer "localhost:16379"
 ```
 
-Nếu thiếu dịch vụ hoặc biến môi trường cần thiết, test tích hợp có thể được đánh dấu `Skipped`; điều đó không đồng nghĩa với việc chức năng tích hợp đã được kiểm thử thành công. Không trỏ các test có khả năng tạo/xóa database hoặc xóa cache vào môi trường production.
+Script đọc `SA_PASSWORD` từ file `.env`, tạo hai connection string kiểm thử trong phiên PowerShell, chạy HR Service rồi Leave Service và dừng nếu test thất bại, không tìm được test summary hoặc có bất kỳ test nào bị skipped. Hãy khởi động SQL Server và Redis trước khi chạy.
 
 ## 9. Lệnh Docker thường dùng
 

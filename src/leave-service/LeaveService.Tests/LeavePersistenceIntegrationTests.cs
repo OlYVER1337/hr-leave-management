@@ -10,6 +10,12 @@ namespace LeaveService.Tests;
 
 public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlIntegrationFixture>
 {
+    private static LeaveAccess ManagerAccess() =>
+        new([
+            new LeavePermissionGrant("leaves.read", ["Self", "Team"]),
+            new LeavePermissionGrant("leaves.decide", ["Team"])
+        ]);
+
     private readonly LeaveSqlIntegrationFixture _fixture;
 
     public LeavePersistenceIntegrationTests(LeaveSqlIntegrationFixture fixture)
@@ -205,7 +211,7 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
             await Assert.ThrowsAsync<LeaveForbiddenException>(() => repository.TransitionAsync(
                 approvedRequest.Id,
                 Guid.NewGuid(),
-                isHr: false,
+                ManagerAccess(),
                 LeaveRequestStatus.Approved,
                 null,
                 DateTime.UtcNow));
@@ -216,7 +222,7 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
             var result = await new LeaveRequestRepository(context).TransitionAsync(
                 approvedRequest.Id,
                 approvedManager,
-                isHr: false,
+                ManagerAccess(),
                 LeaveRequestStatus.Approved,
                 "Approved by manager",
                 DateTime.UtcNow);
@@ -233,7 +239,7 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
             var result = await new LeaveRequestRepository(context).TransitionAsync(
                 rejectedRequest.Id,
                 rejectedManager,
-                isHr: false,
+                ManagerAccess(),
                 LeaveRequestStatus.Rejected,
                 "Not enough coverage",
                 DateTime.UtcNow);
@@ -401,7 +407,7 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
             var result = await new LeaveRequestRepository(context).TransitionAsync(
                 request.Id,
                 newManagerId,
-                isHr: false,
+                ManagerAccess(),
                 LeaveRequestStatus.Approved,
                 null,
                 DateTime.UtcNow,
@@ -451,7 +457,7 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
                 await new LeaveRequestRepository(context).TransitionAsync(
                     request.Id,
                     managerId,
-                    isHr: false,
+                    ManagerAccess(),
                     status,
                     null,
                     DateTime.UtcNow);

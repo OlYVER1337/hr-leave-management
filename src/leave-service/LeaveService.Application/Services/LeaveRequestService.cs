@@ -119,17 +119,23 @@ public sealed class LeaveRequestService(
     public async Task<IReadOnlyList<LeaveRequestResponse>> GetPendingAsync(
         Guid actorId,
         string authorization,
-        bool isHr,
+        LeaveAccess access,
         CancellationToken cancellationToken = default)
     {
-        if (isHr)
+        ArgumentNullException.ThrowIfNull(access);
+        if (access.CanDecideAll)
         {
             var all = await repository.ListPendingAsync(null, cancellationToken);
             return all.Select(item => ToResponse(item.Request, item.Balances)).ToArray();
         }
 
-        // The manager's queue is derived from the *current* reporting lines in HR, not from the
-        // approver snapshot stored on each request, so it stays correct after a reassignment.
+        if (!access.CanDecideTeam)
+        {
+            throw new LeaveForbiddenException("The caller does not have leaves.decide permission.");
+        }
+
+        // Team membership is resolved from HR at request time. ApproverId is only a snapshot
+        // and may be stale after an employee is reassigned.
         var team = await hrClient.GetTeamAsync(actorId, authorization, cancellationToken);
         var requests = await repository.ListPendingByEmployeesAsync(
             team.Select(member => member.Id).ToArray(),
@@ -139,12 +145,18 @@ public sealed class LeaveRequestService(
 
     public async Task<IReadOnlyList<LeaveRequestResponse>> GetVisibleAsync(
         Guid employeeId,
-        bool isHr,
+        LeaveAccess access,
         bool calendarOnly,
         DateOnly? from,
         DateOnly? to,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(access);
+        if (!access.CanRead)
+        {
+            throw new LeaveForbiddenException("The caller does not have leaves.read permission.");
+        }
+
         if (from.HasValue && to.HasValue && from.Value > to.Value)
         {
             throw Invalid("from", "The start date must not be later than the end date.");
@@ -152,7 +164,7 @@ public sealed class LeaveRequestService(
 
         var requests = await repository.ListVisibleAsync(
             employeeId,
-            isHr,
+            access,
             calendarOnly,
             from,
             to,
@@ -185,10 +197,16 @@ public sealed class LeaveRequestService(
         string authorization,
         Guid requestId,
         bool approve,
-        bool isHr,
+        LeaveAccess access,
         string? note,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(access);
+        if (!access.CanDecide)
+        {
+            throw new LeaveForbiddenException("The caller does not have leaves.decide permission.");
+        }
+
         var request = await repository.GetForDecisionAsync(requestId, cancellationToken)
             ?? throw new LeaveNotFoundException($"Leave request with id '{requestId}' was not found.");
         EnsurePending(request);
@@ -198,14 +216,14 @@ public sealed class LeaveRequestService(
         }
 
         Guid? verifiedApproverId = null;
-        if (!isHr)
+        if (!access.CanDecideAll)
         {
-            // HR is the source of truth for reporting lines. It also answers 403 when the caller
-            // may not look this employee up, which we surface as Forbidden.
+            // Team decisions always re-check the employee's current manager in HR.
+            // Do not trust the approver snapshot stored on the leave request.
             var employee = await hrClient.GetEmployeeAsync(request.EmployeeId, authorization, cancellationToken);
             if (employee.ManagerId != actorId)
             {
-                throw new LeaveForbiddenException("Only the assigned manager or HR can decide this request.");
+                throw new LeaveForbiddenException("Only the current manager or a global leave approver can decide this request.");
             }
 
             verifiedApproverId = employee.ManagerId;
@@ -215,7 +233,7 @@ public sealed class LeaveRequestService(
         var result = await repository.TransitionAsync(
             requestId,
             actorId,
-            isHr,
+            access,
             approve ? LeaveRequestStatus.Approved : LeaveRequestStatus.Rejected,
             NormalizeNote(note),
             timeProvider.GetUtcNow().UtcDateTime,

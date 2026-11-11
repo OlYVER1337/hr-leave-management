@@ -98,7 +98,7 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
     public Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> TransitionAsync(
         Guid requestId,
         Guid actorId,
-        bool isHr,
+        LeaveAccess access,
         LeaveRequestStatus status,
         string? note,
         DateTime decidedAtUtc,
@@ -112,7 +112,7 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
 
         return ExecuteWithRetryAsync(
             () => TransitionOnceAsync(
-                requestId, actorId, isHr, status, note, decidedAtUtc, verifiedApproverId, cancellationToken),
+                requestId, actorId, access, status, note, decidedAtUtc, verifiedApproverId, cancellationToken),
             "Leave request changed concurrently; retry the decision.",
             cancellationToken);
     }
@@ -209,7 +209,7 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
     public async Task<IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>>
         ListVisibleAsync(
             Guid employeeId,
-            bool isHr,
+            LeaveAccess access,
             bool calendarOnly,
             DateOnly? from,
             DateOnly? to,
@@ -220,9 +220,25 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
             .Include(item => item.YearAllocations)
             .AsQueryable();
 
-        if (!isHr)
+        if (!access.CanReadAll)
         {
-            query = query.Where(item => item.EmployeeId == employeeId || item.ApproverId == employeeId);
+            if (access.CanReadSelf && access.CanReadTeam)
+            {
+                query = query.Where(item =>
+                    item.EmployeeId == employeeId || item.ApproverId == employeeId);
+            }
+            else if (access.CanReadTeam)
+            {
+                query = query.Where(item => item.ApproverId == employeeId);
+            }
+            else if (access.CanReadSelf)
+            {
+                query = query.Where(item => item.EmployeeId == employeeId);
+            }
+            else
+            {
+                query = query.Where(item => false);
+            }
         }
 
         if (calendarOnly)
@@ -278,7 +294,7 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
     private async Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> TransitionOnceAsync(
         Guid requestId,
         Guid actorId,
-        bool isHr,
+        LeaveAccess access,
         LeaveRequestStatus status,
         string? note,
         DateTime decidedAtUtc,
@@ -293,14 +309,14 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
             .SingleOrDefaultAsync(item => item.Id == requestId, cancellationToken)
             ?? throw new LeaveNotFoundException($"Leave request with id '{requestId}' was not found.");
         EnsurePending(request);
-        if (!isHr)
+        if (!access.CanDecideAll)
         {
-            // The approver is the employee's current manager according to HR; the stored value
-            // is only a snapshot taken at creation time and may be stale after a reassignment.
+            // The service layer performs a live HR lookup for Team decisions.
+            // Keep the snapshot fallback for direct repository tests and internal callers.
             var currentApproverId = verifiedApproverId ?? request.ApproverId;
             if (currentApproverId != actorId)
             {
-                throw new LeaveForbiddenException("Only the assigned manager or HR can decide this request.");
+                throw new LeaveForbiddenException("Only the assigned manager or a global leave approver can decide this request.");
             }
 
             request.ApproverId = currentApproverId;

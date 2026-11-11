@@ -7,7 +7,7 @@ using Xunit;
 namespace LeaveService.Tests;
 
 // Kiểm tra trực tiếp WHERE của LeaveRequestRepository.ListVisibleAsync trên SQL Server thật.
-// Mỗi test dùng employee/manager GUID riêng; khi là HR thì chỉ khẳng định các id của test, không đếm tổng.
+// Mỗi test dùng employee/manager GUID riêng; khi đọc Scope All chỉ khẳng định các id của test, không đếm tổng.
 public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlIntegrationFixture>
 {
     private readonly LeaveSqlIntegrationFixture _fixture;
@@ -36,16 +36,38 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
     }
 
     private async Task<HashSet<Guid>> VisibleAsync(
-        Guid actor, bool isHr, bool calendarOnly = false, DateOnly? from = null, DateOnly? to = null)
+        Guid actor, LeaveAccess access, bool calendarOnly = false, DateOnly? from = null, DateOnly? to = null)
     {
         await using var context = _fixture.CreateContext();
         var rows = await new LeaveRequestRepository(context)
-            .ListVisibleAsync(actor, isHr, calendarOnly, from, to);
+            .ListVisibleAsync(actor, access, calendarOnly, from, to);
         return rows.Select(row => row.Request.Id).ToHashSet();
     }
 
+    private static LeaveAccess ManagerAccess() =>
+        new([
+            new LeavePermissionGrant("leaves.read", ["Self", "Team"]),
+            new LeavePermissionGrant("leaves.decide", ["Team"])
+        ]);
+
+    private static LeaveAccess SelfAccess() =>
+        new([
+            new LeavePermissionGrant("leaves.read", ["Self"])
+        ]);
+
+    private static LeaveAccess TeamOnlyAccess() =>
+        new([
+            new LeavePermissionGrant("leaves.read", ["Team"])
+        ]);
+
+    private static LeaveAccess GlobalAccess() =>
+        new([
+            new LeavePermissionGrant("leaves.read", ["All"]),
+            new LeavePermissionGrant("leaves.decide", ["All"])
+        ]);
+
     [LeaveSqlFact]
-    public async Task NonHr_SeesOwnRequestsAndRequestsAssignedToThem_NotOthers()
+    public async Task TeamScope_SeesOwnRequestsAndRequestsAssignedToThem_NotOthers()
     {
         var me = Guid.NewGuid();
         var otherManager = Guid.NewGuid();
@@ -56,7 +78,7 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
         var notMine = await CreateAsync(otherEmployee, otherManager, new DateOnly(2030, 3, 6), new DateOnly(2030, 3, 6));
         var ofAnotherOwnerWithMe = await CreateAsync(otherEmployee, null, new DateOnly(2030, 3, 7), new DateOnly(2030, 3, 7));
 
-        var visible = await VisibleAsync(me, isHr: false);
+        var visible = await VisibleAsync(me, ManagerAccess());
 
         Assert.Contains(own.Id, visible);
         Assert.Contains(assignedToMe.Id, visible);
@@ -65,15 +87,45 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
     }
 
     [LeaveSqlFact]
-    public async Task Hr_SeesRequestsOfAnyEmployeeAndApprover()
+    public async Task AllScope_SeesRequestsOfAnyEmployeeAndApprover()
     {
         var a = await CreateAsync(Guid.NewGuid(), Guid.NewGuid(), new DateOnly(2030, 4, 1), new DateOnly(2030, 4, 1));
         var b = await CreateAsync(Guid.NewGuid(), null, new DateOnly(2030, 4, 2), new DateOnly(2030, 4, 2));
 
-        var visible = await VisibleAsync(Guid.NewGuid(), isHr: true);
+        var visible = await VisibleAsync(Guid.NewGuid(), GlobalAccess());
 
         Assert.Contains(a.Id, visible);
         Assert.Contains(b.Id, visible);
+    }
+
+    [LeaveSqlFact]
+    public async Task SelfScope_OnlyReturnsRequestsOwnedByActor()
+    {
+        var actor = Guid.NewGuid();
+        var ownerRequest = await CreateAsync(
+            actor, Guid.NewGuid(), new DateOnly(2030, 7, 1), new DateOnly(2030, 7, 1));
+        var assignedRequest = await CreateAsync(
+            Guid.NewGuid(), actor, new DateOnly(2030, 7, 2), new DateOnly(2030, 7, 2));
+
+        var visible = await VisibleAsync(actor, SelfAccess());
+
+        Assert.Contains(ownerRequest.Id, visible);
+        Assert.DoesNotContain(assignedRequest.Id, visible);
+    }
+
+    [LeaveSqlFact]
+    public async Task TeamScope_OnlyReturnsRequestsAssignedToActor()
+    {
+        var actor = Guid.NewGuid();
+        var ownerRequest = await CreateAsync(
+            actor, Guid.NewGuid(), new DateOnly(2030, 8, 1), new DateOnly(2030, 8, 1));
+        var assignedRequest = await CreateAsync(
+            Guid.NewGuid(), actor, new DateOnly(2030, 8, 2), new DateOnly(2030, 8, 2));
+
+        var visible = await VisibleAsync(actor, TeamOnlyAccess());
+
+        Assert.DoesNotContain(ownerRequest.Id, visible);
+        Assert.Contains(assignedRequest.Id, visible);
     }
 
     [LeaveSqlFact]
@@ -89,12 +141,12 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
         await using (var context = _fixture.CreateContext())
         {
             var repo = new LeaveRequestRepository(context);
-            await repo.TransitionAsync(approved.Id, manager, false, LeaveRequestStatus.Approved, null, DateTime.UtcNow, manager);
+            await repo.TransitionAsync(approved.Id, manager, ManagerAccess(), LeaveRequestStatus.Approved, null, DateTime.UtcNow, manager);
         }
         await using (var context = _fixture.CreateContext())
         {
             var repo = new LeaveRequestRepository(context);
-            await repo.TransitionAsync(rejected.Id, manager, false, LeaveRequestStatus.Rejected, null, DateTime.UtcNow, manager);
+            await repo.TransitionAsync(rejected.Id, manager, ManagerAccess(), LeaveRequestStatus.Rejected, null, DateTime.UtcNow, manager);
         }
         await using (var context = _fixture.CreateContext())
         {
@@ -102,7 +154,7 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
             await repo.CancelAsync(employee, cancelled.Id, null, DateTime.UtcNow);
         }
 
-        var calendar = await VisibleAsync(employee, isHr: false, calendarOnly: true);
+        var calendar = await VisibleAsync(employee, ManagerAccess(), calendarOnly: true);
 
         Assert.Contains(pending.Id, calendar);
         Assert.Contains(approved.Id, calendar);
@@ -122,8 +174,8 @@ public async Task DateRange_IncludesOverlapIncludingBoundaries_ExcludesOutside()
     var startsOnTo = await CreateAsync(Guid.NewGuid(), manager, new DateOnly(2030, 6, 11), new DateOnly(2030, 6, 12));
     var afterWindow = await CreateAsync(Guid.NewGuid(), manager, new DateOnly(2030, 6, 12), new DateOnly(2030, 6, 13));
 
-    // Dùng HR để đọc toàn bộ, rồi chỉ khẳng định các id của test này.
-    var visible = await VisibleAsync(Guid.NewGuid(), isHr: true,
+    // Dùng Scope All để đọc toàn bộ, rồi chỉ khẳng định các id của test này.
+    var visible = await VisibleAsync(Guid.NewGuid(), GlobalAccess(),
         from: new DateOnly(2030, 3, 1), to: new DateOnly(2030, 6, 11));
     var ours = new[] { beforeWindow, endsOnFrom, inside, startsOnTo, afterWindow }.Select(r => r.Id).ToHashSet();
     var matched = ours.Where(visible.Contains).ToHashSet();

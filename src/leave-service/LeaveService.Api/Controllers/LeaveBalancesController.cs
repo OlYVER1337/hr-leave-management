@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using LeaveService.Api.Authorization;
 using LeaveService.Application.Dtos;
 using LeaveService.Application.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -12,6 +13,7 @@ namespace LeaveService.Api.Controllers;
 public sealed class LeaveBalancesController(LeaveRequestService leaveRequestService) : ControllerBase
 {
     [HttpGet("mine")]
+    [Authorize(Policy = LeavePermissionPolicies.LeavesRead)]
     public async Task<ActionResult<IReadOnlyList<LeaveBalanceResponse>>> GetMine(
         [FromQuery] int? year,
         CancellationToken cancellationToken)

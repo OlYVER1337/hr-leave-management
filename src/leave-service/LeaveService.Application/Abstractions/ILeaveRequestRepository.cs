@@ -25,7 +25,7 @@ public interface ILeaveRequestRepository
     Task<IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>>
         ListVisibleAsync(
             Guid employeeId,
-            bool isHr,
+            LeaveAccess access,
             bool calendarOnly,
             DateOnly? from,
             DateOnly? to,
@@ -41,7 +41,7 @@ public interface ILeaveRequestRepository
     Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> TransitionAsync(
         Guid requestId,
         Guid actorId,
-        bool isHr,
+        LeaveAccess access,
         LeaveRequestStatus status,
         string? note,
         DateTime decidedAtUtc,

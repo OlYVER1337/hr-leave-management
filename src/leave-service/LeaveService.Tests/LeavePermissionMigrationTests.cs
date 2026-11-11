@@ -1,5 +1,7 @@
 using LeaveService.Api.Controllers;
+using LeaveService.Application.Dtos;
 using LeaveService.Application.Services;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Xunit;
 
@@ -50,6 +52,41 @@ public sealed class LeavePermissionMigrationTests
             property.Name == "CanDecideAll" && property.PropertyType == typeof(bool));
         Assert.Contains(accessType.GetProperties(), property =>
             property.Name == "CanDecideTeam" && property.PropertyType == typeof(bool));
+    }
+
+    [Fact]
+    public void LeaveAccess_ReadsPermissionAndScopeFromVersionedJwtClaims()
+    {
+        var claims = new[]
+        {
+            new Claim("authz_v", "1"),
+            new Claim("perm", """[{"p":"leaves.read","s":["Self","All"]},{"p":"leaves.decide","s":["Team"]}]""")
+        };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+
+        var access = LeaveAccess.FromClaims(principal);
+
+        Assert.True(access.CanReadSelf);
+        Assert.True(access.CanReadAll);
+        Assert.True(access.CanDecideTeam);
+        Assert.False(access.CanDecideAll);
+    }
+
+    [Fact]
+    public void LeaveAccess_RejectsInvalidOrUnversionedPermissionClaims()
+    {
+        var invalidPrincipal = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim("authz_v", "1"),
+            new Claim("perm", "not-json")
+        ], "test"));
+        var oldTokenPrincipal = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim("perm", """[{"p":"leaves.decide","s":["All"]}]""")
+        ], "test"));
+
+        Assert.False(LeaveAccess.FromClaims(invalidPrincipal).CanDecide);
+        Assert.False(LeaveAccess.FromClaims(oldTokenPrincipal).CanDecide);
     }
 
     private static void AssertNoBooleanParameters(string methodName)
