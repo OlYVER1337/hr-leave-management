@@ -1,6 +1,7 @@
 using LeaveService.Api.Middleware;
 using LeaveService.Infrastructure.Clients;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 
@@ -19,6 +20,9 @@ public sealed class HrCallMetricsMiddlewareTests
             .Build();
         var metrics = new HrCallMetrics(configuration);
         var context = new DefaultHttpContext();
+        var responseFeature = new TestHttpResponseFeature();
+        context.Features.Set<IHttpResponseFeature>(responseFeature);
+
         using var responseBody = new MemoryStream();
         context.Response.Body = responseBody;
 
@@ -27,8 +31,8 @@ public sealed class HrCallMetricsMiddlewareTests
             metrics.Record(12.5);
             metrics.Record(25.75);
 
-            // Kestrel runs OnStarting callbacks immediately before committing headers.
-            await httpContext.Response.StartAsync();
+            // Simulate the server firing OnStarting immediately before committing headers.
+            await responseFeature.StartResponseAsync();
             await httpContext.Response.WriteAsync("ok");
         });
 
@@ -40,5 +44,45 @@ public sealed class HrCallMetricsMiddlewareTests
         responseBody.Position = 0;
         using var reader = new StreamReader(responseBody);
         Assert.Equal("ok", await reader.ReadToEndAsync());
+    }
+
+    private sealed class TestHttpResponseFeature : HttpResponseFeature
+    {
+        private readonly Stack<(Func<object, Task> Callback, object State)> _onStarting = new();
+        private bool _hasStarted;
+
+        public override bool HasStarted => _hasStarted;
+
+        public override void OnStarting(Func<object, Task> callback, object state)
+        {
+            ArgumentNullException.ThrowIfNull(callback);
+
+            if (_hasStarted)
+            {
+                throw new InvalidOperationException("The response has already started.");
+            }
+
+            _onStarting.Push((callback, state));
+        }
+
+        public async Task StartResponseAsync()
+        {
+            if (_hasStarted)
+            {
+                return;
+            }
+
+            while (_onStarting.TryPop(out var callback))
+            {
+                await callback.Callback(callback.State);
+            }
+
+            if (Headers is HeaderDictionary headers)
+            {
+                headers.IsReadOnly = true;
+            }
+
+            _hasStarted = true;
+        }
     }
 }
