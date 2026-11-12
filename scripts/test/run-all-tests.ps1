@@ -5,7 +5,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\\..")).Path
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $envFile = Join-Path $repoRoot ".env"
 
 if (-not (Test-Path -LiteralPath $envFile)) {
@@ -18,9 +18,9 @@ function Get-DotEnvValue {
         [Parameter(Mandatory = $true)][string]$Path
     )
 
-    $pattern = "^\\s*$([regex]::Escape($Name))\\s*="
+    $pattern = "^\s*$([regex]::Escape($Name))\s*="
     $line = Get-Content -LiteralPath $Path |
-        Where-Object { $_ -notmatch '^\\s*#' -and $_ -match $pattern } |
+        Where-Object { $_ -notmatch '^\s*#' -and $_ -match $pattern } |
         Select-Object -First 1
 
     if (-not $line) {
@@ -79,7 +79,7 @@ try {
         $outputText = ($output | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
         $summary = [regex]::Match(
             $outputText,
-            'Test summary:\\s*total:\\s*(\\d+),\\s*failed:\\s*(\\d+),\\s*succeeded:\\s*(\\d+),\\s*skipped:\\s*(\\d+)',
+            'Test summary:\s*total:\s*(\d+),\s*failed:\s*(\d+),\s*succeeded:\s*(\d+),\s*skipped:\s*(\d+)',
             [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
         )
 
