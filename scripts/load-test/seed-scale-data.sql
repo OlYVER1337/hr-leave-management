@@ -3,6 +3,9 @@
 :setvar ManagerCount "25"
 
 SET NOCOUNT ON;
+-- Bắt buộc: bảng UserRoles có unique index có điều kiện (filtered), cần QUOTED_IDENTIFIER ON.
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
 
 DECLARE @EmployeeCount int = TRY_CONVERT(int, '$(EmployeeCount)');
 DECLARE @RequestsPerEmployee int = TRY_CONVERT(int, '$(RequestsPerEmployee)');
