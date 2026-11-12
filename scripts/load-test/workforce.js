@@ -7,6 +7,9 @@ const leaveBaseUrl = __ENV.LEAVE_BASE_URL || 'http://host.docker.internal:18082'
 const vuCount = Number(__ENV.VUS || 50);
 const duration = __ENV.DURATION || '5m';
 const year = Number(__ENV.YEAR || new Date().getUTCFullYear());
+// PAGE_SIZE rỗng: đo danh sách không phân trang (như trước). PAGE_SIZE=50: đo danh sách có phân trang.
+const pageSize = __ENV.PAGE_SIZE || '';
+const listQuery = pageSize ? `?page=1&pageSize=${pageSize}` : '';
 const httpErrors = new Counter('workforce_http_errors');
 const workforceRequests = new Counter('workforce_requests');
 const workforceDuration = new Trend('workforce_request_duration_ms');
@@ -40,8 +43,8 @@ export const options = {
 };
 
 const routes = [
-  { name: 'employees', url: `${hrBaseUrl}/api/v1/employees`, token: 'hr' },
-  { name: 'all_leave_requests', url: `${leaveBaseUrl}/api/v1/leave-requests`, token: 'hr' },
+  { name: 'employees', url: `${hrBaseUrl}/api/v1/employees${listQuery}`, token: 'hr' },
+  { name: 'all_leave_requests', url: `${leaveBaseUrl}/api/v1/leave-requests${listQuery}`, token: 'hr' },
   {
     name: 'leave_calendar',
     url: `${leaveBaseUrl}/api/v1/leave-requests/calendar?from=${year}-01-01&to=${year}-12-31`,
