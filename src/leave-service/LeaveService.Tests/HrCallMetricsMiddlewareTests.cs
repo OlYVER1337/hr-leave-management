@@ -38,6 +38,9 @@ public sealed class HrCallMetricsMiddlewareTests
 
         await middleware.InvokeAsync(context, metrics);
 
+        Assert.True(responseFeature.HasStarted);
+        Assert.Throws<InvalidOperationException>(() =>
+            context.Response.Headers["X-Late-Test-Header"] = "must-not-be-accepted");
         Assert.Equal("2", context.Response.Headers["X-HR-Call-Count"].ToString());
         Assert.Equal("12.50,25.75", context.Response.Headers["X-HR-Call-Durations-Ms"].ToString());
 
