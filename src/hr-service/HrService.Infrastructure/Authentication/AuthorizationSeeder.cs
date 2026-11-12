@@ -11,7 +11,7 @@ namespace HrService.Infrastructure.Authentication;
 /// backfill from the legacy Employee.Role column to UserRoles.
 /// </summary>
 public sealed class AuthorizationSeeder(
-    HrDbContext dbContext,
+    IDbContextFactory<HrDbContext> dbContextFactory,
     TimeProvider timeProvider,
     ILogger<AuthorizationSeeder> logger)
 {
@@ -100,20 +100,30 @@ public sealed class AuthorizationSeeder(
 
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(
-            IsolationLevel.Serializable,
-            cancellationToken);
+        // A retry strategy cannot execute a manually opened transaction directly.
+        // Keep the complete seed in one retriable transaction, with a fresh DbContext
+        // for every attempt so a failed attempt cannot leave stale tracked entities.
+        await using var strategyContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var executionStrategy = strategyContext.Database.CreateExecutionStrategy();
 
-        var now = timeProvider.GetUtcNow().UtcDateTime;
+        await executionStrategy.ExecuteAsync(async () =>
+        {
+            await using var dbContext = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+            await using var transaction = await dbContext.Database.BeginTransactionAsync(
+                IsolationLevel.Serializable,
+                cancellationToken);
 
-        var roles = await EnsureRolesAsync(cancellationToken);
-        var permissions = await EnsurePermissionsAsync(cancellationToken);
+            var now = timeProvider.GetUtcNow().UtcDateTime;
 
-        await EnsurePermissionScopeRulesAsync(permissions, cancellationToken);
-        await EnsureRolePermissionsAsync(roles, permissions, now, cancellationToken);
-        await BackfillUserRolesAsync(roles, now, cancellationToken);
+            var roles = await EnsureRolesAsync(dbContext, cancellationToken);
+            var permissions = await EnsurePermissionsAsync(dbContext, cancellationToken);
 
-        await transaction.CommitAsync(cancellationToken);
+            await EnsurePermissionScopeRulesAsync(dbContext, permissions, cancellationToken);
+            await EnsureRolePermissionsAsync(dbContext, roles, permissions, now, cancellationToken);
+            await BackfillUserRolesAsync(dbContext, roles, now, cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+        });
 
         logger.LogInformation(
             "Authorization baseline seeded. Roles: {RoleCount}; permissions: {PermissionCount}.",
@@ -122,6 +132,7 @@ public sealed class AuthorizationSeeder(
     }
 
     private async Task<Dictionary<string, SecurityRole>> EnsureRolesAsync(
+        HrDbContext dbContext,
         CancellationToken cancellationToken)
     {
         var existingRoles = await dbContext.Roles.ToListAsync(cancellationToken);
@@ -159,6 +170,7 @@ public sealed class AuthorizationSeeder(
     }
 
     private async Task<Dictionary<string, Permission>> EnsurePermissionsAsync(
+        HrDbContext dbContext,
         CancellationToken cancellationToken)
     {
         var existingPermissions = await dbContext.Permissions.ToListAsync(cancellationToken);
@@ -196,6 +208,7 @@ public sealed class AuthorizationSeeder(
     }
 
     private async Task EnsurePermissionScopeRulesAsync(
+        HrDbContext dbContext,
         IReadOnlyDictionary<string, Permission> permissions,
         CancellationToken cancellationToken)
     {
@@ -233,6 +246,7 @@ public sealed class AuthorizationSeeder(
     }
 
     private async Task EnsureRolePermissionsAsync(
+        HrDbContext dbContext,
         IReadOnlyDictionary<string, SecurityRole> roles,
         IReadOnlyDictionary<string, Permission> permissions,
         DateTime now,
@@ -311,6 +325,7 @@ public sealed class AuthorizationSeeder(
     }
 
     private async Task BackfillUserRolesAsync(
+        HrDbContext dbContext,
         IReadOnlyDictionary<string, SecurityRole> roles,
         DateTime now,
         CancellationToken cancellationToken)

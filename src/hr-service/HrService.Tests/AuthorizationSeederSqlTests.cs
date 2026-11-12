@@ -43,7 +43,7 @@ public sealed class AuthorizationSeederSqlTests : IClassFixture<AuthorizationSee
         await using (var context = _fixture.CreateContext())
         {
             var seeder = new AuthorizationSeeder(
-                context,
+                _fixture.CreateFactory(),
                 TimeProvider.System,
                 NullLogger<AuthorizationSeeder>.Instance);
 
@@ -131,7 +131,7 @@ public sealed class AuthorizationSeederSqlTests : IClassFixture<AuthorizationSee
         await using (var context = _fixture.CreateContext())
         {
             var seeder = new AuthorizationSeeder(
-                context,
+                _fixture.CreateFactory(),
                 TimeProvider.System,
                 NullLogger<AuthorizationSeeder>.Instance);
 
@@ -256,6 +256,21 @@ public sealed class AuthorizationSeederSqlFixture : IAsyncLifetime
             .Options;
 
         return new HrDbContext(options);
+    }
+
+    public IDbContextFactory<HrDbContext> CreateFactory()
+    {
+        var options = new DbContextOptionsBuilder<HrDbContext>()
+            .UseSqlServer(DatabaseConnectionString, sqlServer => sqlServer.EnableRetryOnFailure())
+            .Options;
+
+        return new AuthorizationSeederContextFactory(options);
+    }
+
+    private sealed class AuthorizationSeederContextFactory(
+        DbContextOptions<HrDbContext> options) : IDbContextFactory<HrDbContext>
+    {
+        public HrDbContext CreateDbContext() => new(options);
     }
 
     public async Task DisposeAsync()

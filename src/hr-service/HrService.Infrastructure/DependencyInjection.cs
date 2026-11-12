@@ -19,7 +19,7 @@ public static class DependencyInjection
         string connectionString,
         IConfiguration configuration)
     {
-        services.AddDbContext<HrDbContext>(options =>
+        services.AddDbContextFactory<HrDbContext>(options =>
             options.UseSqlServer(connectionString, sqlServer => sqlServer.EnableRetryOnFailure()));
         services.AddScoped<IDepartmentRepository, DepartmentRepository>();
         services.AddScoped<IEmployeeRepository, EmployeeRepository>();
