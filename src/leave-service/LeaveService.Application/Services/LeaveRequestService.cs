@@ -164,10 +164,11 @@ public sealed class LeaveRequestService(
         }
 
         // Team scope is resolved from HR at request time (current manager), not from ApproverId.
-        var teamEmployeeIds = access.CanReadTeam
-            ? (await hrClient.GetTeamAsync(employeeId, authorization, cancellationToken))
-                .Select(member => member.Id).ToArray()
-            : Array.Empty<Guid>();
+        var teamEmployeeIds = access.CanReadTeam && !access.CanReadAll
+    ? (await hrClient.GetTeamAsync(employeeId, authorization, cancellationToken))
+        .Select(member => member.Id)
+        .ToArray()
+    : Array.Empty<Guid>();
 
         var requests = await repository.ListVisibleAsync(
             employeeId,
