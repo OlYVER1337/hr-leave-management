@@ -273,17 +273,21 @@ dotnet test src/leave-service/LeaveService.slnx
 
 Một số integration test cần SQL Server hoặc Redis riêng dành cho kiểm thử. Nếu thiếu dịch vụ hoặc biến môi trường cần thiết, test tích hợp có thể được đánh dấu `Skipped`; điều đó không đồng nghĩa với việc chức năng tích hợp đã được kiểm thử thành công. Không trỏ các test có khả năng tạo/xóa database hoặc xóa cache vào môi trường production.
 
-Trên Windows PowerShell, có thể chạy cả hai solution và yêu cầu `skipped = 0` bằng script:
+Chạy trực tiếp bằng .NET CLI, không cần script wrapper:
 
 ```powershell
-# Dùng cổng mặc định của docker-compose.yml: SQL 1433, Redis 6379
-.\scripts\test\run-all-tests.ps1
-
-# Nếu đang chạy stack hrbench theo docker-compose.loadtest.yml:
-.\scripts\test\run-all-tests.ps1 -SqlServer "localhost,11433" -RedisServer "localhost:16379"
+dotnet test .\src\hr-service\HrService.slnx
+dotnet test .\src\leave-service\LeaveService.slnx
 ```
 
-Script đọc `SA_PASSWORD` từ file `.env`, tạo hai connection string kiểm thử trong phiên PowerShell, chạy HR Service rồi Leave Service và dừng nếu test thất bại, không tìm được test summary hoặc có bất kỳ test nào bị skipped. Hãy khởi động SQL Server và Redis trước khi chạy.
+Các integration test cần connection string qua biến môi trường. Nếu không cấu hình, test phụ thuộc SQL Server/Redis sẽ bị `Skipped`. Để chạy đầy đủ trên stack `hrbench`, cấu hình hai biến sau trong phiên PowerShell (thay `<SA_PASSWORD>` bằng giá trị cục bộ trong `.env`), rồi chạy lại hai lệnh `dotnet test` ở trên:
+
+```powershell
+$env:HR_TEST_SQL_CONNECTION_STRING = "Server=localhost,11433;Database=master;User Id=sa;Password=<SA_PASSWORD>;Encrypt=False;TrustServerCertificate=True;Connect Timeout=5"
+$env:HR_TEST_REDIS_CONNECTION_STRING = "localhost:16379,abortConnect=false,connectTimeout=5000"
+```
+
+Các test tích hợp có thể tạo và xóa database kiểm thử ngẫu nhiên; HR integration test sử dụng Redis database 15. Chỉ dùng SQL Server/Redis riêng cho kiểm thử, không trỏ vào production.
 
 ## 9. Lệnh Docker thường dùng
 
