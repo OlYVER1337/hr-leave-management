@@ -90,20 +90,33 @@ export function setup() {
   return tokens;
 }
 
+function getHeader(response, name) {
+  const target = name.toLowerCase();
+  for (const key of Object.keys(response.headers)) {
+    if (key.toLowerCase() === target) {
+      return String(response.headers[key]);
+    }
+  }
+  return null;
+}
+
 function recordHrCalls(response) {
-  const header = response.headers['X-HR-Call-Durations-Ms']
-    || response.headers['x-hr-call-durations-ms']
-    || '';
-  const durations = String(header)
+  // Response không có header của Leave Service (ví dụ HR trực tiếp) thì không ghi nhận.
+  const countHeader = getHeader(response, 'X-HR-Call-Count');
+  if (countHeader === null) {
+    return;
+  }
+
+  const durationHeader = getHeader(response, 'X-HR-Call-Durations-Ms') || '';
+  const durations = durationHeader
     .split(',')
+    .map((value) => value.trim())
+    .filter((value) => value !== '')
     .map((value) => Number(value))
     .filter((value) => Number.isFinite(value) && value >= 0);
 
-  const countHeader = response.headers['X-HR-Call-Count']
-    || response.headers['x-hr-call-count'];
   const declaredCallCount = Number(countHeader);
-  const callCount = countHeader !== undefined && countHeader !== ''
-    && Number.isFinite(declaredCallCount) && declaredCallCount >= 0
+  const callCount = Number.isFinite(declaredCallCount) && declaredCallCount >= 0
     ? declaredCallCount
     : durations.length;
 
