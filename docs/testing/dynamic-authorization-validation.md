@@ -30,13 +30,17 @@ Invoke-RestMethod http://localhost:18082/health
 
 ## 2. Chạy toàn bộ test với SQL Server và Redis thật
 
-Script lấy `SA_PASSWORD` trực tiếp từ file `.env`, tự tạo connection string cho test và kiểm tra summary của từng solution. Script trả lỗi nếu có test fail, không tìm thấy summary hoặc `skipped > 0`.
+Chạy trực tiếp bằng .NET CLI. Hai biến môi trường dưới đây cho phép các integration test kết nối tới SQL Server và Redis trong stack `hrbench`. Thay `<SA_PASSWORD>` bằng giá trị cục bộ trong file `.env`; không commit mật khẩu hoặc connection string thật.
 
 ```powershell
-.\scripts\test\run-all-tests.ps1 -SqlServer "localhost,11433" -RedisServer "localhost:16379"
+$env:HR_TEST_SQL_CONNECTION_STRING = "Server=localhost,11433;Database=master;User Id=sa;Password=<SA_PASSWORD>;Encrypt=False;TrustServerCertificate=True;Connect Timeout=5"
+$env:HR_TEST_REDIS_CONNECTION_STRING = "localhost:16379,abortConnect=false,connectTimeout=5000"
+
+dotnet test .\src\hr-service\HrService.slnx
+dotnet test .\src\leave-service\LeaveService.slnx
 ```
 
-Điều kiện nghiệm thu: HR Service và Leave Service đều có `failed = 0`, `skipped = 0`. Giữ nguyên toàn bộ log Test summary để lưu bằng chứng.
+Điều kiện nghiệm thu: HR Service và Leave Service đều có `failed = 0`, `skipped = 0`. Nếu chưa cấu hình các biến môi trường, một số integration test sẽ bị `Skipped`; không xem đó là đã xác minh tích hợp. Lưu lại toàn bộ log Test summary để làm bằng chứng.
 
 ## 3. Seed dữ liệu tải
 
