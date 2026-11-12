@@ -1,15 +1,15 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$SqlServer = "localhost,1433",
     [string]$RedisServer = "localhost:6379"
 )
 
 $ErrorActionPreference = "Stop"
-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\\..")).Path
 $envFile = Join-Path $repoRoot ".env"
 
-if (-not (Test-Path $envFile)) {
-    throw "Không tìm thấy .env tại $envFile. Hãy tạo .env từ .env.example."
+if (-not (Test-Path -LiteralPath $envFile)) {
+    throw "Missing .env at $envFile. Create it from .env.example."
 }
 
 function Get-DotEnvValue {
@@ -18,9 +18,9 @@ function Get-DotEnvValue {
         [Parameter(Mandatory = $true)][string]$Path
     )
 
-    $pattern = "^\s*$([regex]::Escape($Name))\s*="
+    $pattern = "^\\s*$([regex]::Escape($Name))\\s*="
     $line = Get-Content -LiteralPath $Path |
-        Where-Object { $_ -notmatch '^\s*#' -and $_ -match $pattern } |
+        Where-Object { $_ -notmatch '^\\s*#' -and $_ -match $pattern } |
         Select-Object -First 1
 
     if (-not $line) {
@@ -40,7 +40,7 @@ function Get-DotEnvValue {
 
 $saPassword = Get-DotEnvValue -Name "SA_PASSWORD" -Path $envFile
 if ([string]::IsNullOrWhiteSpace($saPassword)) {
-    throw "SA_PASSWORD không được cấu hình trong .env."
+    throw "SA_PASSWORD is not configured in .env."
 }
 
 $oldSql = $env:HR_TEST_SQL_CONNECTION_STRING
@@ -60,7 +60,7 @@ try {
     foreach ($solution in $solutions) {
         $solutionPath = Join-Path $repoRoot $solution
         Write-Host ""
-        Write-Host "===== Chạy test: $solution =====" -ForegroundColor Cyan
+        Write-Host "===== Running tests: $solution =====" -ForegroundColor Cyan
 
         Push-Location $repoRoot
         try {
@@ -73,18 +73,18 @@ try {
         }
 
         if ($exitCode -ne 0) {
-            throw "dotnet test thất bại cho $solution (exit code $exitCode)."
+            throw "dotnet test failed for $solution (exit code $exitCode)."
         }
 
         $outputText = ($output | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
         $summary = [regex]::Match(
             $outputText,
-            'Test summary:\s*total:\s*(\d+),\s*failed:\s*(\d+),\s*succeeded:\s*(\d+),\s*skipped:\s*(\d+)',
+            'Test summary:\\s*total:\\s*(\\d+),\\s*failed:\\s*(\\d+),\\s*succeeded:\\s*(\\d+),\\s*skipped:\\s*(\\d+)',
             [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
         )
 
         if (-not $summary.Success) {
-            throw "Không tìm thấy Test summary của $solution; không thể xác nhận skipped = 0."
+            throw "Test summary not found for $solution; cannot verify skipped = 0."
         }
 
         $total = [int]$summary.Groups[1].Value
@@ -92,17 +92,17 @@ try {
         $skipped = [int]$summary.Groups[4].Value
 
         if ($failed -ne 0) {
-            throw "$solution có $failed test thất bại."
+            throw "$solution has $failed failed test(s)."
         }
         if ($skipped -ne 0) {
-            throw "$solution có $skipped test bị skipped. Kiểm tra SQL Server và Redis."
+            throw "$solution has $skipped skipped test(s). Check SQL Server and Redis."
         }
 
-        Write-Host "PASS: $solution — total=$total, failed=0, skipped=0" -ForegroundColor Green
+        Write-Host "PASS: $solution - total=$total, failed=0, skipped=0" -ForegroundColor Green
     }
 
     Write-Host ""
-    Write-Host "Hoàn tất: cả HR Service và Leave Service đều có skipped = 0." -ForegroundColor Green
+    Write-Host "Completed: HR Service and Leave Service both have skipped = 0." -ForegroundColor Green
 }
 finally {
     $env:HR_TEST_SQL_CONNECTION_STRING = $oldSql
