@@ -273,13 +273,6 @@ dotnet test src/leave-service/LeaveService.slnx
 
 Một số integration test cần SQL Server hoặc Redis riêng dành cho kiểm thử. Nếu thiếu dịch vụ hoặc biến môi trường cần thiết, test tích hợp có thể được đánh dấu `Skipped`; điều đó không đồng nghĩa với việc chức năng tích hợp đã được kiểm thử thành công. Không trỏ các test có khả năng tạo/xóa database hoặc xóa cache vào môi trường production.
 
-Chạy trực tiếp bằng .NET CLI, không cần script wrapper:
-
-```powershell
-dotnet test .\src\hr-service\HrService.slnx
-dotnet test .\src\leave-service\LeaveService.slnx
-```
-
 Các integration test cần connection string qua biến môi trường. Nếu không cấu hình, test phụ thuộc SQL Server/Redis sẽ bị `Skipped`. Để chạy đầy đủ trên stack `hrbench`, cấu hình hai biến sau trong phiên PowerShell (thay `<SA_PASSWORD>` bằng giá trị cục bộ trong `.env`), rồi chạy lại hai lệnh `dotnet test` ở trên:
 
 ```powershell
