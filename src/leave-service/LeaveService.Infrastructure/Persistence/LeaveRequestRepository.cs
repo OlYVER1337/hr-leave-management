@@ -194,13 +194,12 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
     }
 
     public async Task<IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>>
-        ListPendingAsync(Guid? approverId, CancellationToken cancellationToken = default)
+        ListPendingAsync(CancellationToken cancellationToken = default)
     {
         var requests = await context.LeaveRequests
             .AsNoTracking()
             .Include(item => item.YearAllocations)
-            .Where(item => item.Status == LeaveRequestStatus.Pending &&
-                           (!approverId.HasValue || item.ApproverId == approverId.Value))
+            .Where(item => item.Status == LeaveRequestStatus.Pending)
             .OrderBy(item => item.CreatedAtUtc)
             .ToArrayAsync(cancellationToken);
         return await WithBalancesAsync(requests, cancellationToken);

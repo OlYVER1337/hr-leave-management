@@ -125,7 +125,7 @@ public sealed class LeaveRequestService(
         ArgumentNullException.ThrowIfNull(access);
         if (access.CanDecideAll)
         {
-            var all = await repository.ListPendingAsync(null, cancellationToken);
+            var all = await repository.ListPendingAsync(cancellationToken);
             return all.Select(item => ToResponse(item.Request, item.Balances)).ToArray();
         }
 

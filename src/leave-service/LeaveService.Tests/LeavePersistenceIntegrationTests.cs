@@ -206,7 +206,7 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
         await using (var pendingContext = _fixture.CreateContext())
         {
             var repository = new LeaveRequestRepository(pendingContext);
-            var managerQueue = await repository.ListPendingAsync(approvedManager);
+            var managerQueue = await repository.ListPendingByEmployeesAsync(new[] { approvedEmployee }, default);
             Assert.Contains(managerQueue, item => item.Request.Id == approvedRequest.Id);
             await Assert.ThrowsAsync<LeaveForbiddenException>(() => repository.TransitionAsync(
                 approvedRequest.Id,

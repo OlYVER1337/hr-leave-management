@@ -412,7 +412,7 @@ public sealed class LeaveRequestServiceTests
     {
         var actorId = Guid.NewGuid();
         var repository = new Mock<ILeaveRequestRepository>();
-        repository.Setup(item => item.ListPendingAsync(null, It.IsAny<CancellationToken>()))
+        repository.Setup(item => item.ListPendingAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync([]);
         var hrClient = new Mock<ILeaveHrClient>();
         var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
@@ -420,7 +420,7 @@ public sealed class LeaveRequestServiceTests
         var result = await service.GetPendingAsync(actorId, "Bearer global", GlobalAccess());
 
         Assert.Empty(result);
-        repository.Verify(item => item.ListPendingAsync(null, It.IsAny<CancellationToken>()), Times.Once);
+        repository.Verify(item => item.ListPendingAsync(It.IsAny<CancellationToken>()), Times.Once);
         repository.Verify(
             item => item.ListPendingByEmployeesAsync(
                 It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()),
@@ -516,7 +516,7 @@ public sealed class LeaveRequestServiceTests
                 It.IsAny<CancellationToken>()),
             Times.Once);
         repository.Verify(
-            item => item.ListPendingAsync(It.IsAny<Guid?>(), It.IsAny<CancellationToken>()),
+            item => item.ListPendingAsync(It.IsAny<CancellationToken>()),
             Times.Never);
         hrClient.Verify(
             item => item.GetTeamAsync(managerId, "Bearer manager", It.IsAny<CancellationToken>()),

@@ -20,7 +20,7 @@ public interface ILeaveRequestRepository
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>>
-        ListPendingAsync(Guid? approverId, CancellationToken cancellationToken = default);
+        ListPendingAsync(CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>>
         ListVisibleAsync(
