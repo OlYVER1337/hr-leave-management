@@ -1,15 +1,19 @@
 :setvar EmployeeCount "1000"
 :setvar RequestsPerEmployee "5"
+:setvar ManagerCount "25"
 
 SET NOCOUNT ON;
 
 DECLARE @EmployeeCount int = TRY_CONVERT(int, '$(EmployeeCount)');
 DECLARE @RequestsPerEmployee int = TRY_CONVERT(int, '$(RequestsPerEmployee)');
+DECLARE @ManagerCount int = TRY_CONVERT(int, '$(ManagerCount)');
 
 IF @EmployeeCount NOT BETWEEN 1000 AND 5000
     THROW 51000, 'EmployeeCount must be between 1000 and 5000.', 1;
 IF @RequestsPerEmployee NOT BETWEEN 1 AND 20
     THROW 51001, 'RequestsPerEmployee must be between 1 and 20.', 1;
+IF @ManagerCount NOT BETWEEN 1 AND 200
+    THROW 51005, 'ManagerCount must be between 1 and 200.', 1;
 
 CREATE TABLE #LoadTestEmployees
 (
@@ -33,6 +37,66 @@ ORDER BY Code;
 
 IF @ManagerId IS NULL
     THROW 51002, 'An active Manager is required before seeding load-test employees.', 1;
+
+DECLARE @ManagerRoleId int = (SELECT Id FROM dbo.Roles WHERE Code = N'Manager' AND IsActive = 1);
+IF @ManagerRoleId IS NULL
+    THROW 51006, 'The Manager role must exist. Start hr-service once so authorization is seeded.', 1;
+
+CREATE TABLE #LoadTestManagers
+(
+    ManagerId uniqueidentifier NOT NULL PRIMARY KEY,
+    Number int NOT NULL
+);
+
+;WITH ManagerNumbers AS
+(
+    SELECT TOP (@ManagerCount)
+        CONVERT(int, ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) AS Number
+    FROM sys.all_objects AS firstSource
+    CROSS JOIN sys.all_objects AS secondSource
+)
+INSERT INTO dbo.Employees
+(
+    Id, Code, FullName, Email, PasswordHash, Role, HireDate, IsActive,
+    DepartmentId, ManagerId
+)
+SELECT
+    NEWID(),
+    N'LTM' + RIGHT(N'0000' + CONVERT(nvarchar(4), Number), 4),
+    N'Load Test Manager ' + CONVERT(nvarchar(4), Number),
+    N'loadtest.manager.' + RIGHT(N'0000' + CONVERT(nvarchar(4), Number), 4) + N'@example.invalid',
+    @PasswordHash,
+    N'Manager',
+    DATEADD(day, -Number % 1800, CONVERT(date, SYSUTCDATETIME())),
+    1,
+    @DepartmentId,
+    NULL
+FROM ManagerNumbers
+WHERE NOT EXISTS
+(
+    SELECT 1
+    FROM dbo.Employees AS existing
+    WHERE existing.Code = N'LTM' + RIGHT(N'0000' + CONVERT(nvarchar(4), Number), 4)
+);
+
+INSERT INTO #LoadTestManagers (ManagerId, Number)
+SELECT Id, TRY_CONVERT(int, SUBSTRING(Code, 4, 4))
+FROM dbo.Employees
+WHERE Code LIKE N'LTM%' AND Role = N'Manager' AND IsActive = 1
+  AND TRY_CONVERT(int, SUBSTRING(Code, 4, 4)) BETWEEN 1 AND @ManagerCount;
+
+IF (SELECT COUNT(*) FROM #LoadTestManagers) <> @ManagerCount
+    THROW 51007, 'The requested load-test manager set could not be prepared.', 1;
+
+INSERT INTO dbo.UserRoles (EmployeeId, RoleId, GrantedByEmployeeId, GrantedAtUtc)
+SELECT m.ManagerId, @ManagerRoleId, NULL, SYSUTCDATETIME()
+FROM #LoadTestManagers AS m
+WHERE NOT EXISTS
+(
+    SELECT 1
+    FROM dbo.UserRoles AS ur
+    WHERE ur.EmployeeId = m.ManagerId AND ur.RoleId = @ManagerRoleId AND ur.RevokedAtUtc IS NULL
+);
 
 INSERT INTO #LoadTestEmployees (EmployeeId, Code)
 SELECT TOP (@EmployeeCount) Id, Code
@@ -64,7 +128,7 @@ SELECT
     DATEADD(day, -Numbers.Number % 1800, CONVERT(date, SYSUTCDATETIME())),
     1,
     @DepartmentId,
-    @ManagerId
+    NULL
 FROM Numbers
 WHERE NOT EXISTS
 (
@@ -72,6 +136,19 @@ WHERE NOT EXISTS
     FROM dbo.Employees AS existing
     WHERE existing.Code = N'LT' + RIGHT(N'0000000' + CONVERT(nvarchar(7), Numbers.Number), 7)
 );
+
+;WITH Assignment AS
+(
+    SELECT
+        loadTest.EmployeeId,
+        ((TRY_CONVERT(int, SUBSTRING(loadTest.Code, 3, 7)) - 1) % @ManagerCount) + 1 AS ManagerNumber
+    FROM #LoadTestEmployees AS loadTest
+)
+UPDATE e
+SET e.ManagerId = m.ManagerId
+FROM dbo.Employees AS e
+INNER JOIN Assignment AS a ON a.EmployeeId = e.Id
+INNER JOIN #LoadTestManagers AS m ON m.Number = a.ManagerNumber;
 
 IF (SELECT COUNT(*) FROM #LoadTestEmployees) <> @EmployeeCount
     THROW 51003, 'The requested load-test employee set could not be prepared.', 1;
@@ -138,7 +215,7 @@ INSERT INTO #LoadTestRequests
 SELECT
     NEWID(),
     employee.EmployeeId,
-    @ManagerId,
+    NULL,
     @DepartmentId,
     DATEADD(day, (numbers.Number - 1) % 300, @YearStart),
     DATEADD(day, (numbers.Number - 1) % 300 + (numbers.Number % 3), @YearStart),
@@ -155,6 +232,11 @@ FROM RequestNumbers AS numbers
 INNER JOIN EmployeeNumbers AS employee
     ON employee.EmployeeNumber =
         ((numbers.Number - 1) / @RequestsPerEmployee) % @EmployeeCount + 1;
+
+UPDATE request
+SET request.ApproverId = employee.ManagerId
+FROM #LoadTestRequests AS request
+INNER JOIN HR_DB.dbo.Employees AS employee ON employee.Id = request.EmployeeId;
 
 INSERT INTO dbo.LeaveRequests
 (

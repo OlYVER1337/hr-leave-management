@@ -30,11 +30,21 @@ export const options = {
   },
 };
 
-function loginManager() {
+const managerCount = Math.max(1, Number(__ENV.LOADTEST_MANAGER_COUNT || 1));
+
+function managerEmail(number) {
+  // LOADTEST_MANAGER_COUNT=1: hành vi cũ, dùng MANAGER_EMAIL.
+  if (managerCount === 1) {
+    return __ENV.MANAGER_EMAIL;
+  }
+  return `loadtest.manager.${String(number).padStart(4, '0')}@example.invalid`;
+}
+
+function loginManager(email) {
   const response = http.post(
     `${hrBaseUrl}/api/v1/auth/login`,
     JSON.stringify({
-      email: __ENV.MANAGER_EMAIL,
+      email,
       password: __ENV.MANAGER_PASSWORD,
     }),
     { headers: { 'Content-Type': 'application/json' }, tags: { phase: 'setup' } },
@@ -50,28 +60,35 @@ function loginManager() {
 }
 
 export function setup() {
-  const token = loginManager();
-  const inbox = http.get(`${leaveBaseUrl}/api/v1/leave-requests/pending-approval`, {
-    headers: { Authorization: `Bearer ${token}` },
-    tags: { phase: 'setup' },
-  });
-  if (inbox.status !== 200) {
-    throw new Error(`Manager pending inbox failed with HTTP ${inbox.status}`);
+  // Mỗi VU được gán cố định cho một Manager: VU k dùng Manager ((k-1) % managerCount) + 1.
+  const perManagerVus = Math.ceil(vuCount / managerCount);
+  const required = perManagerVus * iterationsPerVu;
+  const managers = [];
+
+  for (let number = 1; number <= managerCount; number += 1) {
+    const token = loginManager(managerEmail(number));
+    const inbox = http.get(`${leaveBaseUrl}/api/v1/leave-requests/pending-approval`, {
+      headers: { Authorization: `Bearer ${token}` },
+      tags: { phase: 'setup' },
+    });
+    if (inbox.status !== 200) {
+      throw new Error(`Manager ${number} pending inbox failed with HTTP ${inbox.status}`);
+    }
+
+    const requests = inbox.json();
+    const ids = (Array.isArray(requests) ? requests : [])
+      .filter((request) => String(request.reason || '').startsWith('LOADTEST:'))
+      .map((request) => request.id);
+
+    if (ids.length < required) {
+      throw new Error(
+        `Manager ${number}: only ${ids.length} seeded pending LOADTEST requests; ${required} required. Re-run seed-scale-data.sql or lower ITERATIONS_PER_VU / VUS.`,
+      );
+    }
+    managers.push({ token, ids });
   }
 
-  const requests = inbox.json();
-  const ids = (Array.isArray(requests) ? requests : [])
-    .filter((request) => String(request.reason || '').startsWith('LOADTEST:'))
-    .map((request) => request.id);
-
-  const required = vuCount * iterationsPerVu;
-  if (ids.length < required) {
-    throw new Error(
-      `Only ${ids.length} seeded pending LOADTEST requests are available; ${required} are required. Re-run seed-scale-data.sql or lower ITERATIONS_PER_VU.`,
-    );
-  }
-
-  return { token, ids };
+  return { managers };
 }
 
 function getHeader(response, name) {
@@ -112,9 +129,13 @@ function recordHrCalls(response) {
   }
 }
 
-export default function ({ token, ids }) {
-  const index = ((__VU - 1) * iterationsPerVu) + __ITER;
-  const requestId = ids[index];
+export default function (data) {
+  const managers = data.managers;
+  const slot = managers[(__VU - 1) % managers.length];
+  const perManagerVu = Math.floor((__VU - 1) / managers.length);
+  const index = (perManagerVu * iterationsPerVu) + __ITER;
+  const token = slot.token;
+  const requestId = slot.ids[index];
   const response = http.post(
     `${leaveBaseUrl}/api/v1/leave-requests/${requestId}/approve`,
     JSON.stringify({ note: 'Load-test approval' }),
