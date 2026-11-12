@@ -136,9 +136,12 @@ public sealed class LeaveRequestService(
 
         // Team membership is resolved from HR at request time. ApproverId is only a snapshot
         // and may be stale after an employee is reassigned.
-        var team = await hrClient.GetTeamAsync(actorId, authorization, cancellationToken);
+        var teamEmployeeIds = await hrClient.GetTeamEmployeeIdsAsync(
+            actorId,
+            authorization,
+            cancellationToken);
         var requests = await repository.ListPendingByEmployeesAsync(
-            team.Select(member => member.Id).ToArray(),
+            teamEmployeeIds,
             cancellationToken);
         return requests.Select(item => ToResponse(item.Request, item.Balances)).ToArray();
     }
@@ -165,10 +168,8 @@ public sealed class LeaveRequestService(
 
         // Team scope is resolved from HR at request time (current manager), not from ApproverId.
         var teamEmployeeIds = access.CanReadTeam && !access.CanReadAll
-    ? (await hrClient.GetTeamAsync(employeeId, authorization, cancellationToken))
-        .Select(member => member.Id)
-        .ToArray()
-    : Array.Empty<Guid>();
+            ? await hrClient.GetTeamEmployeeIdsAsync(employeeId, authorization, cancellationToken)
+            : Array.Empty<Guid>();
 
         var requests = await repository.ListVisibleAsync(
             employeeId,

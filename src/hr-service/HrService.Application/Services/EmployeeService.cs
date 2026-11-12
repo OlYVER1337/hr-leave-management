@@ -102,6 +102,11 @@ public sealed class EmployeeService(
         return employees.Select(ToLookupResponse).ToArray();
     }
 
+    public Task<IReadOnlyList<Guid>> GetTeamEmployeeIdsAsync(
+        Guid managerId,
+        CancellationToken cancellationToken = default) =>
+        employeeRepository.GetDirectReportIdsAsync(managerId, cancellationToken);
+
     public async Task<IReadOnlyList<EmployeeResponse>> GetTeamAsync(
         Guid managerId,
         CancellationToken cancellationToken = default)

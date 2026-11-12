@@ -20,14 +20,14 @@ public sealed class HrServiceClient(HttpClient httpClient, HrCallMetrics? metric
             "employee",
             cancellationToken);
 
-    public async Task<IReadOnlyList<HrEmployeeSnapshot>> GetTeamAsync(
+    public async Task<IReadOnlyList<Guid>> GetTeamEmployeeIdsAsync(
         Guid managerId,
         string authorization,
         CancellationToken cancellationToken = default) =>
-        await GetRequiredAsync<HrEmployeeSnapshot[]>(
-            $"/api/v1/lookup/employees/{managerId}/team",
+        await GetRequiredAsync<Guid[]>(
+            $"/api/v1/leave-scope/managers/{managerId}/employee-ids",
             authorization,
-            "team",
+            "leave team",
             cancellationToken);
 
     public Task<HrLeaveType> GetLeaveTypeAsync(

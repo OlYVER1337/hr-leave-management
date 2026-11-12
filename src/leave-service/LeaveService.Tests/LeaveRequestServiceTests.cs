@@ -408,6 +408,218 @@ public sealed class LeaveRequestServiceTests
     }
 
     [Fact]
+    public async Task GetVisibleAsync_UsesCurrentTeamIdsFromHrForTeamScope()
+    {
+        var managerId = Guid.NewGuid();
+        var teamEmployeeId = Guid.NewGuid();
+        var repository = new Mock<ILeaveRequestRepository>();
+        repository
+            .Setup(item => item.ListVisibleAsync(
+                managerId,
+                It.Is<LeaveAccess>(access => access.CanReadSelf && access.CanReadTeam),
+                It.Is<IReadOnlyCollection<Guid>>(ids => ids.Count == 1 && ids.Contains(teamEmployeeId)),
+                false,
+                null,
+                null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        var hrClient = new Mock<ILeaveHrClient>();
+        hrClient
+            .Setup(item => item.GetTeamEmployeeIdsAsync(
+                managerId,
+                "Bearer manager",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([teamEmployeeId]);
+        var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
+
+        var result = await service.GetVisibleAsync(
+            managerId,
+            "Bearer manager",
+            ManagerAccess(),
+            calendarOnly: false,
+            from: null,
+            to: null);
+
+        Assert.Empty(result);
+        hrClient.Verify(
+            item => item.GetTeamEmployeeIdsAsync(
+                managerId,
+                "Bearer manager",
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        repository.Verify(
+            item => item.ListVisibleAsync(
+                managerId,
+                It.IsAny<LeaveAccess>(),
+                It.Is<IReadOnlyCollection<Guid>>(ids => ids.Count == 1 && ids.Contains(teamEmployeeId)),
+                false,
+                null,
+                null,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task GetVisibleAsync_SelfScopeDoesNotCallHr()
+    {
+        var employeeId = Guid.NewGuid();
+        var repository = new Mock<ILeaveRequestRepository>();
+        repository
+            .Setup(item => item.ListVisibleAsync(
+                employeeId,
+                It.IsAny<LeaveAccess>(),
+                It.Is<IReadOnlyCollection<Guid>>(ids => ids.Count == 0),
+                false,
+                null,
+                null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        var hrClient = new Mock<ILeaveHrClient>();
+        var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
+        var selfAccess = new LeaveAccess([
+            new LeavePermissionGrant("leaves.read", ["Self"])
+        ]);
+
+        var result = await service.GetVisibleAsync(
+            employeeId,
+            "Bearer employee",
+            selfAccess,
+            calendarOnly: false,
+            from: null,
+            to: null);
+
+        Assert.Empty(result);
+        hrClient.VerifyNoOtherCalls();
+        repository.Verify(
+            item => item.ListVisibleAsync(
+                employeeId,
+                selfAccess,
+                It.Is<IReadOnlyCollection<Guid>>(ids => ids.Count == 0),
+                false,
+                null,
+                null,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GetVisibleAsync_AllScopeDoesNotCallHr(bool alsoHasTeamScope)
+    {
+        var employeeId = Guid.NewGuid();
+        var readScopes = alsoHasTeamScope ? new[] { "All", "Team" } : new[] { "All" };
+        var access = new LeaveAccess([
+            new LeavePermissionGrant("leaves.read", readScopes)
+        ]);
+        var repository = new Mock<ILeaveRequestRepository>();
+        repository
+            .Setup(item => item.ListVisibleAsync(
+                employeeId,
+                access,
+                It.Is<IReadOnlyCollection<Guid>>(ids => ids.Count == 0),
+                false,
+                null,
+                null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        var hrClient = new Mock<ILeaveHrClient>();
+        var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
+
+        var result = await service.GetVisibleAsync(
+            employeeId,
+            "Bearer global",
+            access,
+            calendarOnly: false,
+            from: null,
+            to: null);
+
+        Assert.Empty(result);
+        hrClient.VerifyNoOtherCalls();
+        repository.Verify(
+            item => item.ListVisibleAsync(
+                employeeId,
+                access,
+                It.Is<IReadOnlyCollection<Guid>>(ids => ids.Count == 0),
+                false,
+                null,
+                null,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task GetVisibleAsync_HrTeamLookupFailureDoesNotQueryRepository()
+    {
+        var managerId = Guid.NewGuid();
+        var repository = new Mock<ILeaveRequestRepository>();
+        var hrClient = new Mock<ILeaveHrClient>();
+        hrClient
+            .Setup(item => item.GetTeamEmployeeIdsAsync(
+                managerId,
+                "Bearer manager",
+                It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new DependencyUnavailableException("HR service"));
+        var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
+
+        await Assert.ThrowsAsync<DependencyUnavailableException>(() =>
+            service.GetVisibleAsync(
+                managerId,
+                "Bearer manager",
+                ManagerAccess(),
+                calendarOnly: false,
+                from: null,
+                to: null));
+
+        repository.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetVisibleAsync_TeamLookupWithNoMembersPassesEmptyScopeToRepository()
+    {
+        var managerId = Guid.NewGuid();
+        var repository = new Mock<ILeaveRequestRepository>();
+        repository
+            .Setup(item => item.ListVisibleAsync(
+                managerId,
+                It.IsAny<LeaveAccess>(),
+                It.Is<IReadOnlyCollection<Guid>>(ids => ids.Count == 0),
+                false,
+                null,
+                null,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        var hrClient = new Mock<ILeaveHrClient>();
+        hrClient
+            .Setup(item => item.GetTeamEmployeeIdsAsync(
+                managerId,
+                "Bearer manager",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+        var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
+
+        var result = await service.GetVisibleAsync(
+            managerId,
+            "Bearer manager",
+            ManagerAccess(),
+            calendarOnly: false,
+            from: null,
+            to: null);
+
+        Assert.Empty(result);
+        repository.Verify(
+            item => item.ListVisibleAsync(
+                managerId,
+                It.IsAny<LeaveAccess>(),
+                It.Is<IReadOnlyCollection<Guid>>(ids => ids.Count == 0),
+                false,
+                null,
+                null,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
     public async Task GetPendingAsync_ForGlobalDeciderDoesNotCallHr()
     {
         var actorId = Guid.NewGuid();
@@ -503,8 +715,8 @@ public sealed class LeaveRequestServiceTests
             .ReturnsAsync([]);
         var hrClient = new Mock<ILeaveHrClient>();
         hrClient
-            .Setup(item => item.GetTeamAsync(managerId, "Bearer manager", It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new HrEmployeeSnapshot(memberId, "E2", "Member", "Employee", true, 1, managerId)]);
+            .Setup(item => item.GetTeamEmployeeIdsAsync(managerId, "Bearer manager", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([memberId]);
         var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
 
         var result = await service.GetPendingAsync(managerId, "Bearer manager", ManagerAccess());
@@ -519,7 +731,7 @@ public sealed class LeaveRequestServiceTests
             item => item.ListPendingAsync(It.IsAny<CancellationToken>()),
             Times.Never);
         hrClient.Verify(
-            item => item.GetTeamAsync(managerId, "Bearer manager", It.IsAny<CancellationToken>()),
+            item => item.GetTeamEmployeeIdsAsync(managerId, "Bearer manager", It.IsAny<CancellationToken>()),
             Times.Once);
     }
 

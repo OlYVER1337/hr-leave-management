@@ -33,6 +33,9 @@ public interface IEmployeeRepository
     Task<IReadOnlyList<Employee>> GetDirectReportsAsync(
         Guid managerId,
         CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<Guid>> GetDirectReportIdsAsync(
+        Guid managerId,
+        CancellationToken cancellationToken = default);
     Task<bool> HasDirectReportsAsync(Guid managerId, CancellationToken cancellationToken = default);
     void Add(Employee employee);
 }

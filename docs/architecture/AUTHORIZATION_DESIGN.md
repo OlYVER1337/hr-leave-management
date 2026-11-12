@@ -24,7 +24,9 @@ Leave Service sở hữu Leave_DB và không tạo bản sao quan hệ quản l�
 
 ### Truy vấn danh sách
 
-Khi Scope yêu cầu Team, Leave Service gọi HR Service để lấy một lần danh sách nhân viên thuộc Team hiện tại, sau đó truyền danh sách EmployeeId cho repository lọc trong SQL. Không gọi HR theo từng đơn.
+Khi Scope yêu cầu Team, Leave Service gọi HR Service một lần để lấy danh sách EmployeeId thuộc Team hiện tại, sau đó truyền danh sách này cho repository lọc trong SQL. Không gọi HR theo từng đơn.
+
+Leave Team lookup dùng endpoint chuyên biệt `GET /api/v1/leave-scope/managers/{managerId}/employee-ids`. Endpoint chỉ trả ID, yêu cầu `leaves.read:Team` hoặc `leaves.decide:Team`, và chỉ cho phép người gọi truy vấn Team có `managerId` trùng employee ID trong JWT. Endpoint này không yêu cầu `employees.read`; quyền đọc hồ sơ nhân viên và quyền lấy ID để giới hạn Leave data được tách riêng.
 
 ### Quyết định phê duyệt
 
@@ -151,7 +153,7 @@ Các thao tác ghi ở Departments, Holidays, LeavePolicies và LeaveTypes cũng
 
 Leave Service dựng LeaveAccess từ claim authz_v=1 và perm. LeaveRequestsController dùng leaves.read cho đọc, leaves.create cho tạo, leaves.decide cho hộp chờ/approve/reject và leaves.cancel cho hủy; LeaveBalancesController cũng yêu cầu leaves.read. LeaveRequestService và repository nhận LeaveAccess thay vì bool isHr. All scope cho phép đọc/duyệt toàn cục; Self/Team giới hạn theo quyền cụ thể.
 
-Với leaves.decide:Team, hộp chờ gọi HR Service để lấy danh sách Team theo ManagerId hiện tại; khi approve/reject, Leave Service gọi HR Service lại để xác minh ManagerId tại thời điểm quyết định. Không dùng ApproverId snapshot làm cơ sở authorization. Khi HR Service không khả dụng, quyết định không được thực hiện. Với leaves.decide:All, không cần lookup Team/Manager vì quyền được cấp toàn cục.
+Với leaves.decide:Team, hộp chờ gọi endpoint Leave Team scope của HR để lấy danh sách EmployeeId theo ManagerId hiện tại; endpoint chỉ trả ID và kiểm tra `leaves.decide:Team`. Với `leaves.read:Team`, danh sách đọc cũng dùng endpoint này và kiểm tra đúng permission đọc. Khi approve/reject, Leave Service gọi HR Service để xác minh ManagerId tại thời điểm quyết định. Không dùng ApproverId snapshot làm cơ sở authorization. Khi HR Service không khả dụng, thao tác phụ thuộc Team bị từ chối và không thay đổi dữ liệu. Với leaves.decide:All hoặc leaves.read:All, không cần lookup Team vì quyền đã bao phủ toàn cục.
 
 Các endpoint đã chuyển sang Permission + Scope không sử dụng claim role để authorization. Role claim vẫn có thể được giữ tạm cho hiển thị UI hoặc controller ngoài phạm vi migration; mục tiêu là không dùng role claim trong quyết định truy cập nghiệp vụ.
 
@@ -195,7 +197,7 @@ Một nhân viên chỉ đủ điều kiện được chọn làm ManagerId khi 
 Team được định nghĩa theo quan hệ quản lý hiện tại:
 
 - Employees Team: Employees.ManagerId == ActorId.
-- Leave Team: EmployeeId của đơn phải thuộc danh sách nhân viên hiện đang có ManagerId == ActorId trong HR Service.
+- Leave Team: EmployeeId của đơn phải thuộc danh sách nhân viên hiện đang có ManagerId == ActorId trong HR Service. Leave Service nhận danh sách ID qua `GET /api/v1/leave-scope/managers/{managerId}/employee-ids`; đây là API chỉ phục vụ scope của Leave, không cấp quyền đọc hồ sơ nhân viên.
 
 LeaveRequests.ApproverId là snapshot tại thời điểm tạo đơn, chỉ phục vụ lịch sử. Không dùng trường này làm điều kiện authorization hoặc Team filter.
 

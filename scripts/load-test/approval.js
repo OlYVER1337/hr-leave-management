@@ -99,8 +99,9 @@ function recordHrCalls(response) {
     .map((value) => Number(value))
     .filter((value) => Number.isFinite(value) && value >= 0);
 
-  const declaredCallCount = Number(countHeader);
-  const callCount = Number.isFinite(declaredCallCount) && declaredCallCount >= 0
+  const normalizedCount = countHeader.trim();
+  const declaredCallCount = normalizedCount === '' ? Number.NaN : Number(normalizedCount);
+  const callCount = Number.isInteger(declaredCallCount) && declaredCallCount >= 0
     ? declaredCallCount
     : durations.length;
 

@@ -148,6 +148,18 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Guid>> GetDirectReportIdsAsync(
+        Guid managerId,
+        CancellationToken cancellationToken = default)
+    {
+        return await dbContext.Employees
+            .AsNoTracking()
+            .Where(employee => employee.ManagerId == managerId && employee.IsActive)
+            .OrderBy(employee => employee.Id)
+            .Select(employee => employee.Id)
+            .ToArrayAsync(cancellationToken);
+    }
+
     public Task<bool> HasDirectReportsAsync(
         Guid managerId,
         CancellationToken cancellationToken = default)

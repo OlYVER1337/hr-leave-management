@@ -69,7 +69,7 @@ public interface ILeaveHrClient
         string authorization,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<HrEmployeeSnapshot>> GetTeamAsync(
+    Task<IReadOnlyList<Guid>> GetTeamEmployeeIdsAsync(
         Guid managerId,
         string authorization,
         CancellationToken cancellationToken = default);

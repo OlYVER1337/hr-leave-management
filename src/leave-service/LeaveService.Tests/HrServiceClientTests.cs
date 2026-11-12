@@ -32,6 +32,26 @@ public sealed class HrServiceClientTests
             handler.RequestedUris);
     }
 
+    [Fact]
+    public async Task GetTeamEmployeeIds_UsesLeaveScopeEndpointAndReturnsOnlyIds()
+    {
+        var managerId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var expectedEmployeeId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var handler = new RecordingHttpMessageHandler();
+        using var httpClient = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("http://hr-service")
+        };
+        var client = new HrServiceClient(httpClient);
+
+        var employeeIds = await client.GetTeamEmployeeIdsAsync(managerId, "Bearer test-token");
+
+        Assert.Equal(new[] { expectedEmployeeId }, employeeIds);
+        Assert.Equal(
+            $"/api/v1/leave-scope/managers/{managerId}/employee-ids",
+            Assert.Single(handler.RequestedUris));
+    }
+
     private sealed class RecordingHttpMessageHandler : HttpMessageHandler
     {
         public List<string> RequestedUris { get; } = [];
@@ -47,6 +67,10 @@ public sealed class HrServiceClientTests
                     """{"id":4,"code":"ANNUAL","name":"Annual","isPaid":true,"deductsBalance":true,"isActive":true}""",
                 "/api/v1/leave-policies" => "[]",
                 "/api/v1/holidays" => "[]",
+                _ when request.RequestUri.AbsolutePath.StartsWith(
+                    "/api/v1/leave-scope/managers/",
+                    StringComparison.Ordinal) =>
+                    """["22222222-2222-2222-2222-222222222222"]""",
                 _ => throw new InvalidOperationException(
                     $"Unexpected HR API request: {request.RequestUri.PathAndQuery}")
             };

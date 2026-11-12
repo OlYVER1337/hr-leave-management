@@ -108,6 +108,8 @@ Ghi bốn workload thành bốn dòng riêng, không gộp workforce và approva
 
 Raw k6 summaries được lưu trong `docs/testing/evidence/dynamic-authorization/` với bốn file `workforce-50.json`, `workforce-100.json`, `approval-50.json` và `approval-100.json`. Không sử dụng kết quả benchmark lịch sử trước Dynamic RBAC làm kết quả của phiên bản này. Ghi rõ commit SHA, thời điểm, cấu hình cache, số nhân viên/đơn và kết quả lỗi cùng với bảng.
 
+Lưu ý: `workforce-debug.json` là kết quả chạy thử để chẩn đoán, không phải workload 50 VU chính thức. Metrics trong file ghi nhận `vus = 5` và thời gian chạy khoảng 60,85 giây; không dùng file này để điền dòng Workforce 50 VU trong bảng nghiệm thu.
+
 ## 7. Giới hạn và an toàn
 
 - Chạy trên stack `hrbench` cô lập, không trỏ test tới production.
