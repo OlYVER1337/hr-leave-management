@@ -146,6 +146,25 @@ public sealed class LeaveRequestService(
         return requests.Select(item => ToResponse(item.Request, item.Balances)).ToArray();
     }
 
+    public async Task<PagedLeaveRequestResponse> GetVisiblePagedAsync(
+        Guid employeeId,
+        string authorization,
+        LeaveAccess access,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var all = await GetVisibleAsync(
+            employeeId, authorization, access, calendarOnly: false, from: null, to: null, cancellationToken);
+        var normalizedPage = Math.Max(1, page);
+        var normalizedSize = Math.Clamp(pageSize, 1, 100);
+        var items = all
+            .Skip((normalizedPage - 1) * normalizedSize)
+            .Take(normalizedSize)
+            .ToArray();
+        return new PagedLeaveRequestResponse(items, all.Count);
+    }
+
     public async Task<IReadOnlyList<LeaveRequestResponse>> GetVisibleAsync(
         Guid employeeId,
         string authorization,
@@ -375,3 +394,5 @@ public sealed class LeaveRequestService(
                 balance.Pending,
                 balance.Entitled - balance.Used - balance.Pending)).ToArray());
 }
+
+public sealed record PagedLeaveRequestResponse(IReadOnlyList<LeaveRequestResponse> Items, int TotalCount);

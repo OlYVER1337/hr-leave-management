@@ -14,6 +14,8 @@ public sealed class EmployeesController(EmployeeService employeeService) : Contr
     [HttpGet]
     [Authorize(Policy = PermissionPolicies.EmployeesRead)]
     public async Task<ActionResult<IReadOnlyList<EmployeeResponse>>> GetAll(
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
         CancellationToken cancellationToken)
     {
         var actorId = AuthorizationClaimReader.GetEmployeeId(User);
@@ -21,9 +23,17 @@ public sealed class EmployeesController(EmployeeService employeeService) : Contr
             return Unauthorized();
 
         var authorization = AuthorizationClaimReader.Read(User);
-        var employees = await employeeService.GetVisibleAsync(
-            actorId.Value, authorization, cancellationToken);
-        return Ok(employees);
+
+        // Không truyền page/pageSize: giữ nguyên hành vi cũ, trả toàn bộ danh sách trong phạm vi.
+        if (page is null && pageSize is null)
+        {
+            return Ok(await employeeService.GetVisibleAsync(actorId.Value, authorization, cancellationToken));
+        }
+
+        var paged = await employeeService.GetVisiblePagedAsync(
+            actorId.Value, authorization, page ?? 1, pageSize ?? 20, cancellationToken);
+        Response.Headers["X-Total-Count"] = paged.TotalCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return Ok(paged.Items);
     }
 
     [HttpGet("{id:guid}")]

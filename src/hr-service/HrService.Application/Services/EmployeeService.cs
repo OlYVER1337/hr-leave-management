@@ -40,6 +40,23 @@ public sealed class EmployeeService(
         return employees.Select(ToResponse).ToArray();
     }
 
+    public async Task<PagedEmployeeResponse> GetVisiblePagedAsync(
+        Guid actorId,
+        EffectiveAuthorization authorization,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var all = await GetVisibleAsync(actorId, authorization, cancellationToken);
+        var normalizedPage = Math.Max(1, page);
+        var normalizedSize = Math.Clamp(pageSize, 1, 100);
+        var items = all
+            .Skip((normalizedPage - 1) * normalizedSize)
+            .Take(normalizedSize)
+            .ToArray();
+        return new PagedEmployeeResponse(items, all.Count);
+    }
+
     public async Task<EmployeeResponse> GetVisibleByIdAsync(
         Guid id,
         Guid actorId,
@@ -454,3 +471,5 @@ public sealed class EmployeeService(
     private static string CreateEmployeeCode(Guid employeeId) =>
         $"EMP-{employeeId:N}"[..20].ToUpperInvariant();
 }
+
+public sealed record PagedEmployeeResponse(IReadOnlyList<EmployeeResponse> Items, int TotalCount);

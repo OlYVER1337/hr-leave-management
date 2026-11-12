@@ -15,6 +15,8 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
     [HttpGet]
     [Authorize(Policy = LeavePermissionPolicies.LeavesRead)]
     public async Task<ActionResult<IReadOnlyList<LeaveRequestResponse>>> GetVisible(
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
         CancellationToken cancellationToken)
     {
         var employeeId = GetCurrentEmployeeId();
@@ -23,15 +25,22 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
             return Unauthorized();
         }
 
-        var requests = await leaveRequestService.GetVisibleAsync(
-            employeeId.Value,
-            Request.Headers.Authorization.ToString(),
-            LeaveAccess.FromClaims(User),
-            calendarOnly: false,
-            from: null,
-            to: null,
-            cancellationToken);
-        return Ok(requests);
+        var authorization = Request.Headers.Authorization.ToString();
+        var access = LeaveAccess.FromClaims(User);
+
+        // Không truyền page/pageSize: giữ nguyên hành vi cũ.
+        if (page is null && pageSize is null)
+        {
+            var all = await leaveRequestService.GetVisibleAsync(
+                employeeId.Value, authorization, access,
+                calendarOnly: false, from: null, to: null, cancellationToken);
+            return Ok(all);
+        }
+
+        var paged = await leaveRequestService.GetVisiblePagedAsync(
+            employeeId.Value, authorization, access, page ?? 1, pageSize ?? 20, cancellationToken);
+        Response.Headers["X-Total-Count"] = paged.TotalCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return Ok(paged.Items);
     }
 
     [HttpGet("calendar")]
