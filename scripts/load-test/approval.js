@@ -131,6 +131,8 @@ export default function ({ token, ids }) {
 }
 
 export function handleSummary(data) {
+  // Không ghi dữ liệu setup() (có thể chứa token) vào báo cáo.
+  delete data.setup_data;
   const durationMetrics = data.metrics.approval_request_duration_ms?.values || {};
   const hrMetrics = data.metrics.approval_leave_to_hr_call_duration_ms?.values || {};
   const attempts = data.metrics.approval_requests?.values?.count || 0;

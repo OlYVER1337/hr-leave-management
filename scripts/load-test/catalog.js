@@ -91,6 +91,8 @@ export default function ({ token }) {
 }
 
 export function handleSummary(data) {
+  // Không ghi dữ liệu setup() (có thể chứa token) vào báo cáo.
+  delete data.setup_data;
   const durationMetrics = data.metrics.http_req_duration?.values || {};
   const requestMetrics = data.metrics.http_reqs?.values || {};
   const failureMetrics = data.metrics.http_req_failed?.values || {};

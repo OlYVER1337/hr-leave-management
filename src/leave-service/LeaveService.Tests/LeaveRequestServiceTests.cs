@@ -135,6 +135,7 @@ public sealed class LeaveRequestServiceTests
         await Assert.ThrowsAsync<LeaveValidationException>(() =>
             service.GetVisibleAsync(
                 Guid.NewGuid(),
+                "Bearer test",
                 ManagerAccess(),
                 calendarOnly: true,
                 from: new DateOnly(2026, 2, 2),
@@ -397,6 +398,7 @@ public sealed class LeaveRequestServiceTests
         await Assert.ThrowsAsync<LeaveForbiddenException>(() =>
             service.GetVisibleAsync(
                 Guid.NewGuid(),
+                "Bearer test",
                 LeaveAccess.Empty,
                 calendarOnly: false,
                 from: null,

@@ -36,11 +36,12 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
     }
 
     private async Task<HashSet<Guid>> VisibleAsync(
-        Guid actor, LeaveAccess access, bool calendarOnly = false, DateOnly? from = null, DateOnly? to = null)
+        Guid actor, LeaveAccess access, bool calendarOnly = false, DateOnly? from = null, DateOnly? to = null,
+        IReadOnlyCollection<Guid>? team = null)
     {
         await using var context = _fixture.CreateContext();
         var rows = await new LeaveRequestRepository(context)
-            .ListVisibleAsync(actor, access, calendarOnly, from, to);
+            .ListVisibleAsync(actor, access, team ?? Array.Empty<Guid>(), calendarOnly, from, to);
         return rows.Select(row => row.Request.Id).ToHashSet();
     }
 
@@ -67,23 +68,21 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
         ]);
 
     [LeaveSqlFact]
-    public async Task TeamScope_SeesOwnRequestsAndRequestsAssignedToThem_NotOthers()
+    public async Task TeamScope_UsesCurrentHrTeamMembership_NotApproverSnapshot()
     {
         var me = Guid.NewGuid();
-        var otherManager = Guid.NewGuid();
-        var otherEmployee = Guid.NewGuid();
+        var inTeam = Guid.NewGuid();      // HR hiện báo là cấp dưới của me
+        var movedAway = Guid.NewGuid();   // đã chuyển sang quản lý khác; ApproverId snapshot vẫn là me
 
-        var own = await CreateAsync(me, otherManager, new DateOnly(2030, 3, 4), new DateOnly(2030, 3, 4));
-        var assignedToMe = await CreateAsync(otherEmployee, me, new DateOnly(2030, 3, 5), new DateOnly(2030, 3, 5));
-        var notMine = await CreateAsync(otherEmployee, otherManager, new DateOnly(2030, 3, 6), new DateOnly(2030, 3, 6));
-        var ofAnotherOwnerWithMe = await CreateAsync(otherEmployee, null, new DateOnly(2030, 3, 7), new DateOnly(2030, 3, 7));
+        var own = await CreateAsync(me, Guid.NewGuid(), new DateOnly(2030, 3, 4), new DateOnly(2030, 3, 4));
+        var teamRequest = await CreateAsync(inTeam, Guid.NewGuid(), new DateOnly(2030, 3, 5), new DateOnly(2030, 3, 5));
+        var movedRequest = await CreateAsync(movedAway, me, new DateOnly(2030, 3, 6), new DateOnly(2030, 3, 6));
 
-        var visible = await VisibleAsync(me, ManagerAccess());
+        var visible = await VisibleAsync(me, ManagerAccess(), team: new[] { inTeam });
 
         Assert.Contains(own.Id, visible);
-        Assert.Contains(assignedToMe.Id, visible);
-        Assert.DoesNotContain(notMine.Id, visible);
-        Assert.DoesNotContain(ofAnotherOwnerWithMe.Id, visible);
+        Assert.Contains(teamRequest.Id, visible);
+        Assert.DoesNotContain(movedRequest.Id, visible);
     }
 
     [LeaveSqlFact]
@@ -114,18 +113,28 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
     }
 
     [LeaveSqlFact]
-    public async Task TeamScope_OnlyReturnsRequestsAssignedToActor()
+    public async Task TeamScope_EmptyTeamDoesNotWidenAccess()
+    {
+        var me = Guid.NewGuid();
+        var request = await CreateAsync(Guid.NewGuid(), me, new DateOnly(2030, 8, 1), new DateOnly(2030, 8, 1));
+
+        var visible = await VisibleAsync(me, TeamOnlyAccess(), team: Array.Empty<Guid>());
+
+        Assert.DoesNotContain(request.Id, visible);
+    }
+
+    [LeaveSqlFact]
+    public async Task TeamOnly_ReturnsRequestsOfTeamMembersAndNotOwnRequests()
     {
         var actor = Guid.NewGuid();
-        var ownerRequest = await CreateAsync(
-            actor, Guid.NewGuid(), new DateOnly(2030, 8, 1), new DateOnly(2030, 8, 1));
-        var assignedRequest = await CreateAsync(
-            Guid.NewGuid(), actor, new DateOnly(2030, 8, 2), new DateOnly(2030, 8, 2));
+        var member = Guid.NewGuid();
+        var ownRequest = await CreateAsync(actor, Guid.NewGuid(), new DateOnly(2030, 8, 2), new DateOnly(2030, 8, 2));
+        var memberRequest = await CreateAsync(member, Guid.NewGuid(), new DateOnly(2030, 8, 3), new DateOnly(2030, 8, 3));
 
-        var visible = await VisibleAsync(actor, TeamOnlyAccess());
+        var visible = await VisibleAsync(actor, TeamOnlyAccess(), team: new[] { member });
 
-        Assert.DoesNotContain(ownerRequest.Id, visible);
-        Assert.Contains(assignedRequest.Id, visible);
+        Assert.DoesNotContain(ownRequest.Id, visible);
+        Assert.Contains(memberRequest.Id, visible);
     }
 
     [LeaveSqlFact]

@@ -25,6 +25,7 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
 
         var requests = await leaveRequestService.GetVisibleAsync(
             employeeId.Value,
+            Request.Headers.Authorization.ToString(),
             LeaveAccess.FromClaims(User),
             calendarOnly: false,
             from: null,
@@ -48,6 +49,7 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
 
         var requests = await leaveRequestService.GetVisibleAsync(
             employeeId.Value,
+            Request.Headers.Authorization.ToString(),
             LeaveAccess.FromClaims(User),
             calendarOnly: true,
             from,

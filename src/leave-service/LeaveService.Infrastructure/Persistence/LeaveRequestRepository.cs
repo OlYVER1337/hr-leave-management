@@ -210,6 +210,7 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
         ListVisibleAsync(
             Guid employeeId,
             LeaveAccess access,
+            IReadOnlyCollection<Guid> teamEmployeeIds,
             bool calendarOnly,
             DateOnly? from,
             DateOnly? to,
@@ -222,16 +223,21 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
 
         if (!access.CanReadAll)
         {
-            if (access.CanReadSelf && access.CanReadTeam)
+            // Team membership comes from HR (current manager), never from the ApproverId snapshot.
+            // Self and Team are OR-ed; an empty team never widens access.
+            var self = access.CanReadSelf;
+            var team = access.CanReadTeam && teamEmployeeIds.Count > 0;
+            var teamIds = team ? teamEmployeeIds.ToArray() : Array.Empty<Guid>();
+
+            if (self && team)
             {
-                query = query.Where(item =>
-                    item.EmployeeId == employeeId || item.ApproverId == employeeId);
+                query = query.Where(item => item.EmployeeId == employeeId || teamIds.Contains(item.EmployeeId));
             }
-            else if (access.CanReadTeam)
+            else if (team)
             {
-                query = query.Where(item => item.ApproverId == employeeId);
+                query = query.Where(item => teamIds.Contains(item.EmployeeId));
             }
-            else if (access.CanReadSelf)
+            else if (self)
             {
                 query = query.Where(item => item.EmployeeId == employeeId);
             }

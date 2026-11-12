@@ -26,6 +26,7 @@ public interface ILeaveRequestRepository
         ListVisibleAsync(
             Guid employeeId,
             LeaveAccess access,
+            IReadOnlyCollection<Guid> teamEmployeeIds,
             bool calendarOnly,
             DateOnly? from,
             DateOnly? to,

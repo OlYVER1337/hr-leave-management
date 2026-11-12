@@ -145,6 +145,7 @@ public sealed class LeaveRequestService(
 
     public async Task<IReadOnlyList<LeaveRequestResponse>> GetVisibleAsync(
         Guid employeeId,
+        string authorization,
         LeaveAccess access,
         bool calendarOnly,
         DateOnly? from,
@@ -162,9 +163,16 @@ public sealed class LeaveRequestService(
             throw Invalid("from", "The start date must not be later than the end date.");
         }
 
+        // Team scope is resolved from HR at request time (current manager), not from ApproverId.
+        var teamEmployeeIds = access.CanReadTeam
+            ? (await hrClient.GetTeamAsync(employeeId, authorization, cancellationToken))
+                .Select(member => member.Id).ToArray()
+            : Array.Empty<Guid>();
+
         var requests = await repository.ListVisibleAsync(
             employeeId,
             access,
+            teamEmployeeIds,
             calendarOnly,
             from,
             to,

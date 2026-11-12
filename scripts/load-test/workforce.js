@@ -153,6 +153,8 @@ export default function (tokens) {
 }
 
 export function handleSummary(data) {
+  // Không ghi dữ liệu setup() (có thể chứa token) vào báo cáo.
+  delete data.setup_data;
   const durationMetrics = data.metrics.workforce_request_duration_ms?.values || {};
   const hrDirectMetrics = data.metrics.hr_direct_duration_ms?.values || {};
   const leaveToHrMetrics = data.metrics.leave_to_hr_call_duration_ms?.values || {};
