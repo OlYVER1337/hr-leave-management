@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { ArrowDown, ArrowDownUp, ArrowUp, Building2, ChevronDown, Download, Edit3, Plus, Search, UserCheck, UserMinus, Users } from 'lucide-react';
 import { Avatar, EmptyState, formatDate, PageHeader } from '../components/ui';
 import { Modal } from '../components/Modal';
@@ -57,7 +57,7 @@ export function EmployeesPage() {
   const [form, setForm] = useState<EmployeeInput>(blankForm());
   const [saving, setSaving] = useState(false);
 
-  async function reloadAuxiliary() {
+  const reloadAuxiliary = useCallback(async () => {
     setAuxiliaryLoading(true);
     setError('');
     const requests = await Promise.allSettled([
@@ -78,8 +78,8 @@ export function EmployeesPage() {
       setError((value) => value || getApiErrorMessage(getRejectedReason(requests[3])));
     }
     setAuxiliaryLoading(false);
-  }
-  useEffect(() => { void reloadAuxiliary(); }, []);
+  }, []);
+  useEffect(() => { void reloadAuxiliary(); }, [reloadAuxiliary]);
 
   // Load the manager dropdown only when its form is open. Search is executed
   // by the HR API so the selector is not limited to the first 100 managers.
@@ -116,14 +116,17 @@ export function EmployeesPage() {
 
   // Page/size are owned by usePagedBlock; this object only identifies the
   // filters and sort order that define a distinct result set.
-  const query: Omit<EmployeePageQuery, 'page' | 'pageSize'> = {
-    search: debouncedSearch || undefined,
-    role: role === 'All' ? undefined : role,
-    isActive: activeFilter === 'All' ? undefined : activeFilter === 'Active',
-    departmentId: departmentFilter === 'All' ? undefined : Number(departmentFilter),
-    sortBy: sortField,
-    sortDirection,
-  };
+  const query = useMemo<Omit<EmployeePageQuery, 'page' | 'pageSize'>>(
+    () => ({
+      search: debouncedSearch || undefined,
+      role: role === 'All' ? undefined : role,
+      isActive: activeFilter === 'All' ? undefined : activeFilter === 'Active',
+      departmentId: departmentFilter === 'All' ? undefined : Number(departmentFilter),
+      sortBy: sortField,
+      sortDirection,
+    }),
+    [debouncedSearch, role, activeFilter, departmentFilter, sortField, sortDirection],
+  );
   const queryKey = JSON.stringify(query);
   const loadBlock = useCallback(
     (requestPage: number, requestPageSize: number) => getEmployeePage({
@@ -131,7 +134,7 @@ export function EmployeesPage() {
       page: requestPage,
       pageSize: requestPageSize,
     }),
-    [queryKey],
+    [query],
   );
   const {
     items: blockEmployees,
