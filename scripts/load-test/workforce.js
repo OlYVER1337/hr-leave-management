@@ -17,6 +17,7 @@ const paginationContractRoutes = [
   { name: 'employees', url: `${hrBaseUrl}/api/v1/employees`, token: 'hr' },
   { name: 'all_leave_requests', url: `${leaveBaseUrl}/api/v1/leave-requests`, token: 'hr' },
   { name: 'manager_approvals', url: `${leaveBaseUrl}/api/v1/leave-requests/pending-approval`, token: 'manager' },
+  { name: 'manager_team', url: `${hrBaseUrl}/api/v1/me/team`, token: 'manager' },
 ];
 const httpErrors = new Counter('workforce_http_errors');
 const workforceRequests = new Counter('workforce_requests');
@@ -234,6 +235,17 @@ export function handleSummary(data) {
     leave_to_hr_total_time_ms: data.metrics.leave_to_hr_total_duration_ms?.values?.count || 0,
     leave_to_hr_avg_ms: leaveToHrMetrics.avg || 0,
     leave_to_hr_p95_ms: leaveToHrMetrics['p(95)'] || 0,
+  };
+  // Store run metadata in the raw JSON itself; stdout alone is not durable evidence.
+  data.benchmark_metadata = {
+    workload: summary.workload,
+    git_sha: summary.git_sha,
+    image_tag: summary.image_tag,
+    page_size: pageSize,
+    vus: vuCount,
+    duration,
+    year,
+    generated_at_utc: new Date().toISOString(),
   };
   const output = JSON.stringify(summary, null, 2);
   if (__ENV.REPORT_JSON) {
