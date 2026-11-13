@@ -15,8 +15,8 @@ public sealed class EmployeesController(EmployeeService employeeService) : Contr
     [HttpGet]
     [Authorize(Policy = PermissionPolicies.EmployeesRead)]
     public async Task<ActionResult<IReadOnlyList<EmployeeResponse>>> GetAll(
-        [FromQuery, Range(1, int.MaxValue)] int page,
-        [FromQuery, Range(1, 100)] int pageSize,
+        [FromQuery, Range(1, int.MaxValue)] int? page,
+        [FromQuery, Range(1, 100)] int? pageSize,
         [FromQuery] string? search = null,
         [FromQuery] string? role = null,
         [FromQuery] bool? isActive = null,
@@ -25,6 +25,16 @@ public sealed class EmployeesController(EmployeeService employeeService) : Contr
         [FromQuery] string? sortDirection = "asc",
         CancellationToken cancellationToken = default)
     {
+        if (!IsValidPagination(page, pageSize))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Invalid pagination",
+                Detail = "Both page and pageSize are required. page must be at least 1 and pageSize must be between 1 and 100."
+            });
+        }
+
         var actorId = AuthorizationClaimReader.GetEmployeeId(User);
         if (!actorId.HasValue)
             return Unauthorized();
@@ -34,8 +44,8 @@ public sealed class EmployeesController(EmployeeService employeeService) : Contr
         var paged = await employeeService.GetVisiblePagedAsync(
             actorId.Value,
             authorization,
-            page,
-            pageSize,
+            page!.Value,
+            pageSize!.Value,
             search,
             role,
             isActive,
@@ -104,4 +114,8 @@ public sealed class EmployeesController(EmployeeService employeeService) : Contr
         await employeeService.ResetPasswordAsync(id, request, cancellationToken);
         return NoContent();
     }
+
+    private static bool IsValidPagination(int? page, int? pageSize) =>
+        page.HasValue && page.Value >= 1 &&
+        pageSize.HasValue && pageSize.Value is >= 1 and <= 100;
 }
