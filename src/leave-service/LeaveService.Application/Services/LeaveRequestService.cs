@@ -154,15 +154,30 @@ public sealed class LeaveRequestService(
         int pageSize,
         CancellationToken cancellationToken = default)
     {
-        var all = await GetVisibleAsync(
-            employeeId, authorization, access, calendarOnly: false, from: null, to: null, cancellationToken);
-        var normalizedPage = Math.Max(1, page);
-        var normalizedSize = Math.Clamp(pageSize, 1, 100);
-        var items = all
-            .Skip((normalizedPage - 1) * normalizedSize)
-            .Take(normalizedSize)
-            .ToArray();
-        return new PagedLeaveRequestResponse(items, all.Count);
+        ArgumentNullException.ThrowIfNull(access);
+        if (!access.CanRead)
+        {
+            throw new LeaveForbiddenException("The caller does not have leaves.read permission.");
+        }
+
+        var teamEmployeeIds = access.CanReadTeam && !access.CanReadAll
+            ? await hrClient.GetTeamEmployeeIdsAsync(employeeId, authorization, cancellationToken)
+            : Array.Empty<Guid>();
+
+        var (rows, totalCount) = await repository.ListVisiblePageAsync(
+            employeeId,
+            access,
+            teamEmployeeIds,
+            calendarOnly: false,
+            from: null,
+            to: null,
+            Math.Max(1, page),
+            Math.Clamp(pageSize, 1, 100),
+            cancellationToken);
+
+        return new PagedLeaveRequestResponse(
+            rows.Select(item => ToResponse(item.Request, item.Balances)).ToArray(),
+            totalCount);
     }
 
     public async Task<IReadOnlyList<LeaveRequestResponse>> GetVisibleAsync(

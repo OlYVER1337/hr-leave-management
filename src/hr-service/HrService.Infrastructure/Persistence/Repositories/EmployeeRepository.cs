@@ -38,6 +38,40 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<(IReadOnlyList<Employee> Items, int TotalCount)> ListVisiblePageAsync(
+        Guid actorId,
+        bool includeSelf,
+        bool includeTeam,
+        bool includeAll,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        if (actorId == Guid.Empty || (!includeSelf && !includeTeam && !includeAll))
+            return (Array.Empty<Employee>(), 0);
+
+        // Phạm vi áp trong WHERE; COUNT và OFFSET/FETCH đều chạy trên SQL, không tải toàn bộ bảng.
+        var visible = dbContext.Employees
+            .AsNoTracking()
+            .Where(employee =>
+                includeAll ||
+                (includeSelf && employee.Id == actorId) ||
+                (includeTeam && employee.IsActive && employee.ManagerId == actorId));
+
+        var totalCount = await visible.CountAsync(cancellationToken);
+
+        var items = await visible
+            .Include(employee => employee.Department)
+            .Include(employee => employee.Manager)
+            .OrderBy(employee => employee.FullName)
+            .ThenBy(employee => employee.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return (items, totalCount);
+    }
+
     public Task<Employee?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         return dbContext.Employees

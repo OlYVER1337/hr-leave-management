@@ -47,14 +47,20 @@ public sealed class EmployeeService(
         int pageSize,
         CancellationToken cancellationToken = default)
     {
-        var all = await GetVisibleAsync(actorId, authorization, cancellationToken);
+        var scopes = GetEmployeeReadScopes(actorId, authorization);
         var normalizedPage = Math.Max(1, page);
         var normalizedSize = Math.Clamp(pageSize, 1, 100);
-        var items = all
-            .Skip((normalizedPage - 1) * normalizedSize)
-            .Take(normalizedSize)
-            .ToArray();
-        return new PagedEmployeeResponse(items, all.Count);
+
+        var (items, totalCount) = await employeeRepository.ListVisiblePageAsync(
+            actorId,
+            scopes.IncludeSelf,
+            scopes.IncludeTeam,
+            scopes.IncludeAll,
+            normalizedPage,
+            normalizedSize,
+            cancellationToken);
+
+        return new PagedEmployeeResponse(items.Select(ToResponse).ToArray(), totalCount);
     }
 
     public async Task<EmployeeResponse> GetVisibleByIdAsync(

@@ -11,6 +11,15 @@ public interface IEmployeeRepository
         bool includeTeam,
         bool includeAll,
         CancellationToken cancellationToken = default);
+
+    Task<(IReadOnlyList<Employee> Items, int TotalCount)> ListVisiblePageAsync(
+        Guid actorId,
+        bool includeSelf,
+        bool includeTeam,
+        bool includeAll,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default);
     Task<Employee?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<bool> IsDirectManagerOfAsync(
         Guid managerId,

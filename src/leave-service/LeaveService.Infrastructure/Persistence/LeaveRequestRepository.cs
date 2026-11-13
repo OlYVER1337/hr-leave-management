@@ -205,6 +205,76 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
         return await WithBalancesAsync(requests, cancellationToken);
     }
 
+    public async Task<(IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> Items, int TotalCount)>
+        ListVisiblePageAsync(
+            Guid employeeId,
+            LeaveAccess access,
+            IReadOnlyCollection<Guid> teamEmployeeIds,
+            bool calendarOnly,
+            DateOnly? from,
+            DateOnly? to,
+            int page,
+            int pageSize,
+            CancellationToken cancellationToken = default)
+    {
+        var query = context.LeaveRequests.AsNoTracking().AsQueryable();
+
+        if (!access.CanReadAll)
+        {
+            var self = access.CanReadSelf;
+            var team = access.CanReadTeam && teamEmployeeIds.Count > 0;
+            var teamIds = team ? teamEmployeeIds.ToArray() : Array.Empty<Guid>();
+
+            if (self && team)
+            {
+                query = query.Where(item => item.EmployeeId == employeeId || teamIds.Contains(item.EmployeeId));
+            }
+            else if (team)
+            {
+                query = query.Where(item => teamIds.Contains(item.EmployeeId));
+            }
+            else if (self)
+            {
+                query = query.Where(item => item.EmployeeId == employeeId);
+            }
+            else
+            {
+                query = query.Where(item => false);
+            }
+        }
+
+        if (calendarOnly)
+        {
+            query = query.Where(item =>
+                item.Status == LeaveRequestStatus.Pending ||
+                item.Status == LeaveRequestStatus.Approved);
+        }
+
+        if (from.HasValue)
+        {
+            query = query.Where(item => item.EndDate >= from.Value);
+        }
+
+        if (to.HasValue)
+        {
+            query = query.Where(item => item.StartDate <= to.Value);
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        // Chỉ tải đúng một trang đơn và balances của các đơn trong trang đó.
+        var requests = await query
+            .Include(item => item.YearAllocations)
+            .OrderByDescending(item => item.CreatedAtUtc)
+            .ThenBy(item => item.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToArrayAsync(cancellationToken);
+
+        var rows = await WithBalancesAsync(requests, cancellationToken);
+        return (rows, totalCount);
+    }
+
     public async Task<IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>>
         ListVisibleAsync(
             Guid employeeId,

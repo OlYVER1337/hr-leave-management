@@ -32,6 +32,18 @@ public interface ILeaveRequestRepository
             DateOnly? to,
             CancellationToken cancellationToken = default);
 
+    Task<(IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> Items, int TotalCount)>
+        ListVisiblePageAsync(
+            Guid employeeId,
+            LeaveAccess access,
+            IReadOnlyCollection<Guid> teamEmployeeIds,
+            bool calendarOnly,
+            DateOnly? from,
+            DateOnly? to,
+            int page,
+            int pageSize,
+            CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>>
         ListPendingByEmployeesAsync(
             IReadOnlyCollection<Guid> employeeIds,
