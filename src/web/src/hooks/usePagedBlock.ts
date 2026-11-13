@@ -64,9 +64,6 @@ export function usePagedBlock<T>({
             [blockKey]: reason instanceof Error ? reason.message : 'Không thể tải dữ liệu.',
           };
         });
-      })
-      .finally(() => {
-        // The loading state is derived from the cache/error state above.
       });
 
     return () => { active = false; };
