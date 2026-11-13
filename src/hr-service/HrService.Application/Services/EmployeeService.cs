@@ -536,7 +536,9 @@ public sealed class EmployeeService(
             employee.Role,
             employee.IsActive,
             employee.DepartmentId,
-            employee.ManagerId);
+            employee.ManagerId,
+            employee.DepartmentName,
+            employee.ManagerName);
 
     private static string CreateEmployeeCode(Guid employeeId) =>
         $"EMP-{employeeId:N}"[..20].ToUpperInvariant();
