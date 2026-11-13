@@ -52,6 +52,7 @@ export interface LeavePageQuery {
   search?: string;
   status?: LeaveRequest['status'];
   typeCode?: string;
+  mineOnly?: boolean;
 }
 
 interface LeaveRequestRecord {
@@ -239,7 +240,7 @@ function filterDemoRequests(user: AuthUser, query: LeavePageQuery, pendingOnly =
   );
   const search = query.search?.trim().toLocaleLowerCase('vi-VN') ?? '';
   return state.requests
-    .filter((item) => allowedEmployeeIds.has(item.employeeId))
+    .filter((item) => query.mineOnly ? item.employeeId === user.id : allowedEmployeeIds.has(item.employeeId))
     .filter((item) => !pendingOnly || item.status === 'Pending')
     .filter((item) => !query.status || item.status === query.status)
     .filter((item) => !query.typeCode || item.typeCode === query.typeCode)
@@ -267,16 +268,17 @@ export async function getLeaveRequestsPage(
   }
   try {
     const leaveTypeId = await resolveLeaveTypeId(query.typeCode);
-    const { data, headers } = await leaveApi.get<LeaveRequestRecord[]>('/api/v1/leave-requests', {
+    if (leaveTypeId === -1) return { items: [], totalCount: 0 };
+    const endpoint = query.mineOnly ? '/api/v1/leave-requests/mine' : '/api/v1/leave-requests';
+    const { data, headers } = await leaveApi.get<LeaveRequestRecord[]>(endpoint, {
       params: {
         page,
         pageSize,
         search: query.search || undefined,
         status: query.status,
-        leaveTypeId: leaveTypeId === -1 ? -1 : leaveTypeId,
+        leaveTypeId,
       },
     });
-    if (leaveTypeId === -1) return { items: [], totalCount: 0 };
     return {
       items: await mapApiRequests(data, user),
       totalCount: Number(headers['x-total-count'] ?? data.length),
