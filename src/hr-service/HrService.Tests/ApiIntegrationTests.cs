@@ -156,6 +156,33 @@ public sealed class ApiIntegrationTests
     }
 
     [Fact]
+    public async Task EmployeeSummary_ReturnsCountsForAuthorizedScope()
+    {
+        var actorId = Guid.NewGuid();
+        var employeeRepository = new Mock<IEmployeeRepository>();
+        employeeRepository
+            .Setup(repository => repository.GetVisibleSummaryAsync(
+                actorId, false, false, true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((12, 9, 2));
+
+        using var host = await CreateHostAsync(employeeRepository);
+        using var client = host.GetTestClient();
+        AddPermissionHeaders(client, actorId, """[{"p":"employees.read","s":["All"]}]""");
+
+        var response = await client.GetAsync("/api/v1/employees/summary");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("\"total\":12", body, StringComparison.Ordinal);
+        Assert.Contains("\"active\":9", body, StringComparison.Ordinal);
+        Assert.Contains("\"managers\":2", body, StringComparison.Ordinal);
+        employeeRepository.Verify(
+            repository => repository.GetVisibleSummaryAsync(
+                actorId, false, false, true, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
     public async Task EmployeeList_CombinesSelfAndTeamScopes()
     {
         var actorId = Guid.NewGuid();

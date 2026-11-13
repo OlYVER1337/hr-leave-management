@@ -12,6 +12,13 @@ public interface IEmployeeRepository
         bool includeAll,
         CancellationToken cancellationToken = default);
 
+    Task<(int Total, int Active, int Managers)> GetVisibleSummaryAsync(
+        Guid actorId,
+        bool includeSelf,
+        bool includeTeam,
+        bool includeAll,
+        CancellationToken cancellationToken = default);
+
     Task<(IReadOnlyList<EmployeeReadModel> Items, int TotalCount)> ListVisiblePageAsync(
         Guid actorId,
         bool includeSelf,

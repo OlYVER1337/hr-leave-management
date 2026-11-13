@@ -40,6 +40,25 @@ public sealed class EmployeeService(
         return employees.Select(ToResponse).ToArray();
     }
 
+    public async Task<EmployeeSummaryResponse> GetVisibleSummaryAsync(
+        Guid actorId,
+        EffectiveAuthorization authorization,
+        CancellationToken cancellationToken = default)
+    {
+        var scopes = GetEmployeeReadScopes(actorId, authorization);
+        var counts = await employeeRepository.GetVisibleSummaryAsync(
+            actorId,
+            scopes.IncludeSelf,
+            scopes.IncludeTeam,
+            scopes.IncludeAll,
+            cancellationToken);
+
+        return new EmployeeSummaryResponse(
+            counts.Total,
+            counts.Active,
+            counts.Managers);
+    }
+
     public async Task<PagedEmployeeResponse> GetVisiblePagedAsync(
         Guid actorId,
         EffectiveAuthorization authorization,

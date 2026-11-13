@@ -57,6 +57,21 @@ public sealed class EmployeesController(EmployeeService employeeService) : Contr
         return Ok(paged.Items);
     }
 
+    [HttpGet("summary")]
+    [Authorize(Policy = PermissionPolicies.EmployeesRead)]
+    public async Task<ActionResult<EmployeeSummaryResponse>> GetSummary(
+        CancellationToken cancellationToken)
+    {
+        var actorId = AuthorizationClaimReader.GetEmployeeId(User);
+        if (!actorId.HasValue)
+            return Unauthorized();
+
+        var authorization = AuthorizationClaimReader.Read(User);
+        var summary = await employeeService.GetVisibleSummaryAsync(
+            actorId.Value, authorization, cancellationToken);
+        return Ok(summary);
+    }
+
     [HttpGet("{id:guid}")]
     [Authorize(Policy = PermissionPolicies.EmployeesRead)]
     public async Task<ActionResult<EmployeeResponse>> GetById(
