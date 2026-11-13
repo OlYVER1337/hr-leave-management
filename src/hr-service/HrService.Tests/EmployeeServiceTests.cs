@@ -45,6 +45,75 @@ public sealed class EmployeeServiceTests
     }
 
     [Fact]
+    public async Task GetVisibleOverviewPagedAsync_ReturnsPageAndScopedSummary()
+    {
+        var actorId = Guid.NewGuid();
+        var employee = CreateEmployee(Guid.NewGuid(), actorId);
+        var repository = new Mock<IEmployeeRepository>();
+        repository
+            .Setup(item => item.ListVisiblePageAsync(
+                actorId,
+                true,
+                true,
+                false,
+                null,
+                null,
+                null,
+                null,
+                "fullName",
+                false,
+                1,
+                10,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(((IReadOnlyList<EmployeeReadModel>)[
+                new EmployeeReadModel(
+                    employee.Id,
+                    employee.Code,
+                    employee.FullName,
+                    employee.Email,
+                    employee.Role,
+                    employee.HireDate,
+                    employee.IsActive,
+                    employee.DepartmentId,
+                    employee.Department.Name,
+                    employee.ManagerId,
+                    null)
+            ], 1));
+        repository
+            .Setup(item => item.GetVisibleSummaryAsync(
+                actorId, true, true, false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Total: 4, Active: 3, Managers: 1));
+        var authorization = new EffectiveAuthorization(
+        [
+            new EffectivePermission("employees.read", ["Self"]),
+            new EffectivePermission("employees.read", ["Team"])
+        ]);
+        var service = CreateService(repository);
+
+        var overview = await service.GetVisibleOverviewPagedAsync(
+            actorId,
+            authorization,
+            1,
+            10,
+            null,
+            null,
+            null,
+            null,
+            "fullName",
+            "asc");
+
+        var item = Assert.Single(overview.Items);
+        Assert.Equal(employee.Id, item.Id);
+        Assert.Equal(1, overview.TotalCount);
+        Assert.Equal(new EmployeeSummaryResponse(4, 3, 1), overview.Summary);
+        repository.Verify(item => item.ListVisiblePageAsync(
+            actorId, true, true, false, null, null, null, null,
+            "fullName", false, 1, 10, It.IsAny<CancellationToken>()), Times.Once);
+        repository.Verify(item => item.GetVisibleSummaryAsync(
+            actorId, true, true, false, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task GetVisibleAsync_RejectsAuthorizationWithoutSupportedReadScope()
     {
         var actorId = Guid.NewGuid();
