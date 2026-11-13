@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PagedResult } from '../services/hrService';
 
-// Mỗi request tải hai trang UI. Chuyển giữa hai trang dùng cùng block đã cache.
-const PAGES_PER_BLOCK = 2;
+// Mỗi request tải tối đa 2 trang UI nhưng không vượt giới hạn 100 bản ghi của API.
+const MAX_PAGES_PER_BLOCK = 2;
+const MAX_API_PAGE_SIZE = 100;
 const MAX_CACHED_BLOCKS = 4;
-const MAX_PAGE_SIZE = 100;
 
 export function usePagedBlock<T>({
   page,
@@ -30,11 +30,17 @@ export function usePagedBlock<T>({
 
   const normalizedPage = Number.isFinite(page) ? Math.max(1, Math.floor(page)) : 1;
   const normalizedPageSize = Number.isFinite(pageSize)
-    ? Math.min(MAX_PAGE_SIZE, Math.max(1, Math.floor(pageSize)))
+    ? Math.min(MAX_API_PAGE_SIZE, Math.max(1, Math.floor(pageSize)))
     : 1;
-  const blockIndex = Math.floor((normalizedPage - 1) / PAGES_PER_BLOCK);
+  // A UI page size of 100 must use one page per block; otherwise the second
+  // UI page would require 200 records and be silently truncated by the API.
+  const pagesPerBlock = Math.min(
+    MAX_PAGES_PER_BLOCK,
+    Math.max(1, Math.floor(MAX_API_PAGE_SIZE / normalizedPageSize)),
+  );
+  const blockIndex = Math.floor((normalizedPage - 1) / pagesPerBlock);
   const requestPage = blockIndex + 1;
-  const requestPageSize = Math.min(normalizedPageSize * PAGES_PER_BLOCK, MAX_PAGE_SIZE);
+  const requestPageSize = normalizedPageSize * pagesPerBlock;
   const cacheNamespace = `${refreshToken}|${queryKey}|${normalizedPageSize}|`;
   const blockKey = `${cacheNamespace}${blockIndex}`;
 
@@ -50,7 +56,9 @@ export function usePagedBlock<T>({
 
     let request = inFlightRef.current.get(blockKey);
     if (!request) {
-      request = loadRef.current(requestPage, requestPageSize);
+      request = Promise.resolve().then(() =>
+        loadRef.current(requestPage, requestPageSize),
+      );
       inFlightRef.current.set(blockKey, request);
     }
 
@@ -68,18 +76,18 @@ export function usePagedBlock<T>({
           return { ...retained, [blockKey]: result };
         });
 
-        // Count is stored per filter/page-size namespace, not inferred from
-        // object insertion order or whichever block happened to load last.
+        // Keep the count for the active filter namespace independently from
+        // block insertion order, eviction, or the currently selected page.
         setKnownCounts((current) => ({
-          ...Object.fromEntries(
-            Object.entries(current).filter(([key]) => key === cacheNamespace),
-          ),
           [cacheNamespace]: result.totalCount,
         }));
 
         setErrors((current) => {
-          const next = { ...current };
-          delete next[blockKey];
+          const next = Object.fromEntries(
+            Object.entries(current).filter(([key]) =>
+              key.startsWith(cacheNamespace) && key !== blockKey,
+            ),
+          );
           return next;
         });
       })
@@ -106,11 +114,13 @@ export function usePagedBlock<T>({
   }, [blockKey, cacheNamespace, requestPage, requestPageSize]);
 
   const block = blocks[blockKey];
-  const offsetInBlock = ((normalizedPage - 1) % PAGES_PER_BLOCK) * normalizedPageSize;
+  const offsetInBlock = ((normalizedPage - 1) % pagesPerBlock) * normalizedPageSize;
+  const hasTotalCount = Object.prototype.hasOwnProperty.call(knownCounts, cacheNamespace);
 
   return {
     items: block?.items.slice(offsetInBlock, offsetInBlock + normalizedPageSize) ?? [],
     totalCount: knownCounts[cacheNamespace] ?? 0,
+    hasTotalCount,
     loading: !block && !errors[blockKey],
     error: errors[blockKey] || '',
   };
