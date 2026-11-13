@@ -77,20 +77,23 @@ public sealed class EmployeeServiceTests
                 1,
                 10,
                 It.IsAny<CancellationToken>()))
-            .ReturnsAsync(((IReadOnlyList<EmployeeReadModel>)[
-                new EmployeeReadModel(
-                    employee.Id,
-                    employee.Code,
-                    employee.FullName,
-                    employee.Email,
-                    employee.Role,
-                    employee.HireDate,
-                    employee.IsActive,
-                    employee.DepartmentId,
-                    employee.Department.Name,
-                    employee.ManagerId,
-                    null)
-            ], 1));
+            .ReturnsAsync((
+                Items: (IReadOnlyList<EmployeeReadModel>)new[]
+                {
+                    new EmployeeReadModel(
+                        employee.Id,
+                        employee.Code,
+                        employee.FullName,
+                        employee.Email,
+                        employee.Role,
+                        employee.HireDate,
+                        employee.IsActive,
+                        employee.DepartmentId,
+                        employee.Department!.Name,
+                        employee.ManagerId,
+                        null)
+                },
+                TotalCount: 1));
         repository
             .Setup(item => item.GetVisibleSummaryAsync(
                 actorId, true, true, false, It.IsAny<CancellationToken>()))
