@@ -17,8 +17,21 @@ public interface IEmployeeRepository
         bool includeSelf,
         bool includeTeam,
         bool includeAll,
+        string? search,
+        Role? role,
+        bool? isActive,
+        int? departmentId,
+        string sortBy,
+        bool descending,
         int page,
         int pageSize,
+        CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<EmployeeReadModel>> ListVisibleByIdsAsync(
+        Guid actorId,
+        bool includeSelf,
+        bool includeTeam,
+        bool includeAll,
+        IReadOnlyCollection<Guid> employeeIds,
         CancellationToken cancellationToken = default);
     Task<Employee?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<bool> IsDirectManagerOfAsync(

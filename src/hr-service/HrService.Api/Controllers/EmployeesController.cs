@@ -14,9 +14,15 @@ public sealed class EmployeesController(EmployeeService employeeService) : Contr
     [HttpGet]
     [Authorize(Policy = PermissionPolicies.EmployeesRead)]
     public async Task<ActionResult<IReadOnlyList<EmployeeResponse>>> GetAll(
-        [FromQuery] int? page,
-        [FromQuery] int? pageSize,
-        CancellationToken cancellationToken)
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? search = null,
+        [FromQuery] string? role = null,
+        [FromQuery] bool? isActive = null,
+        [FromQuery] int? departmentId = null,
+        [FromQuery] string? sortBy = "fullName",
+        [FromQuery] string? sortDirection = "asc",
+        CancellationToken cancellationToken = default)
     {
         var actorId = AuthorizationClaimReader.GetEmployeeId(User);
         if (!actorId.HasValue)
@@ -24,14 +30,18 @@ public sealed class EmployeesController(EmployeeService employeeService) : Contr
 
         var authorization = AuthorizationClaimReader.Read(User);
 
-        // Không truyền page/pageSize: giữ nguyên hành vi cũ, trả toàn bộ danh sách trong phạm vi.
-        if (page is null && pageSize is null)
-        {
-            return Ok(await employeeService.GetVisibleAsync(actorId.Value, authorization, cancellationToken));
-        }
-
         var paged = await employeeService.GetVisiblePagedAsync(
-            actorId.Value, authorization, page ?? 1, pageSize ?? 20, cancellationToken);
+            actorId.Value,
+            authorization,
+            page,
+            pageSize,
+            search,
+            role,
+            isActive,
+            departmentId,
+            sortBy,
+            sortDirection,
+            cancellationToken);
         Response.Headers["X-Total-Count"] = paged.TotalCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
         return Ok(paged.Items);
     }

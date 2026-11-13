@@ -12,6 +12,27 @@ namespace HrService.Api.Controllers;
 [Route("api/v1/lookup/employees")]
 public sealed class EmployeeLookupController(EmployeeService employeeService) : ControllerBase
 {
+    [HttpPost("batch")]
+    [Authorize(Policy = PermissionPolicies.EmployeesRead)]
+    public async Task<ActionResult<IReadOnlyList<EmployeeLookupResponse>>> GetBatch(
+        [FromBody] Guid[] ids,
+        CancellationToken cancellationToken)
+    {
+        var requesterId = GetRequesterId();
+        if (!requesterId.HasValue)
+            return Unauthorized();
+
+        if (ids.Length > 100)
+            return BadRequest(new { error = "At most 100 employee IDs can be requested at once." });
+
+        var employees = await employeeService.GetLookupsAsync(
+            ids,
+            requesterId.Value,
+            AuthorizationClaimReader.Read(User),
+            cancellationToken);
+        return Ok(employees);
+    }
+
     [HttpGet("{id:guid}")]
     [Authorize(Policy = PermissionPolicies.EmployeesRead)]
     public async Task<ActionResult<EmployeeLookupResponse>> GetById(

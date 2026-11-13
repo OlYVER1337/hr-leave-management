@@ -45,22 +45,72 @@ public sealed class EmployeeService(
         EffectiveAuthorization authorization,
         int page,
         int pageSize,
+        string? search,
+        string? role,
+        bool? isActive,
+        int? departmentId,
+        string? sortBy,
+        string? sortDirection,
         CancellationToken cancellationToken = default)
     {
         var scopes = GetEmployeeReadScopes(actorId, authorization);
         var normalizedPage = Math.Max(1, page);
         var normalizedSize = Math.Clamp(pageSize, 1, 100);
+        Role? roleFilter = null;
+        if (!string.IsNullOrWhiteSpace(role))
+        {
+            if (!Enum.TryParse<Role>(role, ignoreCase: true, out var parsedRole) || !Enum.IsDefined(parsedRole))
+                throw Problems.Invalid("role", "Role must be HR, Manager, or Employee.");
+            roleFilter = parsedRole;
+        }
 
+        var descending = string.Equals(sortDirection, "desc", StringComparison.OrdinalIgnoreCase);
         var (items, totalCount) = await employeeRepository.ListVisiblePageAsync(
             actorId,
             scopes.IncludeSelf,
             scopes.IncludeTeam,
             scopes.IncludeAll,
+            search,
+            roleFilter,
+            isActive,
+            departmentId,
+            sortBy ?? "fullName",
+            descending,
             normalizedPage,
             normalizedSize,
             cancellationToken);
 
         return new PagedEmployeeResponse(items.Select(item => ToResponse(item)).ToArray(), totalCount);
+    }
+
+    public async Task<IReadOnlyList<EmployeeLookupResponse>> GetLookupsAsync(
+        IReadOnlyCollection<Guid> employeeIds,
+        Guid requesterId,
+        EffectiveAuthorization authorization,
+        CancellationToken cancellationToken = default)
+    {
+        var scopes = GetEmployeeReadScopes(requesterId, authorization);
+        if (employeeIds.Count > 100)
+            throw Problems.Invalid("ids", "At most 100 employee IDs can be requested at once.");
+
+        var employees = await employeeRepository.ListVisibleByIdsAsync(
+            requesterId,
+            scopes.IncludeSelf,
+            scopes.IncludeTeam,
+            scopes.IncludeAll,
+            employeeIds,
+            cancellationToken);
+
+        return employees.Select(employee => new EmployeeLookupResponse(
+            employee.Id,
+            employee.Code,
+            employee.FullName,
+            employee.Role.ToString(),
+            employee.IsActive,
+            employee.DepartmentId,
+            employee.ManagerId,
+            employee.DepartmentName,
+            employee.ManagerName)).ToArray();
     }
 
     public async Task<EmployeeResponse> GetVisibleByIdAsync(

@@ -43,6 +43,12 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
         bool includeSelf,
         bool includeTeam,
         bool includeAll,
+        string? search,
+        Role? role,
+        bool? isActive,
+        int? departmentId,
+        string sortBy,
+        bool descending,
         int page,
         int pageSize,
         CancellationToken cancellationToken = default)
@@ -50,20 +56,56 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
         if (actorId == Guid.Empty || (!includeSelf && !includeTeam && !includeAll))
             return (Array.Empty<EmployeeReadModel>(), 0);
 
-        var visible = dbContext.Employees
+        var query = dbContext.Employees
             .AsNoTracking()
             .Where(employee =>
                 includeAll ||
                 (includeSelf && employee.Id == actorId) ||
                 (includeTeam && employee.IsActive && employee.ManagerId == actorId));
 
-        var totalCount = await visible.CountAsync(cancellationToken);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(employee =>
+                employee.FullName.Contains(term) ||
+                employee.Code.Contains(term) ||
+                employee.Email.Contains(term) ||
+                (employee.Department != null && employee.Department.Name.Contains(term)));
+        }
 
-        // SELECT đúng các cột cần; không kéo PasswordHash và các cột thừa của Manager/Department.
-        var items = await visible
-            .OrderBy(employee => employee.FullName)
+        if (role.HasValue)
+            query = query.Where(employee => employee.Role == role.Value);
+        if (isActive.HasValue)
+            query = query.Where(employee => employee.IsActive == isActive.Value);
+        if (departmentId.HasValue)
+            query = query.Where(employee => employee.DepartmentId == departmentId.Value);
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var offset = ((long)page - 1L) * pageSize;
+        if (offset >= totalCount)
+            return (Array.Empty<EmployeeReadModel>(), totalCount);
+
+        var ordered = (sortBy.ToLowerInvariant(), descending) switch
+        {
+            ("code", false) => query.OrderBy(employee => employee.Code),
+            ("code", true) => query.OrderByDescending(employee => employee.Code),
+            ("departmentname", false) => query.OrderBy(employee => employee.Department != null ? employee.Department.Name : string.Empty),
+            ("departmentname", true) => query.OrderByDescending(employee => employee.Department != null ? employee.Department.Name : string.Empty),
+            ("role", false) => query.OrderBy(employee => employee.Role),
+            ("role", true) => query.OrderByDescending(employee => employee.Role),
+            ("managername", false) => query.OrderBy(employee => employee.Manager != null ? employee.Manager.FullName : string.Empty),
+            ("managername", true) => query.OrderByDescending(employee => employee.Manager != null ? employee.Manager.FullName : string.Empty),
+            ("hiredate", false) => query.OrderBy(employee => employee.HireDate),
+            ("hiredate", true) => query.OrderByDescending(employee => employee.HireDate),
+            ("isactive", false) => query.OrderBy(employee => employee.IsActive),
+            ("isactive", true) => query.OrderByDescending(employee => employee.IsActive),
+            ("fullname", true) => query.OrderByDescending(employee => employee.FullName),
+            _ => query.OrderBy(employee => employee.FullName)
+        };
+
+        var items = await ordered
             .ThenBy(employee => employee.Id)
-            .Skip((page - 1) * pageSize)
+            .Skip((int)offset)
             .Take(pageSize)
             .Select(employee => new EmployeeReadModel(
                 employee.Id,
@@ -80,6 +122,42 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
             .ToListAsync(cancellationToken);
 
         return (items, totalCount);
+    }
+
+    public async Task<IReadOnlyList<EmployeeReadModel>> ListVisibleByIdsAsync(
+        Guid actorId,
+        bool includeSelf,
+        bool includeTeam,
+        bool includeAll,
+        IReadOnlyCollection<Guid> employeeIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (actorId == Guid.Empty || employeeIds.Count == 0 ||
+            (!includeSelf && !includeTeam && !includeAll))
+            return Array.Empty<EmployeeReadModel>();
+
+        var ids = employeeIds.Distinct().Take(100).ToArray();
+        return await dbContext.Employees
+            .AsNoTracking()
+            .Where(employee =>
+                ids.Contains(employee.Id) &&
+                (includeAll ||
+                 (includeSelf && employee.Id == actorId) ||
+                 (includeTeam && employee.IsActive && employee.ManagerId == actorId)))
+            .OrderBy(employee => employee.FullName)
+            .Select(employee => new EmployeeReadModel(
+                employee.Id,
+                employee.Code,
+                employee.FullName,
+                employee.Email,
+                employee.Role,
+                employee.HireDate,
+                employee.IsActive,
+                employee.DepartmentId,
+                employee.Department != null ? employee.Department.Name : string.Empty,
+                employee.ManagerId,
+                employee.Manager != null ? employee.Manager.FullName : null))
+            .ToListAsync(cancellationToken);
     }
 
     public Task<Employee?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)

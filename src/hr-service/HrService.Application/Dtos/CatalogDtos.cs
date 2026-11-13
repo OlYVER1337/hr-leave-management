@@ -48,4 +48,6 @@ public sealed record EmployeeLookupResponse(
     string Role,
     bool IsActive,
     int DepartmentId,
-    Guid? ManagerId);
+    Guid? ManagerId,
+    string DepartmentName,
+    string? ManagerName);
