@@ -32,6 +32,35 @@ public sealed class ApiIntegrationTests
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("?page=1")]
+    [InlineData("?pageSize=10")]
+    [InlineData("?page=0&pageSize=10")]
+    [InlineData("?page=1&pageSize=101")]
+    public async Task EmployeeList_RequiresValidPageAndPageSize(string query)
+    {
+        var employeeRepository = new Mock<IEmployeeRepository>();
+        using var host = await CreateHostAsync(employeeRepository);
+        using var client = host.GetTestClient();
+        AddPermissionHeaders(
+            client,
+            Guid.NewGuid(),
+            """[{"p":"employees.read","s":["All"]}]""");
+
+        var response = await client.GetAsync($"/api/v1/employees{query}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        employeeRepository.Verify(
+            repository => repository.ListVisiblePageAsync(
+                It.IsAny<Guid>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(),
+                It.IsAny<string?>(), It.IsAny<HrService.Domain.Entities.Role?>(),
+                It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<string>(),
+                It.IsAny<bool>(), It.IsAny<int>(), It.IsAny<int>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
     [Fact]
     public async Task EmployeeList_RejectsLegacyHrRoleWithoutPermissionClaim()
     {
