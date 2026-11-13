@@ -45,6 +45,36 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
         return rows.Select(row => row.Request.Id).ToHashSet();
     }
 
+    private async Task<bool> CanReadByIdAsync(
+        Guid actor,
+        Guid requestId,
+        LeaveAccess access,
+        IReadOnlyCollection<Guid>? team = null)
+    {
+        await using var context = _fixture.CreateContext();
+        var result = await new LeaveRequestRepository(context).GetVisibleByIdAsync(
+            actor, requestId, access, team ?? Array.Empty<Guid>());
+        return result is not null;
+    }
+
+    [LeaveSqlFact]
+    public async Task GetVisibleById_EnforcesSelfTeamAndAllScopes()
+    {
+        var manager = Guid.NewGuid();
+        var teamMember = Guid.NewGuid();
+        var otherEmployee = Guid.NewGuid();
+        var ownRequest = await CreateAsync(manager, null, new DateOnly(2031, 1, 1), new DateOnly(2031, 1, 1));
+        var teamRequest = await CreateAsync(teamMember, Guid.NewGuid(), new DateOnly(2031, 1, 2), new DateOnly(2031, 1, 2));
+        var movedRequest = await CreateAsync(otherEmployee, manager, new DateOnly(2031, 1, 3), new DateOnly(2031, 1, 3));
+
+        var managerAccess = ManagerAccess();
+        Assert.True(await CanReadByIdAsync(manager, ownRequest.Id, managerAccess, [teamMember]));
+        Assert.True(await CanReadByIdAsync(manager, teamRequest.Id, managerAccess, [teamMember]));
+        Assert.False(await CanReadByIdAsync(manager, movedRequest.Id, managerAccess, [teamMember]));
+        Assert.True(await CanReadByIdAsync(manager, movedRequest.Id, GlobalAccess()));
+        Assert.False(await CanReadByIdAsync(manager, teamRequest.Id, TeamOnlyAccess(), []));
+    }
+
     private static LeaveAccess ManagerAccess() =>
         new([
             new LeavePermissionGrant("leaves.read", ["Self", "Team"]),
@@ -169,6 +199,33 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
         Assert.Contains(approved.Id, calendar);
         Assert.DoesNotContain(rejected.Id, calendar);
         Assert.DoesNotContain(cancelled.Id, calendar);
+    }
+
+    [LeaveSqlFact]
+    public async Task TeamDecision_RequiresLiveManagerVerificationAndNeverUsesApproverSnapshot()
+    {
+        var manager = Guid.NewGuid();
+        var employee = Guid.NewGuid();
+        var request = await CreateAsync(
+            employee, manager, new DateOnly(2031, 2, 1), new DateOnly(2031, 2, 1));
+
+        await using (var context = _fixture.CreateContext())
+        {
+            var repository = new LeaveRequestRepository(context);
+            await Assert.ThrowsAsync<LeaveForbiddenException>(() => repository.TransitionAsync(
+                request.Id,
+                manager,
+                ManagerAccess(),
+                LeaveRequestStatus.Approved,
+                null,
+                DateTime.UtcNow));
+        }
+
+        await using var verifyContext = _fixture.CreateContext();
+        var persisted = await verifyContext.LeaveRequests.FindAsync(request.Id);
+        Assert.NotNull(persisted);
+        Assert.Equal(LeaveRequestStatus.Pending, persisted!.Status);
+        Assert.Equal(manager, persisted.ApproverId);
     }
 
     [LeaveSqlFact]
