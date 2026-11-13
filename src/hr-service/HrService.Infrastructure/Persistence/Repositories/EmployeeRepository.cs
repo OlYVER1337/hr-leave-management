@@ -53,31 +53,8 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
         int pageSize,
         CancellationToken cancellationToken = default)
     {
-        if (actorId == Guid.Empty || (!includeSelf && !includeTeam && !includeAll))
-            return (Array.Empty<EmployeeReadModel>(), 0);
-
-        IQueryable<Employee> query = dbContext.Employees.AsNoTracking();
-
-        // Branch the unrestricted scope in application code. Avoid an always-present
-        // "includeAll OR ..." predicate that can make SQL Server's plan less selective.
-        if (!includeAll)
-        {
-            if (includeSelf && includeTeam)
-            {
-                query = query.Where(employee =>
-                    employee.Id == actorId ||
-                    (employee.IsActive && employee.ManagerId == actorId));
-            }
-            else if (includeSelf)
-            {
-                query = query.Where(employee => employee.Id == actorId);
-            }
-            else
-            {
-                query = query.Where(employee =>
-                    employee.IsActive && employee.ManagerId == actorId);
-            }
-        }
+        IQueryable<Employee> query = BuildVisibleQuery(
+            actorId, includeSelf, includeTeam, includeAll);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -138,6 +115,31 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
             .ToListAsync(cancellationToken);
 
         return (items, totalCount);
+    }
+
+    public async Task<(int Total, int Active, int Managers)> GetVisibleSummaryAsync(
+        Guid actorId,
+        bool includeSelf,
+        bool includeTeam,
+        bool includeAll,
+        CancellationToken cancellationToken = default)
+    {
+        // Group by a real column so SQL Server can aggregate the scoped rows in one query.
+        // The result is at most two rows (active/inactive), regardless of employee count.
+        var groups = await BuildVisibleQuery(actorId, includeSelf, includeTeam, includeAll)
+            .GroupBy(employee => employee.IsActive)
+            .Select(group => new
+            {
+                IsActive = group.Key,
+                Count = group.Count(),
+                ManagerCount = group.Count(employee => employee.Role == Role.Manager)
+            })
+            .ToListAsync(cancellationToken);
+
+        return (
+            groups.Sum(group => group.Count),
+            groups.Where(group => group.IsActive).Sum(group => group.Count),
+            groups.Where(group => group.IsActive).Sum(group => group.ManagerCount));
     }
 
     public async Task<IReadOnlyList<EmployeeReadModel>> ListVisibleByIdsAsync(
@@ -354,6 +356,40 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
         return dbContext.Employees
             .AsNoTracking()
             .AnyAsync(employee => employee.ManagerId == managerId, cancellationToken);
+    }
+
+    private IQueryable<Employee> BuildVisibleQuery(
+        Guid actorId,
+        bool includeSelf,
+        bool includeTeam,
+        bool includeAll)
+    {
+        var query = dbContext.Employees.AsNoTracking();
+        if (actorId == Guid.Empty || (!includeSelf && !includeTeam && !includeAll))
+            return query.Where(_ => false);
+
+        // Branch the unrestricted scope in application code. Avoid an always-present
+        // "includeAll OR ..." predicate that can make SQL Server's plan less selective.
+        if (!includeAll)
+        {
+            if (includeSelf && includeTeam)
+            {
+                query = query.Where(employee =>
+                    employee.Id == actorId ||
+                    (employee.IsActive && employee.ManagerId == actorId));
+            }
+            else if (includeSelf)
+            {
+                query = query.Where(employee => employee.Id == actorId);
+            }
+            else
+            {
+                query = query.Where(employee =>
+                    employee.IsActive && employee.ManagerId == actorId);
+            }
+        }
+
+        return query;
     }
 
     public void Add(Employee employee)
