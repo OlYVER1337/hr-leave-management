@@ -9,7 +9,7 @@ export function Pagination({
   pageCount: number;
   onPageChange: (page: number) => void;
 }) {
-  if (pageCount <= 1) return null;
+  if (pageCount < 1) return null;
   return (
     <nav className="page-number-pagination" aria-label="Phân trang">
       <button type="button" className="icon-button" aria-label="Trang trước" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>

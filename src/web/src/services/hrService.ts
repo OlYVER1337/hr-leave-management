@@ -174,6 +174,34 @@ export async function deleteDepartment(id: number): Promise<void> {
   catch (error) { throw new Error(getApiErrorMessage(error)); }
 }
 
+export async function getMyTeamPage(
+  managerId: string,
+  page: number,
+  pageSize: number,
+  search?: string,
+): Promise<PagedResult<Employee>> {
+  const normalizedPage = Math.max(1, page);
+  const normalizedSize = Math.min(100, Math.max(1, pageSize));
+  if (DEMO_MODE) {
+    const state = loadDemoState();
+    const term = search?.trim().toLocaleLowerCase('vi-VN') ?? '';
+    const visible = state.employees
+      .filter((employee) => employee.managerId === managerId && employee.isActive)
+      .filter((employee) => !term || [
+        employee.fullName, employee.code, employee.email, employee.departmentName ?? '',
+      ].some((value) => value.toLocaleLowerCase('vi-VN').includes(term)))
+      .sort((left, right) => left.fullName.localeCompare(right.fullName));
+    const offset = (normalizedPage - 1) * normalizedSize;
+    return { items: visible.slice(offset, offset + normalizedSize), totalCount: visible.length };
+  }
+  try {
+    const { data, headers } = await hrApi.get<Employee[]>('/api/v1/me/team', {
+      params: { page: normalizedPage, pageSize: normalizedSize, search: search || undefined },
+    });
+    return { items: data, totalCount: Number(headers?.['x-total-count'] ?? data.length) };
+  } catch (error) { throw new Error(getApiErrorMessage(error)); }
+}
+
 export async function getMyTeam(managerId: string): Promise<Employee[]> {
   if (DEMO_MODE) {
     return loadDemoState().employees

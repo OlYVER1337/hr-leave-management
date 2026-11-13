@@ -1,56 +1,60 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Eye, Search, Users } from 'lucide-react';
 import { Avatar, EmptyState, formatDate, PageHeader } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { useAuth } from '../contexts';
-import { getMyTeam } from '../services/hrService';
+import { getMyTeamPage } from '../services/hrService';
 import { getApiErrorMessage } from '../services/apiClient';
+import { Pagination } from '../components/Pagination';
+import { usePagedBlock } from '../hooks/usePagedBlock';
 import type { Employee } from '../types';
+
+const pageSizeOptions = [10, 25, 50];
 
 export function ManagerTeamPage() {
   const { user } = useAuth();
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(pageSizeOptions[0]);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
 
   useEffect(() => {
-    let active = true;
-    async function loadTeam() {
+    const handle = window.setTimeout(() => setDebouncedSearch(search), 300);
+    return () => window.clearTimeout(handle);
+  }, [search]);
+
+  const queryKey = JSON.stringify({ managerId: user?.id, search: debouncedSearch, pageSize });
+  const loadBlock = useCallback(
+    (requestPage: number, requestPageSize: number) => {
       if (!user || user.role !== 'Manager') {
-        setEmployees([]);
-        setError('Chỉ quản lý mới có quyền xem danh sách nhân viên phụ trách.');
-        setLoading(false);
-        return;
+        return Promise.resolve({ items: [], totalCount: 0 });
       }
-
-      setLoading(true);
-      setError('');
-      try {
-        const team = await getMyTeam(user.id);
-        if (active) setEmployees(team);
-      } catch (reason) {
-        if (active) setError(getApiErrorMessage(reason));
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-
-    void loadTeam();
-    return () => { active = false; };
-  }, [user]);
-
-  const filteredEmployees = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase('vi-VN');
-    if (!query) return employees;
-    return employees.filter((employee) =>
-      [employee.fullName, employee.code, employee.email, employee.departmentName]
-        .some((value) => value.toLocaleLowerCase('vi-VN').includes(query)),
-    );
-  }, [employees, search]);
-
+      return getMyTeamPage(user.id, requestPage, requestPageSize, debouncedSearch || undefined);
+    },
+    [user, queryKey],
+  );
+  const {
+    items: employees,
+    totalCount,
+    loading,
+    error,
+  } = usePagedBlock<Employee>({
+    page,
+    pageSize,
+    queryKey,
+    refreshToken: 0,
+    load: loadBlock,
+  });
+  const pageCount = Math.max(1, Math.ceil(totalCount / pageSize));
+  const currentPage = Math.min(page, pageCount);
   const departmentsCount = new Set(employees.map((employee) => employee.departmentName)).size;
+  const firstVisible = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const lastVisible = Math.min(currentPage * pageSize, totalCount);
+
+  useEffect(() => {
+    if (page !== currentPage) setPage(currentPage);
+  }, [page, currentPage]);
 
   return <div className="page-stack">
     <PageHeader
@@ -60,12 +64,10 @@ export function ManagerTeamPage() {
     />
 
     <div className="page-summary-row manager-team-summary">
-      <div className="summary-metric"><span>Nhân viên đang phụ trách</span><strong>{employees.length}</strong></div>
-      <div className="summary-metric"><span>Đang hoạt động</span><strong>{employees.filter((employee) => employee.isActive).length}</strong></div>
-      <div className="summary-metric"><span>Phòng ban có nhân viên</span><strong>{departmentsCount}</strong></div>
+      <div className="summary-metric"><span>Tổng nhân viên phụ trách</span><strong>{totalCount}</strong></div>
+      <div className="summary-metric"><span>Đang hoạt động</span><strong>{totalCount}</strong></div>
+      <div className="summary-metric"><span>Phòng ban trên trang này</span><strong>{departmentsCount}</strong></div>
     </div>
-
-    {error && <div className="inline-alert alert-warning" role="alert">{error}</div>}
 
     <section className="panel page-table-panel">
       <div className="table-toolbar">
@@ -75,7 +77,7 @@ export function ManagerTeamPage() {
             placeholder="Tìm tên, email, mã nhân viên, phòng ban…"
             aria-label="Tìm nhân viên phụ trách"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => { setSearch(event.target.value); setPage(1); }}
           />
         </div>
         <span className="table-footer-note"><Users size={14} /> Chỉ nhân viên báo cáo trực tiếp</span>
@@ -84,14 +86,11 @@ export function ManagerTeamPage() {
       {loading ? (
         <div className="table-loading"><span /> Đang tải danh sách nhân viên…</div>
       ) : error ? (
+        <div className="inline-alert alert-warning" role="alert">{error || getApiErrorMessage(error)}</div>
+      ) : employees.length === 0 ? (
         <EmptyState
-          title="Không thể tải danh sách nhân viên"
-          description="Kiểm tra kết nối HR Service hoặc thử đăng nhập lại."
-        />
-      ) : filteredEmployees.length === 0 ? (
-        <EmptyState
-          title={employees.length === 0 ? 'Bạn chưa có nhân viên được phân công' : 'Không tìm thấy nhân viên'}
-          description={employees.length === 0
+          title={totalCount === 0 ? 'Bạn chưa có nhân viên được phân công' : 'Không tìm thấy nhân viên'}
+          description={totalCount === 0
             ? 'Khi HR phân công nhân viên cho bạn, hồ sơ của họ sẽ xuất hiện tại đây.'
             : 'Thử từ khóa khác để tìm trong danh sách nhân viên phụ trách.'}
         />
@@ -103,7 +102,7 @@ export function ManagerTeamPage() {
               <th>Vai trò</th><th>Ngày vào làm</th><th>Trạng thái</th><th />
             </tr></thead>
             <tbody>
-              {filteredEmployees.map((employee) => (
+              {employees.map((employee) => (
                 <tr key={employee.id}>
                   <td><div className="person-cell"><Avatar name={employee.fullName} size="sm" /><div><strong>{employee.fullName}</strong><small>{employee.email}</small></div></div></td>
                   <td><span className="code-pill">{employee.code}</span></td>
@@ -118,12 +117,18 @@ export function ManagerTeamPage() {
           </table>
         </div>
       )}
-      {!loading && employees.length > 0 && (
-        <div className="table-footer">
-          <span aria-live="polite">Đang hiển thị <strong>{filteredEmployees.length}</strong> / <strong>{employees.length}</strong> nhân viên</span>
-          <span className="table-footer-note"><Users size={14} /> Danh sách chỉ đọc</span>
+
+      <div className="table-footer">
+        <span aria-live="polite">Đang hiển thị <strong>{firstVisible}–{lastVisible}</strong> / <strong>{totalCount}</strong> nhân viên</span>
+        <div className="employee-pagination">
+          <label htmlFor="manager-team-page-size">Số dòng</label>
+          <select id="manager-team-page-size" aria-label="Số nhân viên mỗi trang" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}>
+            {pageSizeOptions.map((size) => <option value={size} key={size}>{size}</option>)}
+          </select>
+          <Pagination page={currentPage} pageCount={pageCount} onPageChange={setPage} />
         </div>
-      )}
+        <span className="table-footer-note"><Users size={14} /> Danh sách chỉ đọc</span>
+      </div>
     </section>
 
     {selectedEmployee && (
