@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { ArrowDown, ArrowDownUp, ArrowUp, Building2, ChevronDown, ChevronLeft, ChevronRight, Download, Edit3, Plus, Search, UserCheck, UserMinus, Users } from 'lucide-react';
+import { ArrowDown, ArrowDownUp, ArrowUp, Building2, ChevronDown, Download, Edit3, Plus, Search, UserCheck, UserMinus, Users } from 'lucide-react';
 import { Avatar, EmptyState, formatDate, PageHeader } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { useToast } from '../components/ToastProvider';

@@ -15,6 +15,7 @@ export function Pagination({
       <button type="button" className="icon-button" aria-label="Trang trước" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
         <ChevronLeft size={16} />
       </button>
+      <span className="page-number-count" aria-live="polite">Trang {page} / {pageCount}</span>
       <div className="page-number-list">
         {Array.from({ length: pageCount }, (_, index) => index + 1).map((number) => (
           <button
