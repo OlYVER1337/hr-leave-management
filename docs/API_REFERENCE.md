@@ -89,15 +89,15 @@ hệ thống sẽ bỏ qua Redis và đọc dữ liệu trực tiếp từ SQL.
 
 | Phương thức và Route | Quyền truy cập | Mục đích |
 |---|---|---|
-| `GET /api/v1/leave-requests` | Đã xác thực | Lấy các đơn nghỉ mà người dùng có quyền xem |
-| `GET /api/v1/leave-requests/calendar?from=YYYY-MM-DD&to=YYYY-MM-DD` | Đã xác thực | Lấy dữ liệu đơn nghỉ cho lịch, có thể giới hạn theo khoảng thời gian |
-| `GET /api/v1/leave-requests/{id}` | Đã xác thực | Xem chi tiết đơn nghỉ theo quy tắc phân quyền |
-| `GET /api/v1/leave-requests/mine` | Đã xác thực | Lấy các đơn nghỉ của người dùng hiện tại |
-| `POST /api/v1/leave-requests` | Nhân viên đã xác thực | Gửi đơn xin nghỉ |
-| `GET /api/v1/leave-requests/pending-approval` | Manager, HR | Xem hộp thư các đơn đang chờ phê duyệt |
-| `POST /api/v1/leave-requests/{id}/approve` | Manager hoặc HR được phân công | Phê duyệt đơn nghỉ |
-| `POST /api/v1/leave-requests/{id}/reject` | Manager hoặc HR được phân công | Từ chối đơn nghỉ |
-| `POST /api/v1/leave-requests/{id}/cancel` | Chủ đơn đã xác thực | Hủy đơn nghỉ khi thỏa mãn điều kiện |
+| `GET /api/v1/leave-requests?page=1&pageSize=20` | `leaves.read`: Self, Team hoặc All | Danh sách đơn trong phạm vi được cấp; Team được resolve từ HR theo quan hệ quản lý hiện tại |
+| `GET /api/v1/leave-requests/calendar?from=YYYY-MM-DD&to=YYYY-MM-DD` | `leaves.read`: Self, Team hoặc All | Lịch đơn nghỉ trong phạm vi được cấp; khoảng truy vấn tối đa 62 ngày |
+| `GET /api/v1/leave-requests/{id}` | `leaves.read`: Self, Team hoặc All | Xem chi tiết chỉ khi chủ đơn thuộc phạm vi của người gọi |
+| `GET /api/v1/leave-requests/mine?page=1&pageSize=20` | `leaves.read`: Self hoặc All | Chỉ lấy đơn có EmployeeId bằng người đang đăng nhập |
+| `POST /api/v1/leave-requests` | `leaves.create:Self` | Tạo đơn cho chính người đang đăng nhập |
+| `GET /api/v1/leave-requests/pending-approval?page=1&pageSize=20` | `leaves.decide`: Team hoặc All | Hộp chờ; Team chỉ gồm nhân viên thuộc Manager hiện tại |
+| `POST /api/v1/leave-requests/{id}/approve` | `leaves.decide`: Team hoặc All | Duyệt; Team phải xác minh Manager hiện tại qua HR Service |
+| `POST /api/v1/leave-requests/{id}/reject` | `leaves.decide`: Team hoặc All | Từ chối; Team phải xác minh Manager hiện tại qua HR Service |
+| `POST /api/v1/leave-requests/{id}/cancel` | `leaves.cancel:Self` | Chỉ chủ đơn được hủy khi đơn còn Pending |
 | `GET /api/v1/leave-balances/mine?year=2026` | Đã xác thực | Xem số dư phép của người dùng hiện tại theo từng loại nghỉ |
 
 Hiện tại hệ thống **không có endpoint riêng cho báo cáo hoặc xuất dữ liệu**.
