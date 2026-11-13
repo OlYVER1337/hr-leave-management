@@ -14,7 +14,7 @@ public sealed class LeavePermissionMigrationTests
     [InlineData(nameof(LeaveRequestsController.GetVisible), "permission:leaves.read")]
     [InlineData(nameof(LeaveRequestsController.GetCalendar), "permission:leaves.read")]
     [InlineData(nameof(LeaveRequestsController.GetById), "permission:leaves.read")]
-    [InlineData(nameof(LeaveRequestsController.GetMine), "permission:leaves.read")]
+    [InlineData(nameof(LeaveRequestsController.GetMine), "permission:leaves.read:self-or-all")]
     [InlineData(nameof(LeaveRequestsController.Create), "permission:leaves.create")]
     [InlineData(nameof(LeaveRequestsController.GetPendingApproval), "permission:leaves.decide")]
     [InlineData(nameof(LeaveRequestsController.Approve), "permission:leaves.decide")]
