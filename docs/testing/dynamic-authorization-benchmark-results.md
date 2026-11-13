@@ -166,3 +166,45 @@ File Docker Stats được thu thập từ 11:44:24 đến 11:51:21 ngày 12/11/
 Summary metrics trong tài liệu được chép từ output k6 do người chạy cung cấp trong phiên kiểm thử ngày 12/11/2026. File Docker Stats được dùng cho mục 6. Các JSON k6 được cấu hình xuất qua `REPORT_JSON` vào thư mục host `docs/testing/evidence/dynamic-authorization/`; cần kiểm tra và đưa các file đó vào Git riêng nếu muốn repository chứa raw evidence.
 
 Không lưu access token, mật khẩu SQL Server hoặc file `.env` vào tài liệu/bằng chứng.
+
+
+## 9. Bổ sung báo cáo phân trang — 13/11/2026
+
+### 9.1. Các file JSON mới được push
+
+Commit `b26081799fa3860df923cf2ba53647ba79658a4c` bổ sung 9 file k6 JSON cho 3 nhóm, mỗi nhóm 3 lần chạy ở 100 VU. Các số liệu dưới đây là trung bình số học giữa 3 lần chạy; p50/p95 là trung bình percentile từng lần, không phải percentile tính trên dữ liệu gộp.
+
+| Nhóm được đặt tên trong file | RPS trung bình | P50 trung bình | P95 trung bình | HTTP error rate |
+|---|---:|---:|---:|---:|
+| `nopage` | 58,35 | 1.265,56 ms | 4.363,29 ms | 0% |
+| `paged` | 62,41 | 1.250,21 ms | 3.903,13 ms | 0% |
+| `paged-new-query` | 150,66 | 285,03 ms | 1.851,75 ms | 0% |
+
+Nhóm `paged-new-query` có throughput cao hơn khoảng 141,4% và p95 thấp hơn khoảng 52,6% so với nhóm `paged`. Đây là tín hiệu hiệu năng tích cực cần giữ lại để đối chiếu.
+
+**Không xem các nhóm trên là benchmark nghiệm thu cho HEAD hiện tại.** Các JSON được push chưa chứa Git SHA, PAGE_SIZE và image ID của lần chạy. Ngoài ra, nhóm `nopage` ghi nhận các request không phân trang vẫn thành công (HTTP error rate 0%), trong khi controller ở source hiện tại yêu cầu page/pageSize và phải trả HTTP 400 nếu thiếu. Điều này cho thấy lần chạy `nopage` không dùng đúng API contract đang có trên branch hiện tại, hoặc container chưa được rebuild từ source tương ứng. Không dùng nhóm này làm baseline so sánh chính thức.
+
+Nhóm `paged` và `paged-new-query` cũng chưa thể gán chắc chắn cho cùng một source revision/cùng page size. Vì vậy, chênh lệch 141,4% không chứng minh riêng thay đổi LINQ/query là nguyên nhân; cần chạy lại từ cùng HEAD và cùng image đã build.
+
+### 9.2. Dữ liệu truyền tải
+
+Ước tính từ `data_received / workforce_requests` trong raw JSON:
+
+| Nhóm | Dữ liệu nhận trung bình / workload request |
+|---|---:|
+| `nopage` | khoảng 892 KB |
+| `paged` | khoảng 277 KB |
+| `paged-new-query` | khoảng 278 KB |
+
+Hai nhóm phân trang có payload trung bình gần như tương đương. Điều này gợi ý phần tăng throughput của `paged-new-query` không đến chủ yếu từ việc giảm thêm kích thước response. Tuy nhiên, `data_received` trong raw k6 có cả request setup/warm-up, nên đây chỉ là ước tính trên toàn workload, không phải kích thước response riêng của endpoint.
+
+### 9.3. Điều chỉnh để lần đo kế tiếp có thể tái lập
+
+Script `scripts/load-test/workforce.js` đã được cập nhật:
+
+- PAGE_SIZE luôn hợp lệ, mặc định 50 và chỉ nhận số nguyên từ 1 đến 100.
+- Employees, Leave Requests và Pending Approval đều gửi `page/pageSize`.
+- Setup kiểm tra các list API (bao gồm Manager Team) phải trả HTTP 400 khi bỏ page/pageSize, rồi mới warm-up bằng request phân trang hợp lệ.
+- Raw JSON có `benchmark_metadata`: Git SHA, image tag/ID do người chạy truyền vào, page size, VU, duration, năm dữ liệu và timestamp UTC.
+
+Lần benchmark tiếp theo cần build/recreate hai service từ cùng Git SHA trước khi chạy. So sánh page size 10/50/100 bằng cùng VU, duration và dữ liệu seed; không dùng lần đo không phân trang của binary cũ làm benchmark hiệu năng. Lệnh chạy có trong `dynamic-authorization-validation.md`.
