@@ -98,12 +98,11 @@ public sealed class ApiIntegrationTests
         var employeeRepository = new Mock<IEmployeeRepository>();
         using var host = await CreateHostAsync(employeeRepository);
         using var client = host.GetTestClient();
+        var managerId = Guid.NewGuid();
         AddPermissionHeaders(
             client,
-            Guid.NewGuid(),
+            managerId,
             """[{"p":"employees.read","s":["Team"]}]""");
-
-        var managerId = Guid.NewGuid();
         var response = await client.GetAsync(
             $"/api/v1/lookup/employees/{managerId}/team{query}");
 
