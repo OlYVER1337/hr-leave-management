@@ -23,6 +23,7 @@ export function usePagedBlock<T>({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const blocksRef = useRef(blocks);
   const loadRef = useRef(load);
+  const inFlightRef = useRef(new Map<string, Promise<PagedResult<T>>>());
   blocksRef.current = blocks;
   loadRef.current = load;
 
@@ -38,7 +39,13 @@ export function usePagedBlock<T>({
     let active = true;
     setErrors((current) => ({ ...current, [blockKey]: '' }));
 
-    loadRef.current(requestPage, requestPageSize)
+    let request = inFlightRef.current.get(blockKey);
+    if (!request) {
+      request = loadRef.current(requestPage, requestPageSize);
+      inFlightRef.current.set(blockKey, request);
+    }
+
+    request
       .then((result) => {
         if (!active) return;
 
@@ -64,6 +71,11 @@ export function usePagedBlock<T>({
             [blockKey]: reason instanceof Error ? reason.message : 'Không thể tải dữ liệu.',
           };
         });
+      })
+      .finally(() => {
+        if (inFlightRef.current.get(blockKey) === request) {
+          inFlightRef.current.delete(blockKey);
+        }
       });
 
     return () => { active = false; };
