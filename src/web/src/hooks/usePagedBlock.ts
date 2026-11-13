@@ -21,7 +21,6 @@ export function usePagedBlock<T>({
 }) {
   const [blocks, setBlocks] = useState<Record<string, PagedResult<T>>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [loadingKey, setLoadingKey] = useState<string | null>(null);
   const blocksRef = useRef(blocks);
   const loadRef = useRef(load);
   blocksRef.current = blocks;
@@ -37,7 +36,6 @@ export function usePagedBlock<T>({
     if (blocksRef.current[blockKey]) return;
 
     let active = true;
-    setLoadingKey(blockKey);
     setErrors((current) => ({ ...current, [blockKey]: '' }));
 
     loadRef.current(requestPage, requestPageSize)
@@ -68,7 +66,7 @@ export function usePagedBlock<T>({
         });
       })
       .finally(() => {
-        if (active) setLoadingKey((current) => current === blockKey ? null : current);
+        // The loading state is derived from the cache/error state above.
       });
 
     return () => { active = false; };
