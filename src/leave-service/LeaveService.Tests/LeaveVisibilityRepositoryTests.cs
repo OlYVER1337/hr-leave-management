@@ -63,9 +63,9 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
         var manager = Guid.NewGuid();
         var teamMember = Guid.NewGuid();
         var otherEmployee = Guid.NewGuid();
-        var ownRequest = await CreateAsync(manager, null, new DateOnly(2031, 1, 1), new DateOnly(2031, 1, 1));
-        var teamRequest = await CreateAsync(teamMember, Guid.NewGuid(), new DateOnly(2031, 1, 2), new DateOnly(2031, 1, 2));
-        var movedRequest = await CreateAsync(otherEmployee, manager, new DateOnly(2031, 1, 3), new DateOnly(2031, 1, 3));
+        var ownRequest = await CreateAsync(manager, null, new DateOnly(2030, 1, 1), new DateOnly(2030, 1, 1));
+        var teamRequest = await CreateAsync(teamMember, Guid.NewGuid(), new DateOnly(2030, 1, 2), new DateOnly(2030, 1, 2));
+        var movedRequest = await CreateAsync(otherEmployee, manager, new DateOnly(2030, 1, 3), new DateOnly(2030, 1, 3));
 
         var managerAccess = ManagerAccess();
         Assert.True(await CanReadByIdAsync(manager, ownRequest.Id, managerAccess, [teamMember]));
@@ -207,7 +207,7 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
         var manager = Guid.NewGuid();
         var employee = Guid.NewGuid();
         var request = await CreateAsync(
-            employee, manager, new DateOnly(2031, 2, 1), new DateOnly(2031, 2, 1));
+            employee, manager, new DateOnly(2030, 2, 1), new DateOnly(2030, 2, 1));
 
         await using (var context = _fixture.CreateContext())
         {
