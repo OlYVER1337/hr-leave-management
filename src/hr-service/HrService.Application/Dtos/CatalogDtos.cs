@@ -24,6 +24,10 @@ public sealed record LeaveTypeResponse(
     bool DeductsBalance,
     bool IsActive);
 
+public sealed record LeaveCatalogResponse(
+    IReadOnlyList<LeaveTypeResponse> LeaveTypes,
+    IReadOnlyList<LeavePolicyResponse> LeavePolicies);
+
 public sealed record LeavePolicyRequest(
     int LeaveTypeId,
     int Year,
