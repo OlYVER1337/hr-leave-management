@@ -47,17 +47,25 @@ export function usePagedBlock<T>({
         setBlocks((current) => {
           const matching = Object.entries(current)
             .filter(([key]) => key.startsWith(cacheNamespace))
-            .slice(-MAX_CACHED_BLOCKS + 1);
+            .slice(-(MAX_CACHED_BLOCKS - 1));
 
           return { ...Object.fromEntries(matching), [blockKey]: result };
+        });
+        setErrors((current) => {
+          const next = { ...current };
+          delete next[blockKey];
+          return next;
         });
       })
       .catch((reason: unknown) => {
         if (!active) return;
-        setErrors((current) => ({
-          ...current,
-          [blockKey]: reason instanceof Error ? reason.message : 'Không thể tải dữ liệu.',
-        }));
+        setErrors((current) => {
+          const retained = Object.entries(current).slice(-(MAX_CACHED_BLOCKS - 1));
+          return {
+            ...Object.fromEntries(retained),
+            [blockKey]: reason instanceof Error ? reason.message : 'Không thể tải dữ liệu.',
+          };
+        });
       })
       .finally(() => {
         if (active) setLoadingKey((current) => current === blockKey ? null : current);
@@ -75,7 +83,7 @@ export function usePagedBlock<T>({
   return {
     items: block?.items.slice(offsetInBlock, offsetInBlock + pageSize) ?? [],
     totalCount: block?.totalCount ?? lastKnownBlock?.totalCount ?? 0,
-    loading: !block && loadingKey === blockKey && !errors[blockKey],
+    loading: !block && !errors[blockKey],
     error: errors[blockKey] || '',
   };
 }
