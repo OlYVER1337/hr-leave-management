@@ -4,7 +4,6 @@ import { Avatar, EmptyState, formatDate, PageHeader } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { useAuth } from '../contexts';
 import { getMyTeamPage } from '../services/hrService';
-import { getApiErrorMessage } from '../services/apiClient';
 import { Pagination } from '../components/Pagination';
 import { usePagedBlock } from '../hooks/usePagedBlock';
 import type { Employee } from '../types';
@@ -86,7 +85,7 @@ export function ManagerTeamPage() {
       {loading ? (
         <div className="table-loading"><span /> Đang tải danh sách nhân viên…</div>
       ) : error ? (
-        <div className="inline-alert alert-warning" role="alert">{error || getApiErrorMessage(error)}</div>
+        <div className="inline-alert alert-warning" role="alert">{error}</div>
       ) : employees.length === 0 ? (
         <EmptyState
           title={totalCount === 0 ? 'Bạn chưa có nhân viên được phân công' : 'Không tìm thấy nhân viên'}

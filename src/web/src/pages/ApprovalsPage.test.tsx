@@ -101,7 +101,7 @@ describe('ApprovalsPage', () => {
     });
     expect(mocks.notify).toHaveBeenCalledWith('Đã phê duyệt đơn nghỉ.');
     expect(getApprovalsInboxPage).toHaveBeenCalledWith(manager, expect.objectContaining({ page: 1, pageSize: 20 }));
-    expect(getApprovalsInboxPage).toHaveBeenCalledTimes(expect.any(Number));
+    expect(getApprovalsInboxPage).toHaveBeenCalled();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
@@ -126,10 +126,15 @@ describe('ApprovalsPage', () => {
   it('paginates approval requests and resets to the first page when searching', async () => {
     const user = userEvent.setup();
     const requests = Array.from({ length: 25 }, (_, index) => makePendingRequest(index + 1));
-    const pageResult = async (query: { page: number; pageSize: number }) => ({
-      items: requests.slice((query.page - 1) * query.pageSize, query.page * query.pageSize),
-      totalCount: requests.length,
-    });
+    const pageResult = async (_user: AuthUser, query: { page: number; pageSize: number; search?: string; status?: string }) => {
+      const filtered = requests.filter((item) =>
+        (!query.search || item.id.toLowerCase().includes(query.search.toLowerCase()) || item.reason.toLowerCase().includes(query.search.toLowerCase())) &&
+        (!query.status || item.status === query.status));
+      return {
+        items: filtered.slice((query.page - 1) * query.pageSize, query.page * query.pageSize),
+        totalCount: filtered.length,
+      };
+    };
     vi.mocked(getLeaveRequestsPage).mockImplementation(pageResult);
     vi.mocked(getApprovalsInboxPage).mockImplementation(pageResult);
     render(
@@ -154,16 +159,19 @@ describe('ApprovalsPage', () => {
     const user = userEvent.setup();
     const initialRequests = Array.from({ length: 21 }, (_, index) => makePendingRequest(index + 1));
     const remainingRequests = initialRequests.slice(0, 20);
-    const initialResult = async (query: { page: number; pageSize: number }) => ({
-      items: initialRequests.slice((query.page - 1) * query.pageSize, query.page * query.pageSize),
-      totalCount: initialRequests.length,
-    });
-    const remainingResult = async (query: { page: number; pageSize: number }) => ({
-      items: remainingRequests.slice((query.page - 1) * query.pageSize, query.page * query.pageSize),
-      totalCount: remainingRequests.length,
-    });
-    vi.mocked(getLeaveRequestsPage).mockImplementationOnce(initialResult).mockImplementation(remainingResult);
-    vi.mocked(getApprovalsInboxPage).mockImplementationOnce(initialResult).mockImplementation(remainingResult);
+    let currentRequests = initialRequests;
+    const pageResult = async (_user: AuthUser, query: { page: number; pageSize: number; search?: string; status?: string }) => {
+      const filtered = currentRequests.filter((item) =>
+        (!query.search || item.id.toLowerCase().includes(query.search.toLowerCase()) || item.reason.toLowerCase().includes(query.search.toLowerCase())) &&
+        (!query.status || item.status === query.status));
+      return {
+        items: filtered.slice((query.page - 1) * query.pageSize, query.page * query.pageSize),
+        totalCount: filtered.length,
+      };
+    };
+    vi.mocked(getLeaveRequestsPage).mockImplementation(pageResult);
+    vi.mocked(getApprovalsInboxPage).mockImplementation(pageResult);
+    vi.mocked(decideLeaveRequest).mockImplementation(async () => { currentRequests = remainingRequests; });
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <ApprovalsPage />
