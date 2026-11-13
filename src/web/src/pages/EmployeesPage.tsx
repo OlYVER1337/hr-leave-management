@@ -3,7 +3,7 @@ import { ArrowDown, ArrowDownUp, ArrowUp, Building2, ChevronDown, Download, Edit
 import { Avatar, EmptyState, formatDate, PageHeader } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { useToast } from '../components/ToastProvider';
-import { deactivateEmployee, getDepartments, getEmployeePage, getEmployeeSummary, saveEmployee, type EmployeeInput, type EmployeePageQuery } from '../services/hrService';
+import { deactivateEmployee, getDepartments, getEmployeePage, getEmployeeOverviewPage, saveEmployee, type EmployeeInput, type EmployeePageQuery } from '../services/hrService';
 import { getApiErrorMessage, getRejectedReason } from '../services/apiClient';
 import type { Department, Employee, UserRole } from '../types';
 import { Pagination } from '../components/Pagination';
@@ -60,21 +60,13 @@ export function EmployeesPage() {
   const reloadAuxiliary = useCallback(async () => {
     setAuxiliaryLoading(true);
     setError('');
-    const requests = await Promise.allSettled([
-      getDepartments(),
-      getEmployeeSummary(),
-    ]);
-    if (requests[0].status === 'fulfilled') {
-      setDepartments(requests[0].value);
-    } else {
-      setError(getApiErrorMessage(getRejectedReason(requests[0])));
+    try {
+      setDepartments(await getDepartments());
+    } catch (reason) {
+      setError(getApiErrorMessage(reason));
+    } finally {
+      setAuxiliaryLoading(false);
     }
-    if (requests[1].status === 'fulfilled') {
-      setSummary(requests[1].value);
-    } else {
-      setError((value) => value || getApiErrorMessage(getRejectedReason(requests[1])));
-    }
-    setAuxiliaryLoading(false);
   }, []);
   useEffect(() => { void reloadAuxiliary(); }, [reloadAuxiliary]);
 
@@ -126,11 +118,15 @@ export function EmployeesPage() {
   );
   const queryKey = JSON.stringify(query);
   const loadBlock = useCallback(
-    (requestPage: number, requestPageSize: number) => getEmployeePage({
-      ...query,
-      page: requestPage,
-      pageSize: requestPageSize,
-    }),
+    async (requestPage: number, requestPageSize: number) => {
+      const result = await getEmployeeOverviewPage({
+        ...query,
+        page: requestPage,
+        pageSize: requestPageSize,
+      });
+      setSummary(result.summary);
+      return { items: result.items, totalCount: result.totalCount };
+    },
     [query],
   );
   const {
