@@ -44,6 +44,18 @@ public sealed class LeaveCatalogService(
             : builtInTypes.Where(leaveType => leaveType.IsActive).ToArray();
     }
 
+    public async Task<LeaveCatalogResponse> GetLeaveCatalogAsync(
+        int? year,
+        bool includeInactive,
+        CancellationToken cancellationToken = default)
+    {
+        // DbContext is scoped and cannot execute concurrent operations.
+        // Keep these cache/database reads sequential while exposing one HTTP call.
+        var leaveTypes = await GetLeaveTypesAsync(includeInactive, cancellationToken);
+        var leavePolicies = await GetLeavePoliciesAsync(year, cancellationToken);
+        return new LeaveCatalogResponse(leaveTypes, leavePolicies);
+    }
+
     public async Task<IReadOnlyList<LeaveTypeResponse>> GetAuthoritativeLeaveTypesAsync(
         bool includeInactive,
         CancellationToken cancellationToken = default)
