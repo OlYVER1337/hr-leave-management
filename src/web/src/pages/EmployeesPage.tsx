@@ -51,7 +51,6 @@ export function EmployeesPage() {
       getDepartments(),
       getEmployeePage({ page: 1, pageSize: 1 }),
       getEmployeePage({ page: 1, pageSize: 1, isActive: true }),
-      getEmployeePage({ page: 1, pageSize: 1, role: 'Manager', isActive: true }),
       getEmployeePage({ page: 1, pageSize: 100, role: 'Manager', isActive: true }),
     ]);
     if (requests[0].status === 'fulfilled') setDepartments(requests[0].value);
@@ -60,10 +59,12 @@ export function EmployeesPage() {
     else setError((value) => value || getApiErrorMessage(getRejectedReason(requests[1])));
     if (requests[2].status === 'fulfilled') setSummary((value) => ({ ...value, active: requests[2].value.totalCount }));
     else setError((value) => value || getApiErrorMessage(getRejectedReason(requests[2])));
-    if (requests[3].status === 'fulfilled') setSummary((value) => ({ ...value, managers: requests[3].value.totalCount }));
-    else setError((value) => value || getApiErrorMessage(getRejectedReason(requests[3])));
-    if (requests[4].status === 'fulfilled') setManagerOptions(requests[4].value.items);
-    else setError((value) => value || getApiErrorMessage(getRejectedReason(requests[4])));
+    if (requests[3].status === 'fulfilled') {
+      setSummary((value) => ({ ...value, managers: requests[3].value.totalCount }));
+      setManagerOptions(requests[3].value.items);
+    } else {
+      setError((value) => value || getApiErrorMessage(getRejectedReason(requests[3])));
+    }
     setAuxiliaryLoading(false);
   }
   useEffect(() => { void reloadAuxiliary(); }, []);
@@ -100,13 +101,13 @@ export function EmployeesPage() {
     load: loadBlock,
   });
   const pageCount = Math.max(1, Math.ceil(totalCount / pageSize));
-  const currentPage = Math.min(page, pageCount);
+  const currentPage = hasTotalCount ? Math.min(page, pageCount) : page;
   const pageEmployees = blockEmployees;
   const firstVisibleEmployee = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const lastVisibleEmployee = Math.min(currentPage * pageSize, totalCount);
   useEffect(() => {
-    if (page !== currentPage) setPage(currentPage);
-  }, [page, currentPage]);
+    if (hasTotalCount && page !== currentPage) setPage(currentPage);
+  }, [hasTotalCount, page, currentPage]);
 
   function handleSort(field: EmployeeSortField) {
     setPage(1);
