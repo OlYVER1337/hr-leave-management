@@ -57,7 +57,10 @@ public sealed class EmployeeLookupController(EmployeeService employeeService) : 
     [Authorize(Policy = PermissionPolicies.EmployeesReadTeamOrAll)]
     public async Task<ActionResult<IReadOnlyList<EmployeeLookupResponse>>> GetTeam(
         Guid managerId,
-        CancellationToken cancellationToken)
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? search = null,
+        CancellationToken cancellationToken = default)
     {
         var requesterId = GetRequesterId();
         if (!requesterId.HasValue)
@@ -74,7 +77,19 @@ public sealed class EmployeeLookupController(EmployeeService employeeService) : 
             return Forbid();
         }
 
-        var employees = await employeeService.GetTeamLookupAsync(managerId, cancellationToken);
+        var paged = await employeeService.GetTeamPagedAsync(
+            managerId, page, pageSize, search, cancellationToken);
+        Response.Headers["X-Total-Count"] = paged.TotalCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var employees = paged.Items.Select(employee => new EmployeeLookupResponse(
+            employee.Id,
+            employee.Code,
+            employee.FullName,
+            employee.Role,
+            employee.IsActive,
+            employee.DepartmentId,
+            employee.ManagerId,
+            employee.DepartmentName,
+            employee.ManagerName));
         return Ok(employees);
     }
 

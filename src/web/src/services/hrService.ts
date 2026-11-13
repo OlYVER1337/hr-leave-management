@@ -209,7 +209,7 @@ export async function getMyTeam(managerId: string): Promise<Employee[]> {
       .sort((a, b) => a.fullName.localeCompare(b.fullName));
   }
   try {
-    const { data } = await hrApi.get<Employee[]>('/api/v1/me/team');
+    const { data } = await hrApi.get<Employee[]>('/api/v1/me/team', { params: { page: 1, pageSize: 100 } });
     return data;
   } catch (error) { throw new Error(getApiErrorMessage(error)); }
 }
