@@ -41,7 +41,8 @@ export function usePagedBlock<T>({
   const blockIndex = Math.floor((normalizedPage - 1) / pagesPerBlock);
   const requestPage = blockIndex + 1;
   const requestPageSize = normalizedPageSize * pagesPerBlock;
-  const cacheNamespace = `${refreshToken}|${queryKey}|${normalizedPageSize}|`;
+  const countNamespace = `${queryKey}|${normalizedPageSize}|`;
+  const cacheNamespace = `${refreshToken}|${countNamespace}`;
   const blockKey = `${cacheNamespace}${blockIndex}`;
 
   useEffect(() => {
@@ -79,7 +80,10 @@ export function usePagedBlock<T>({
         // Keep the count for the active filter namespace independently from
         // block insertion order, eviction, or the currently selected page.
         setKnownCounts((current) => ({
-          [cacheNamespace]: result.totalCount,
+          ...Object.fromEntries(
+            Object.entries(current).filter(([key]) => key === countNamespace),
+          ),
+          [countNamespace]: result.totalCount,
         }));
 
         setErrors((current) => {
@@ -115,11 +119,11 @@ export function usePagedBlock<T>({
 
   const block = blocks[blockKey];
   const offsetInBlock = ((normalizedPage - 1) % pagesPerBlock) * normalizedPageSize;
-  const hasTotalCount = Object.prototype.hasOwnProperty.call(knownCounts, cacheNamespace);
+  const hasTotalCount = Object.prototype.hasOwnProperty.call(knownCounts, countNamespace);
 
   return {
     items: block?.items.slice(offsetInBlock, offsetInBlock + normalizedPageSize) ?? [],
-    totalCount: knownCounts[cacheNamespace] ?? 0,
+    totalCount: knownCounts[countNamespace] ?? 0,
     hasTotalCount,
     loading: !block && !errors[blockKey],
     error: errors[blockKey] || '',
