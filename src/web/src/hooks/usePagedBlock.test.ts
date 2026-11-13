@@ -92,7 +92,7 @@ describe('usePagedBlock', () => {
     expect(result.current.items[0]).toBe(101);
   });
 
-  it('does not clamp the selected page before the new query has a count', async () => {
+  it('does not reuse the count from a different filter', async () => {
     const load = vi.fn((page: number, pageSize: number) =>
       Promise.resolve(createPage(page, pageSize)),
     );
@@ -117,8 +117,10 @@ describe('usePagedBlock', () => {
 
   it('keeps the last known count while refreshing the same filter', async () => {
     let resolveRefresh: ((value: PagedResult<number>) => void) | undefined;
+    let loadCount = 0;
     const load = vi.fn((page: number, pageSize: number) => {
-      if (load.mock.calls.length === 1) {
+      loadCount += 1;
+      if (loadCount === 1) {
         return Promise.resolve(createPage(page, pageSize, 45));
       }
       return new Promise<PagedResult<number>>((resolve) => {
