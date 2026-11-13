@@ -58,8 +58,8 @@ public sealed class EmployeeLookupController(EmployeeService employeeService) : 
     [Authorize(Policy = PermissionPolicies.EmployeesReadTeamOrAll)]
     public async Task<ActionResult<IReadOnlyList<EmployeeLookupResponse>>> GetTeam(
         Guid managerId,
-        [FromQuery, Range(1, int.MaxValue)] int page,
-        [FromQuery, Range(1, 100)] int pageSize,
+        [FromQuery, Range(1, int.MaxValue)] int? page,
+        [FromQuery, Range(1, 100)] int? pageSize,
         [FromQuery] string? search = null,
         CancellationToken cancellationToken = default)
     {
@@ -78,8 +78,18 @@ public sealed class EmployeeLookupController(EmployeeService employeeService) : 
             return Forbid();
         }
 
+        if (!IsValidPagination(page, pageSize))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Invalid pagination",
+                Detail = "Both page and pageSize are required. page must be at least 1 and pageSize must be between 1 and 100."
+            });
+        }
+
         var paged = await employeeService.GetTeamPagedAsync(
-            managerId, page, pageSize, search, cancellationToken);
+            managerId, page!.Value, pageSize!.Value, search, cancellationToken);
         Response.Headers["X-Total-Count"] = paged.TotalCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
         var employees = paged.Items.Select(employee => new EmployeeLookupResponse(
             employee.Id,
@@ -102,4 +112,8 @@ public sealed class EmployeeLookupController(EmployeeService employeeService) : 
             ? employeeId
             : null;
     }
+
+    private static bool IsValidPagination(int? page, int? pageSize) =>
+        page.HasValue && page.Value >= 1 &&
+        pageSize.HasValue && pageSize.Value is >= 1 and <= 100;
 }
