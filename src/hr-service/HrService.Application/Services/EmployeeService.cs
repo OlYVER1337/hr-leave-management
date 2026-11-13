@@ -102,6 +102,27 @@ public sealed class EmployeeService(
         return new PagedEmployeeResponse(items.Select(item => ToResponse(item)).ToArray(), totalCount);
     }
 
+    public async Task<EmployeeOverviewResponse> GetVisibleOverviewPagedAsync(
+        Guid actorId,
+        EffectiveAuthorization authorization,
+        int page,
+        int pageSize,
+        string? search,
+        string? role,
+        bool? isActive,
+        int? departmentId,
+        string? sortBy,
+        string? sortDirection,
+        CancellationToken cancellationToken = default)
+    {
+        var paged = await GetVisiblePagedAsync(
+            actorId, authorization, page, pageSize, search, role, isActive,
+            departmentId, sortBy, sortDirection, cancellationToken);
+        var summary = await GetVisibleSummaryAsync(actorId, authorization, cancellationToken);
+
+        return new EmployeeOverviewResponse(paged.Items, paged.TotalCount, summary);
+    }
+
     public async Task<IReadOnlyList<EmployeeLookupResponse>> GetLookupsAsync(
         IReadOnlyCollection<Guid> employeeIds,
         Guid requesterId,
