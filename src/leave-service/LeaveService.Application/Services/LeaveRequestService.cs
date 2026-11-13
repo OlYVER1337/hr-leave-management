@@ -106,6 +106,32 @@ public sealed class LeaveRequestService(
         return requests.Select(item => ToResponse(item.Request, item.Balances)).ToArray();
     }
 
+    public async Task<PagedLeaveRequestResponse> GetMinePagedAsync(
+        Guid employeeId,
+        int page,
+        int pageSize,
+        string? search,
+        string? status,
+        int? leaveTypeId,
+        CancellationToken cancellationToken = default)
+    {
+        if (leaveTypeId is <= 0)
+            throw Invalid("leaveTypeId", "Leave type ID must be a positive integer.");
+
+        var (rows, totalCount) = await repository.ListByEmployeePageAsync(
+            employeeId,
+            ParseStatusFilter(status),
+            leaveTypeId,
+            search,
+            Math.Max(1, page),
+            Math.Clamp(pageSize, 1, 100),
+            cancellationToken);
+
+        return new PagedLeaveRequestResponse(
+            rows.Select(item => ToResponse(item.Request, item.Balances)).ToArray(),
+            totalCount);
+    }
+
     public async Task<LeaveRequestResponse> GetByIdAsync(
         Guid employeeId,
         Guid requestId,

@@ -91,7 +91,12 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
     [HttpGet("mine")]
     [Authorize(Policy = LeavePermissionPolicies.LeavesRead)]
     public async Task<ActionResult<IReadOnlyList<LeaveRequestResponse>>> GetMine(
-        CancellationToken cancellationToken)
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? search = null,
+        [FromQuery] string? status = null,
+        [FromQuery] int? leaveTypeId = null,
+        CancellationToken cancellationToken = default)
     {
         var employeeId = GetCurrentEmployeeId();
         if (!employeeId.HasValue)
@@ -99,8 +104,10 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
             return Unauthorized();
         }
 
-        var requests = await leaveRequestService.GetMineAsync(employeeId.Value, cancellationToken);
-        return Ok(requests);
+        var paged = await leaveRequestService.GetMinePagedAsync(
+            employeeId.Value, page, pageSize, search, status, leaveTypeId, cancellationToken);
+        Response.Headers["X-Total-Count"] = paged.TotalCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return Ok(paged.Items);
     }
 
     [HttpPost]

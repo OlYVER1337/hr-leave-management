@@ -168,6 +168,51 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
         }).ToArray();
     }
 
+    public async Task<(IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> Items, int TotalCount)>
+        ListByEmployeePageAsync(
+            Guid employeeId,
+            LeaveRequestStatus? status,
+            int? leaveTypeId,
+            string? search,
+            int page,
+            int pageSize,
+            CancellationToken cancellationToken = default)
+    {
+        var query = context.LeaveRequests
+            .AsNoTracking()
+            .Where(item => item.EmployeeId == employeeId);
+
+        if (status.HasValue)
+            query = query.Where(item => item.Status == status.Value);
+        if (leaveTypeId.HasValue)
+            query = query.Where(item => item.LeaveTypeId == leaveTypeId.Value);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            if (Guid.TryParse(term, out var requestId))
+                query = query.Where(item => item.Id == requestId || item.Reason.Contains(term));
+            else
+                query = query.Where(item => item.Reason.Contains(term));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var normalizedSize = Math.Clamp(pageSize, 1, 100);
+        var offset = ((long)Math.Max(1, page) - 1L) * normalizedSize;
+        if (offset >= totalCount)
+            return (Array.Empty<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>(), totalCount);
+
+        var requests = await query
+            .Include(item => item.YearAllocations)
+            .OrderByDescending(item => item.CreatedAtUtc)
+            .ThenBy(item => item.Id)
+            .Skip((int)offset)
+            .Take(normalizedSize)
+            .ToArrayAsync(cancellationToken);
+
+        var rows = await WithBalancesAsync(requests, cancellationToken);
+        return (rows, totalCount);
+    }
+
     public async Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)?> GetByIdAsync(
         Guid employeeId,
         Guid requestId,

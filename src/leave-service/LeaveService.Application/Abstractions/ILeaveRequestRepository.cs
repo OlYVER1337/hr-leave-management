@@ -14,6 +14,16 @@ public interface ILeaveRequestRepository
     Task<IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>>
         ListByEmployeeAsync(Guid employeeId, CancellationToken cancellationToken = default);
 
+    Task<(IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> Items, int TotalCount)>
+        ListByEmployeePageAsync(
+            Guid employeeId,
+            LeaveRequestStatus? status,
+            int? leaveTypeId,
+            string? search,
+            int page,
+            int pageSize,
+            CancellationToken cancellationToken = default);
+
     Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)?> GetByIdAsync(
         Guid employeeId,
         Guid requestId,
