@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthUser } from '../types';
-import { getLeaveRequests, getPolicies, restoreBuiltInLeaveType } from './leaveService';
+import { getLeaveRequests, getLeaveRequestsPage, getPolicies, restoreBuiltInLeaveType } from './leaveService';
 
 const mocks = vi.hoisted(() => ({
   hrGet: vi.fn(),
@@ -79,6 +79,70 @@ describe('getLeaveRequests', () => {
     const [request] = await getLeaveRequests(employee);
 
     expect(request.approverName).toBe('Người duyệt không xác định');
+  });
+});
+
+describe('paged leave display lookups', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.hrGet.mockImplementation(async (path: string) => {
+      if (path === '/api/v1/leave-types') {
+        return {
+          data: [{ id: 1, code: 'ANNUAL', name: 'Annual leave', isPaid: true, deductsBalance: true, isActive: true }],
+        };
+      }
+      throw new Error(`Unexpected HR API path: ${path}`);
+    });
+    mocks.hrPost.mockResolvedValue({
+      data: [
+        {
+          id: 'employee-1',
+          code: 'E001',
+          fullName: 'Employee One',
+          role: 'Employee',
+          isActive: true,
+          departmentId: 1,
+          departmentName: 'Kỹ thuật',
+          managerId: 'manager-1',
+          managerName: 'Manager One',
+        },
+        {
+          id: 'manager-1',
+          code: 'M001',
+          fullName: 'Manager One',
+          role: 'Manager',
+          isActive: true,
+          departmentId: 1,
+          departmentName: 'Kỹ thuật',
+          managerId: null,
+          managerName: null,
+        },
+      ],
+    });
+    mocks.leaveGet.mockResolvedValue({ data: [requestRecord], headers: { 'x-total-count': '2' } });
+  });
+
+  it('reuses employee directory and leave-type lookups across pages for the same HR user', async () => {
+    const hrUser: AuthUser = {
+      id: 'hr-pagination-cache',
+      fullName: 'HR User',
+      email: 'hr@example.com',
+      role: 'HR',
+      accessToken: 'test-token',
+    };
+
+    const firstPage = await getLeaveRequestsPage(hrUser, { page: 1, pageSize: 10 });
+    const secondPage = await getLeaveRequestsPage(hrUser, { page: 2, pageSize: 10 });
+
+    expect(firstPage.items[0]).toMatchObject({
+      employeeName: 'Employee One',
+      approverName: 'Manager One',
+      typeCode: 'ANNUAL',
+    });
+    expect(secondPage.items[0].employeeName).toBe('Employee One');
+    expect(mocks.leaveGet).toHaveBeenCalledTimes(2);
+    expect(mocks.hrGet).toHaveBeenCalledTimes(1);
+    expect(mocks.hrPost).toHaveBeenCalledTimes(1);
   });
 });
 
