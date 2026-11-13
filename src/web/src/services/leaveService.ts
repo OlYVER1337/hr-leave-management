@@ -46,6 +46,59 @@ interface EmployeeRecord {
   managerId: string | null;
   managerName: string | null;
 }
+
+// Display metadata is not authorization data. Cache it briefly per signed-in user to
+// avoid repeating HR lookups while navigating adjacent pages.
+const DISPLAY_LOOKUP_CACHE_TTL_MS = 15_000;
+const MAX_EMPLOYEE_DISPLAY_CACHE_ENTRIES = 500;
+const employeeDisplayCache = new Map<string, { value: EmployeeRecord; expiresAt: number }>();
+const employeeDisplayInFlight = new Map<string, Promise<void>>();
+const leaveTypeCache = new Map<boolean, { value: LeaveTypeRecord[]; expiresAt: number }>();
+const leaveTypeInFlight = new Map<boolean, Promise<LeaveTypeRecord[]>>();
+
+function employeeDisplayCacheKey(userId: string, employeeId: string): string {
+  return `${userId}:${employeeId}`;
+}
+
+function cacheEmployeeDisplay(userId: string, employee: EmployeeRecord): void {
+  const key = employeeDisplayCacheKey(userId, employee.id);
+  if (!employeeDisplayCache.has(key) && employeeDisplayCache.size >= MAX_EMPLOYEE_DISPLAY_CACHE_ENTRIES) {
+    const oldestKey = employeeDisplayCache.keys().next().value;
+    if (oldestKey) employeeDisplayCache.delete(oldestKey);
+  }
+
+  employeeDisplayCache.set(key, {
+    value: employee,
+    expiresAt: Date.now() + DISPLAY_LOOKUP_CACHE_TTL_MS,
+  });
+}
+
+async function getCachedLeaveTypes(user: AuthUser): Promise<LeaveTypeRecord[]> {
+  const includeInactive = user.role === 'HR';
+  const cached = leaveTypeCache.get(includeInactive);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  const existingRequest = leaveTypeInFlight.get(includeInactive);
+  if (existingRequest) return existingRequest;
+
+  const request = hrApi
+    .get<LeaveTypeRecord[]>('/api/v1/leave-types', {
+      params: { includeInactive },
+    })
+    .then(({ data }) => {
+      leaveTypeCache.set(includeInactive, {
+        value: data,
+        expiresAt: Date.now() + DISPLAY_LOOKUP_CACHE_TTL_MS,
+      });
+      return data;
+    })
+    .finally(() => {
+      leaveTypeInFlight.delete(includeInactive);
+    });
+
+  leaveTypeInFlight.set(includeInactive, request);
+  return request;
+}
 export interface LeavePageQuery {
   page: number;
   pageSize: number;
@@ -157,9 +210,20 @@ async function getEmployeeDirectory(
   user: AuthUser,
   records: LeaveRequestRecord[],
 ): Promise<Map<string, EmployeeRecord>> {
+  const directory = new Map<string, EmployeeRecord>();
+
   if (user.role === 'Employee') {
-    const { data: currentEmployee } = await hrApi.get<EmployeeRecord>('/api/v1/me');
-    const directory = new Map<string, EmployeeRecord>([[currentEmployee.id, currentEmployee]]);
+    const key = employeeDisplayCacheKey(user.id, user.id);
+    const cached = employeeDisplayCache.get(key);
+    let currentEmployee = cached && cached.expiresAt > Date.now() ? cached.value : undefined;
+
+    if (!currentEmployee) {
+      const { data } = await hrApi.get<EmployeeRecord>('/api/v1/me');
+      currentEmployee = data;
+      cacheEmployeeDisplay(user.id, currentEmployee);
+    }
+
+    directory.set(currentEmployee.id, currentEmployee);
     if (currentEmployee.managerId && currentEmployee.managerName) {
       directory.set(currentEmployee.managerId, {
         ...currentEmployee,
@@ -171,21 +235,64 @@ async function getEmployeeDirectory(
   }
 
   const ids = [...new Set(records.flatMap((record) =>
-    [record.employeeId, record.approverId].filter((id): id is string => Boolean(id)),
+    [record.employeeId, record.approverId]
+      .filter((id): id is string => Boolean(id) && id !== user.id),
   ))];
-  const batches: string[][] = [];
-  for (let index = 0; index < ids.length; index += 100) {
-    batches.push(ids.slice(index, index + 100));
+  const missingIds: string[] = [];
+  const pendingRequests = new Set<Promise<void>>();
+  const now = Date.now();
+
+  for (const id of ids) {
+    const key = employeeDisplayCacheKey(user.id, id);
+    const cached = employeeDisplayCache.get(key);
+    if (cached && cached.expiresAt > now) {
+      directory.set(id, cached.value);
+      continue;
+    }
+
+    const inFlight = employeeDisplayInFlight.get(key);
+    if (inFlight) pendingRequests.add(inFlight);
+    else missingIds.push(id);
   }
 
-  const responses = await Promise.all(batches.map((batch) =>
-    hrApi.post<EmployeeRecord[]>('/api/v1/lookup/employees/batch', batch),
-  ));
-  const directory = new Map<string, EmployeeRecord>();
-  for (const response of responses) {
-    for (const employee of response.data) directory.set(employee.id, employee);
+  const batches: string[][] = [];
+  for (let index = 0; index < missingIds.length; index += 100) {
+    batches.push(missingIds.slice(index, index + 100));
   }
-  // The caller is allowed to identify itself even when employees.read has Team but not Self.
+
+  for (const batch of batches) {
+    const request = hrApi
+      .post<EmployeeRecord[]>('/api/v1/lookup/employees/batch', batch)
+      .then(({ data }) => {
+        for (const employee of data) {
+          cacheEmployeeDisplay(user.id, employee);
+        }
+      });
+
+    const keys = batch.map((id) => employeeDisplayCacheKey(user.id, id));
+    for (const key of keys) employeeDisplayInFlight.set(key, request);
+    pendingRequests.add(request);
+
+    void request.finally(() => {
+      for (const key of keys) {
+        if (employeeDisplayInFlight.get(key) === request) {
+          employeeDisplayInFlight.delete(key);
+        }
+      }
+    }).catch(() => {
+      // The original request is awaited below and owns error propagation.
+    });
+  }
+
+  await Promise.all(pendingRequests);
+
+  // Read from the cache after any in-flight batch has completed.
+  for (const id of ids) {
+    const cached = employeeDisplayCache.get(employeeDisplayCacheKey(user.id, id));
+    if (cached && cached.expiresAt > Date.now()) directory.set(id, cached.value);
+  }
+
+  // The caller may identify itself even when employees.read has Team but not Self.
   directory.set(user.id, {
     id: user.id,
     code: '',
@@ -197,14 +304,16 @@ async function getEmployeeDirectory(
     managerId: null,
     managerName: null,
   });
+
   return directory;
 }
 
 async function mapApiRequests(records: LeaveRequestRecord[], user: AuthUser): Promise<LeaveRequest[]> {
-  const [{ data: leaveTypes }, employees] = await Promise.all([
-    hrApi.get<LeaveTypeRecord[]>('/api/v1/leave-types', { params: { includeInactive: user.role === 'HR' } }),
+  const [leaveTypes, employees] = await Promise.all([
+    getCachedLeaveTypes(user),
     getEmployeeDirectory(user, records),
   ]);
+
   return records.map((record) => {
     const employee = employees.get(record.employeeId);
     const approver = record.approverId ? employees.get(record.approverId) : undefined;
@@ -249,9 +358,9 @@ function filterDemoRequests(user: AuthUser, query: LeavePageQuery, pendingOnly =
     .map(localizeLeaveRequest);
 }
 
-async function resolveLeaveTypeId(typeCode?: string): Promise<number | undefined> {
+async function resolveLeaveTypeId(typeCode: string | undefined, user: AuthUser): Promise<number | undefined> {
   if (!typeCode) return undefined;
-  const { data: types } = await hrApi.get<LeaveTypeRecord[]>('/api/v1/leave-types', { params: { includeInactive: true } });
+  const types = await getCachedLeaveTypes(user);
   return types.find((item) => item.code.toUpperCase() === typeCode.toUpperCase())?.id ?? -1;
 }
 
@@ -267,7 +376,7 @@ export async function getLeaveRequestsPage(
     return { items: filtered.slice(offset, offset + pageSize), totalCount: filtered.length };
   }
   try {
-    const leaveTypeId = await resolveLeaveTypeId(query.typeCode);
+    const leaveTypeId = await resolveLeaveTypeId(query.typeCode, user);
     if (leaveTypeId === -1) return { items: [], totalCount: 0 };
     const endpoint = query.mineOnly ? '/api/v1/leave-requests/mine' : '/api/v1/leave-requests';
     const { data, headers } = await leaveApi.get<LeaveRequestRecord[]>(endpoint, {
