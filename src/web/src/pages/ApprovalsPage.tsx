@@ -6,6 +6,7 @@ import { useToast } from '../components/ToastProvider';
 import {
   decideLeaveRequest,
   getApprovalsInboxPage,
+  getLeaveRequestSummary,
   getLeaveRequestsPage,
 } from '../services/leaveService';
 import { getApiErrorMessage } from '../services/apiClient';
@@ -78,29 +79,13 @@ export function ApprovalsPage() {
     if (!user) return;
     let active = true;
     setSummaryError('');
-    Promise.allSettled([
-      getApprovalsInboxPage(user, { page: 1, pageSize: 1 }),
-      getLeaveRequestsPage(user, { page: 1, pageSize: 1, status: 'Approved' }),
-      getLeaveRequestsPage(user, { page: 1, pageSize: 1 }),
-    ]).then((results) => {
-      if (!active) return;
-      const [pendingResult, approvedResult, totalResult] = results;
-      if (pendingResult.status === 'fulfilled') {
-        setSummary((value) => ({ ...value, pending: pendingResult.value.totalCount }));
-      } else {
-        setSummaryError(getApiErrorMessage(pendingResult.reason));
-      }
-      if (approvedResult.status === 'fulfilled') {
-        setSummary((value) => ({ ...value, approved: approvedResult.value.totalCount }));
-      } else {
-        setSummaryError((value) => value || getApiErrorMessage(approvedResult.reason));
-      }
-      if (totalResult.status === 'fulfilled') {
-        setSummary((value) => ({ ...value, total: totalResult.value.totalCount }));
-      } else {
-        setSummaryError((value) => value || getApiErrorMessage(totalResult.reason));
-      }
-    });
+    getLeaveRequestSummary(user)
+      .then((result) => {
+        if (active) setSummary(result);
+      })
+      .catch((reason: unknown) => {
+        if (active) setSummaryError(getApiErrorMessage(reason));
+      });
     return () => { active = false; };
   }, [user, refreshToken]);
 
