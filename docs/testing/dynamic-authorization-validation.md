@@ -261,3 +261,77 @@ Raw report theo đường dẫn cấu hình:
 - `approval-50-repeat.json`
 - `approval-100-repeat.json`
 
+
+
+## 9. Xác minh hợp đồng phân trang và benchmark đúng revision
+
+### 9.1. Rebuild service từ HEAD hiện tại
+
+Không dùng lại container cũ khi benchmark thay đổi query hoặc pagination contract.
+
+```powershell
+git pull origin feature/dynamic-authorization-v1
+$gitSha = (git rev-parse HEAD).Trim()
+
+$compose = @(
+    "-p", "hrbench",
+    "-f", "docker-compose.yml",
+    "-f", "docker-compose.loadtest.yml"
+)
+
+docker compose @compose build hr-service leave-service
+if ($LASTEXITCODE -ne 0) { throw "Build HR/Leave failed." }
+
+docker compose @compose up -d --force-recreate hr-service leave-service
+if ($LASTEXITCODE -ne 0) { throw "Recreate HR/Leave failed." }
+
+Invoke-RestMethod http://localhost:18081/health
+Invoke-RestMethod http://localhost:18082/health
+
+$hrImage = (docker compose @compose images -q hr-service | Select-Object -First 1).Trim()
+$leaveImage = (docker compose @compose images -q leave-service | Select-Object -First 1).Trim()
+$imageTag = "hr=$hrImage;leave=$leaveImage"
+
+Write-Host "Git SHA: $gitSha"
+Write-Host "Image tag: $imageTag"
+```
+
+### 9.2. Chạy workload có phân trang 10/50/100
+
+Mỗi lần chạy giữ nguyên 100 VU, 5 phút và cùng database snapshot. Workforce chỉ đọc dữ liệu; không chạy Approval hoặc seed lại trong lúc đang so sánh các page size.
+
+```powershell
+foreach ($size in @(10, 50, 100)) {
+    foreach ($run in @(1, 2, 3)) {
+        $report = "/reports/workforce-100vu-page$size-run$run.json"
+
+        docker compose @compose --profile loadtest run --rm `
+            -e VUS=100 `
+            -e DURATION=5m `
+            -e PAGE_SIZE=$size `
+            -e GIT_SHA=$gitSha `
+            -e IMAGE_TAG=$imageTag `
+            -e REPORT_JSON=$report `
+            k6 run /scripts/workforce.js
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "Workforce failed: PAGE_SIZE=$size, run=$run"
+        }
+    }
+}
+```
+
+K6 setup kiểm tra trước mỗi lượt rằng bỏ page/pageSize ở Employees, Leave Requests, Pending Approval và Manager Team phải trả HTTP 400. Sau đó mới warm-up endpoint với page size hợp lệ. Nếu contract check thất bại, script dừng ở setup; không được coi lượt đó là benchmark thành công.
+
+Raw JSON nằm trong `docs/testing/evidence/dynamic-authorization/`. Kiểm tra trường `benchmark_metadata` trong từng JSON, đặc biệt `git_sha`, `image_tag`, `page_size`, `vus`, `duration` và `generated_at_utc`, trước khi đưa kết quả vào báo cáo.
+
+### 9.3. Chạy API contract tests
+
+HR API có test xác nhận Employees list từ chối thiếu/sai page và pageSize. Leave API có TestServer coverage cho Employees tương ứng ở HR và cả ba list endpoint Leave: danh sách toàn bộ, danh sách mine và pending approval.
+
+```powershell
+dotnet test .\src\hr-service\HrService.slnx
+dotnet test .\src\leave-service\LeaveService.slnx
+```
+
+Để nghiệm thu cả integration với SQL Server/Redis, phải cấu hình `HR_TEST_SQL_CONNECTION_STRING` và `HR_TEST_REDIS_CONNECTION_STRING` như Mục 2. Điều kiện cuối cùng vẫn là `failed = 0`, `skipped = 0` ở cả hai solution. TestServer contract tests không thay thế SQL/Redis integration tests.
