@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Department, Employee } from '../types';
-import { deactivateEmployee, getDepartments, getEmployeePage, getEmployeeSummary, saveEmployee } from '../services/hrService';
+import { deactivateEmployee, getDepartments, getEmployeeOverviewPage, getEmployeePage, saveEmployee } from '../services/hrService';
 import { EmployeesPage } from './EmployeesPage';
 
 const mocks = vi.hoisted(() => ({
@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   deactivateEmployee: vi.fn(),
   getDepartments: vi.fn(),
   getEmployeePage: vi.fn(),
-  getEmployeeSummary: vi.fn(),
+  getEmployeeOverviewPage: vi.fn(),
   saveEmployee: vi.fn(),
 }));
 
@@ -19,7 +19,7 @@ vi.mock('../services/hrService', () => ({
   deactivateEmployee: mocks.deactivateEmployee,
   getDepartments: mocks.getDepartments,
   getEmployeePage: mocks.getEmployeePage,
-  getEmployeeSummary: mocks.getEmployeeSummary,
+  getEmployeeOverviewPage: mocks.getEmployeeOverviewPage,
   saveEmployee: mocks.saveEmployee,
 }));
 
@@ -64,7 +64,10 @@ describe('EmployeesPage filtering, sorting and pagination', () => {
       return { items: sorted.slice(offset, offset + query.pageSize), totalCount: sorted.length };
     });
     vi.mocked(getDepartments).mockResolvedValue([department]);
-    vi.mocked(getEmployeeSummary).mockResolvedValue({ total: 25, active: 25, managers: 0 });
+    vi.mocked(getEmployeeOverviewPage).mockImplementation(async (query) => ({
+      ...await vi.mocked(getEmployeePage)(query),
+      summary: { total: 25, active: 25, managers: 0 },
+    }));
     vi.mocked(deactivateEmployee).mockResolvedValue(undefined);
     vi.mocked(saveEmployee).mockResolvedValue(employees[0]);
   });
@@ -74,9 +77,9 @@ describe('EmployeesPage filtering, sorting and pagination', () => {
 
     await screen.findByText('Nhân viên 01');
 
-    expect(getEmployeeSummary).toHaveBeenCalledTimes(1);
-    expect(getEmployeePage).not.toHaveBeenCalledWith(
-      expect.objectContaining({ pageSize: 1 }),
+    expect(getEmployeeOverviewPage).toHaveBeenCalledTimes(1);
+    expect(getEmployeeOverviewPage).toHaveBeenCalledWith(
+      expect.objectContaining({ page: 1, pageSize: 10 }),
     );
     expect(screen.getByText('25')).toBeInTheDocument();
   });
