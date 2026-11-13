@@ -56,7 +56,8 @@ const routes = [
   { name: 'all_leave_requests', url: `${leaveBaseUrl}/api/v1/leave-requests${listQuery}`, token: 'hr' },
   {
     name: 'leave_calendar',
-    url: `${leaveBaseUrl}/api/v1/leave-requests/calendar?from=${year}-01-01&to=${year}-12-31`,
+    // Calendar API is intentionally bounded to one month-sized window.
+    url: `${leaveBaseUrl}/api/v1/leave-requests/calendar?from=${year}-01-01&to=${year}-01-31`,
     token: 'hr',
   },
   {
