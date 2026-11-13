@@ -271,7 +271,10 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
         {
             var self = access.CanReadSelf;
             var team = access.CanReadTeam && teamEmployeeIds.Count > 0;
-            var teamIds = team ? teamEmployeeIds.ToArray() : Array.Empty<Guid>();
+            // Remove duplicate IDs before EF translates the collection into SQL parameters.
+            var teamIds = team
+                ? teamEmployeeIds.Distinct().ToArray()
+                : Array.Empty<Guid>();
 
             if (self && team)
             {
@@ -645,13 +648,26 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
                            years.Contains(item.Year))
             .ToArrayAsync(cancellationToken);
 
-        return requests.Select(request => (
-            request,
-            (IReadOnlyList<LeaveBalance>)balances
-                .Where(balance => balance.EmployeeId == request.EmployeeId &&
-                                  balance.LeaveTypeId == request.LeaveTypeId &&
-                                  request.YearAllocations.Any(allocation => allocation.Year == balance.Year))
-                .ToArray())).ToArray();
+        // Build a lookup once instead of scanning the whole balance result for every request.
+        // This keeps in-memory mapping O(requests + balances), not O(requests × balances).
+        var balancesByKey = balances.ToDictionary(
+            balance => (balance.EmployeeId, balance.LeaveTypeId, balance.Year));
+
+        return requests.Select(request =>
+        {
+            var requestBalances = new List<LeaveBalance>(request.YearAllocations.Count);
+            foreach (var allocation in request.YearAllocations)
+            {
+                if (balancesByKey.TryGetValue(
+                    (request.EmployeeId, request.LeaveTypeId, allocation.Year),
+                    out var balance))
+                {
+                    requestBalances.Add(balance);
+                }
+            }
+
+            return (request, (IReadOnlyList<LeaveBalance>)requestBalances.ToArray());
+        }).ToArray();
     }
 
     private static void EnsurePending(LeaveRequest request)
