@@ -373,3 +373,11 @@ button:disabled { opacity: .58; cursor: not-allowed; }
   outline-offset: 3px;
   border-radius: 3px;
 }
+
+.page-number-pagination { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+.page-number-list { display: flex; align-items: center; gap: 4px; max-width: min(48vw, 520px); overflow-x: auto; padding: 2px; }
+.page-number { flex: 0 0 auto; min-width: 27px; height: 27px; padding: 0 7px; color: #738096; border: 1px solid transparent; border-radius: 6px; background: transparent; font: inherit; font-size: 10px; cursor: pointer; }
+.page-number:hover { color: #385fc7; background: #f2f5fd; }
+.page-number.is-current { color: #fff; background: #5578e8; border-color: #5578e8; font-weight: 700; }
+.page-number-pagination .icon-button:disabled { color: #b7bfcc; background: #f7f8fa; cursor: not-allowed; }
+@media (max-width: 760px) { .page-number-list { max-width: 42vw; } }

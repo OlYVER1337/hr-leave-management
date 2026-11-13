@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { ArrowDown, ArrowDownUp, ArrowUp, Building2, ChevronDown, ChevronLeft, ChevronRight, Download, Edit3, Plus, Search, UserCheck, UserMinus, Users } from 'lucide-react';
 import { Avatar, EmptyState, formatDate, PageHeader } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { useToast } from '../components/ToastProvider';
-import { deactivateEmployee, getDepartments, getEmployees, saveEmployee, type EmployeeInput } from '../services/hrService';
+import { deactivateEmployee, getDepartments, getEmployeePage, saveEmployee, type EmployeeInput, type EmployeePageQuery } from '../services/hrService';
 import { getApiErrorMessage, getRejectedReason } from '../services/apiClient';
 import type { Department, Employee, UserRole } from '../types';
+import { Pagination } from '../components/Pagination';
+import { usePagedBlock } from '../hooks/usePagedBlock';
 
 const today = () => {
   const date = new Date();
@@ -18,9 +20,11 @@ type SortDirection = 'asc' | 'desc';
 
 export function EmployeesPage() {
   const notify = useToast();
-  const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [managerOptions, setManagerOptions] = useState<Employee[]>([]);
+  const [summary, setSummary] = useState({ total: 0, active: 0, managers: 0 });
+  const [refreshToken, setRefreshToken] = useState(0);
+  const [auxiliaryLoading, setAuxiliaryLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [role, setRole] = useState<'All' | UserRole>('All');
@@ -30,75 +34,79 @@ export function EmployeesPage() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(pageSizeOptions[0]);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedSearch(search), 300);
+    return () => window.clearTimeout(handle);
+  }, [search]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [form, setForm] = useState<EmployeeInput>(blankForm());
   const [saving, setSaving] = useState(false);
 
-  async function reload() {
-    setLoading(true); setError('');
-    const results = await Promise.allSettled([getEmployees(), getDepartments()]);
-    if (results[0].status === 'fulfilled') setEmployees(results[0].value); else setError(getApiErrorMessage(getRejectedReason(results[0])));
-    if (results[1].status === 'fulfilled') setDepartments(results[1].value); else setError((value) => value || getApiErrorMessage(getRejectedReason(results[1])));
-    setLoading(false);
+  async function reloadAuxiliary() {
+    setAuxiliaryLoading(true);
+    setError('');
+    const requests = await Promise.allSettled([
+      getDepartments(),
+      getEmployeePage({ page: 1, pageSize: 1 }),
+      getEmployeePage({ page: 1, pageSize: 1, isActive: true }),
+      getEmployeePage({ page: 1, pageSize: 1, role: 'Manager', isActive: true }),
+      getEmployeePage({ page: 1, pageSize: 100, role: 'Manager', isActive: true }),
+    ]);
+    if (requests[0].status === 'fulfilled') setDepartments(requests[0].value);
+    else setError(getApiErrorMessage(getRejectedReason(requests[0])));
+    if (requests[1].status === 'fulfilled') setSummary((value) => ({ ...value, total: requests[1].value.totalCount }));
+    else setError((value) => value || getApiErrorMessage(getRejectedReason(requests[1])));
+    if (requests[2].status === 'fulfilled') setSummary((value) => ({ ...value, active: requests[2].value.totalCount }));
+    else setError((value) => value || getApiErrorMessage(getRejectedReason(requests[2])));
+    if (requests[3].status === 'fulfilled') setSummary((value) => ({ ...value, managers: requests[3].value.totalCount }));
+    else setError((value) => value || getApiErrorMessage(getRejectedReason(requests[3])));
+    if (requests[4].status === 'fulfilled') setManagerOptions(requests[4].value.items);
+    else setError((value) => value || getApiErrorMessage(getRejectedReason(requests[4])));
+    setAuxiliaryLoading(false);
   }
-  useEffect(() => { void reload(); }, []);
+  useEffect(() => { void reloadAuxiliary(); }, []);
 
-  const filtered = useMemo(() => employees.filter((item) => {
-    const query = search.trim().toLocaleLowerCase('vi-VN');
-    const textMatch = [item.fullName, item.code, item.email, item.departmentName ?? '']
-      .some((value) => value.toLocaleLowerCase('vi-VN').includes(query));
-    const roleMatch = role === 'All' || item.role === role;
-    const statusMatch = activeFilter === 'All' ||
-      (activeFilter === 'Active' ? item.isActive : !item.isActive);
-    const departmentMatch = departmentFilter === 'All' ||
-      item.departmentId === Number(departmentFilter);
-
-    return textMatch && roleMatch && statusMatch && departmentMatch;
-  }), [employees, search, role, activeFilter, departmentFilter]);
-
-  const sortedEmployees = useMemo(() => {
-    const collator = new Intl.Collator('vi', { sensitivity: 'base', numeric: true });
-    const direction = sortDirection === 'asc' ? 1 : -1;
-
-    return [...filtered].sort((left, right) => {
-      let comparison = 0;
-
-      switch (sortField) {
-        case 'fullName':
-          comparison = collator.compare(left.fullName, right.fullName);
-          break;
-        case 'code':
-          comparison = collator.compare(left.code, right.code);
-          break;
-        case 'departmentName':
-          comparison = collator.compare(left.departmentName ?? '', right.departmentName ?? '');
-          break;
-        case 'role':
-          comparison = collator.compare(left.role, right.role);
-          break;
-        case 'managerName':
-          comparison = collator.compare(left.managerName ?? '', right.managerName ?? '');
-          break;
-        case 'hireDate':
-          comparison = left.hireDate.localeCompare(right.hireDate);
-          break;
-        case 'isActive':
-          comparison = Number(left.isActive) - Number(right.isActive);
-          break;
-      }
-
-      if (comparison !== 0) return comparison * direction;
-      return collator.compare(left.fullName, right.fullName) || left.id.localeCompare(right.id);
-    });
-  }, [filtered, sortField, sortDirection]);
-
-  const pageCount = Math.max(1, Math.ceil(sortedEmployees.length / pageSize));
+  const query: EmployeePageQuery = {
+    page: Math.floor((page - 1) / 2) + 1,
+    pageSize: Math.min(pageSize * 2, 100),
+    search: debouncedSearch,
+    role: role === 'All' ? undefined : role,
+    isActive: activeFilter === 'All' ? undefined : activeFilter === 'Active',
+    departmentId: departmentFilter === 'All' ? undefined : Number(departmentFilter),
+    sortBy: sortField,
+    sortDirection,
+  };
+  const queryKey = JSON.stringify({ ...query, page: undefined, pageSize: pageSize });
+  const loadBlock = useCallback(
+    (requestPage: number, requestPageSize: number) => getEmployeePage({
+      ...query,
+      page: requestPage,
+      pageSize: requestPageSize,
+    }),
+    [queryKey],
+  );
+  const {
+    items: blockEmployees,
+    totalCount,
+    loading: pageLoading,
+    error: pageError,
+  } = usePagedBlock<Employee>({
+    page,
+    pageSize,
+    queryKey,
+    refreshToken,
+    load: loadBlock,
+  });
+  const pageCount = Math.max(1, Math.ceil(totalCount / pageSize));
   const currentPage = Math.min(page, pageCount);
-  const pageStart = (currentPage - 1) * pageSize;
-  const pageEmployees = sortedEmployees.slice(pageStart, pageStart + pageSize);
-  const firstVisibleEmployee = sortedEmployees.length === 0 ? 0 : pageStart + 1;
-  const lastVisibleEmployee = Math.min(pageStart + pageSize, sortedEmployees.length);
+  const pageEmployees = blockEmployees;
+  const firstVisibleEmployee = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const lastVisibleEmployee = Math.min(currentPage * pageSize, totalCount);
+  useEffect(() => {
+    if (page !== currentPage) setPage(currentPage);
+  }, [page, currentPage]);
 
   function handleSort(field: EmployeeSortField) {
     setPage(1);
@@ -128,21 +136,29 @@ export function EmployeesPage() {
     event.preventDefault(); setSaving(true);
     try {
       await saveEmployee({ ...form, departmentId: Number(form.departmentId), managerId: form.managerId || null }, editing?.id);
-      notify(editing ? 'Đã cập nhật nhân viên.' : 'Đã tạo nhân viên.'); setModalOpen(false); await reload();
+      notify(editing ? 'Đã cập nhật nhân viên.' : 'Đã tạo nhân viên.');
+      setModalOpen(false);
+      setPage(1);
+      setRefreshToken((value) => value + 1);
+      await reloadAuxiliary();
     } catch (reason) { notify(getApiErrorMessage(reason), 'error'); }
     finally { setSaving(false); }
   }
 
   async function onDeactivate(employee: Employee) {
     if (!window.confirm(`Vô hiệu hóa tài khoản ${employee.fullName}? Nhân viên sẽ không thể đăng nhập nữa.`)) return;
-    try { await deactivateEmployee(employee.id); notify('Đã vô hiệu hóa nhân viên.'); await reload(); }
-    catch (reason) { notify(getApiErrorMessage(reason), 'error'); }
+    try {
+      await deactivateEmployee(employee.id);
+      notify('Đã vô hiệu hóa nhân viên.');
+      setRefreshToken((value) => value + 1);
+      await reloadAuxiliary();
+    } catch (reason) { notify(getApiErrorMessage(reason), 'error'); }
   }
 
-  const managers = employees.filter((employee) => employee.role === 'Manager' && employee.isActive && employee.id !== editing?.id);
+  const managers = managerOptions.filter((employee) => employee.id !== editing?.id);
   return <div className="page-stack">
     <PageHeader eyebrow="QUẢN TRỊ" title="Nhân viên" description="Quản lý hồ sơ nhân viên, phân công đội nhóm và quyền truy cập." actions={<><button className="button button-secondary" disabled title="Chưa khả dụng: API xuất danh sách chưa được triển khai"><Download size={16} /> Xuất danh sách (chưa khả dụng)</button><button className="button button-primary" onClick={openCreate}><Plus size={17} /> Thêm nhân viên</button></>} />
-    <div className="page-summary-row"><div className="summary-metric"><span>Tổng số nhân viên</span><strong>{employees.length}</strong></div><div className="summary-metric"><span>Đang hoạt động</span><strong>{employees.filter((item) => item.isActive).length}</strong></div><div className="summary-metric"><span>Quản lý</span><strong>{employees.filter((item) => item.role === 'Manager' && item.isActive).length}</strong></div><div className="summary-metric"><span>Phòng ban</span><strong>{departments.length}</strong></div></div>
+    <div className="page-summary-row"><div className="summary-metric"><span>Tổng số nhân viên</span><strong>{summary.total}</strong></div><div className="summary-metric"><span>Đang hoạt động</span><strong>{summary.active}</strong></div><div className="summary-metric"><span>Quản lý</span><strong>{summary.managers}</strong></div><div className="summary-metric"><span>Phòng ban</span><strong>{departments.length}</strong></div></div>
     {error && <div className="inline-alert alert-warning">{error}</div>}
     <section className="panel page-table-panel">
       <div className="table-toolbar">
@@ -186,7 +202,7 @@ export function EmployeesPage() {
           </label>
         </div>
       </div>
-      {loading ? <div className="table-loading"><span /> Đang tải nhân viên…</div> : filtered.length === 0 ? <EmptyState title="Không tìm thấy nhân viên" description="Thử từ khóa khác hoặc thêm nhân viên mới." /> : <div className="table-scroll"><table className="data-table"><thead>
+      {(pageLoading || auxiliaryLoading) ? <div className="table-loading"><span /> Đang tải nhân viên…</div> : pageError || error ? <div className="inline-alert alert-warning">{pageError || error}</div> : totalCount === 0 ? <EmptyState title="Không tìm thấy nhân viên" description="Thử từ khóa khác hoặc thêm nhân viên mới." /> : <div className="table-scroll"><table className="data-table"><thead>
             <tr>
               <th aria-sort={sortField === 'fullName' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}>
                 <button type="button" className="table-sort-button" aria-label="Sắp xếp theo họ tên" onClick={() => handleSort('fullName')}>Nhân viên {renderSortIcon('fullName')}</button>
@@ -213,15 +229,13 @@ export function EmployeesPage() {
             </tr>
           </thead><tbody>{pageEmployees.map((employee) => <tr key={employee.id}><td><div className="person-cell"><Avatar name={employee.fullName} size="sm" /><div><strong>{employee.fullName}</strong><small>{employee.email}</small></div></div></td><td><span className="code-pill">{employee.code}</span></td><td>{employee.departmentName || '—'}</td><td><span className={`role-pill role-${employee.role.toLowerCase()}`}>{employee.role === 'HR' ? 'Nhân sự' : employee.role === 'Manager' ? 'Quản lý' : 'Nhân viên'}</span></td><td>{employee.managerName || <span className="muted-copy">Chưa phân công</span>}</td><td>{formatDate(employee.hireDate)}</td><td><span className={`employee-status ${employee.isActive ? 'employee-active' : 'employee-inactive'}`}><i />{employee.isActive ? 'Đang hoạt động' : 'Đã vô hiệu hóa'}</span></td><td><div className="row-actions"><button className="icon-button" title="Sửa nhân viên" aria-label={`Sửa ${employee.fullName}`} onClick={() => openEdit(employee)}><Edit3 size={16} /></button>{employee.isActive && <button className="icon-button danger-icon" title="Vô hiệu hóa nhân viên" aria-label={`Vô hiệu hóa ${employee.fullName}`} onClick={() => void onDeactivate(employee)}><UserMinus size={16} /></button>}</div></td></tr>)}</tbody></table></div>}
       <div className="table-footer">
-        <span aria-live="polite">Đang hiển thị <strong>{firstVisibleEmployee}–{lastVisibleEmployee}</strong> / <strong>{sortedEmployees.length}</strong> nhân viên</span>
+        <span aria-live="polite">Đang hiển thị <strong>{firstVisibleEmployee}–{lastVisibleEmployee}</strong> / <strong>{totalCount}</strong> nhân viên</span>
         <div className="employee-pagination">
           <label htmlFor="employee-page-size">Số dòng</label>
           <select id="employee-page-size" aria-label="Số nhân viên mỗi trang" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}>
             {pageSizeOptions.map((size) => <option value={size} key={size}>{size}</option>)}
           </select>
-          <button type="button" className="icon-button" aria-label="Trang trước" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}><ChevronLeft size={16} /></button>
-          <span aria-live="polite">Trang {currentPage} / {pageCount}</span>
-          <button type="button" className="icon-button" aria-label="Trang sau" disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}><ChevronRight size={16} /></button>
+          <Pagination page={currentPage} pageCount={pageCount} onPageChange={setPage} />
         </div>
         <span className="table-footer-note"><UserCheck size={14} /> Hồ sơ nhân viên</span>
       </div>
