@@ -210,39 +210,37 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
 
         var ownPending = await CreateAsync(
             actor, null, new DateOnly(2030, 9, 1), new DateOnly(2030, 9, 1));
+        var ownApproved = await CreateAsync(
+            actor, null, new DateOnly(2030, 9, 2), new DateOnly(2030, 9, 2));
         var teamPending = await CreateAsync(
-            teamMember, actor, new DateOnly(2030, 9, 2), new DateOnly(2030, 9, 2));
-        var teamApproved = await CreateAsync(
             teamMember, actor, new DateOnly(2030, 9, 3), new DateOnly(2030, 9, 3));
-        var outsiderPending = await CreateAsync(
-            outsider, actor, new DateOnly(2030, 9, 4), new DateOnly(2030, 9, 4));
-        var outsiderApproved = await CreateAsync(
-            Guid.NewGuid(), null, new DateOnly(2030, 9, 5), new DateOnly(2030, 9, 5));
+        var teamApproved = await CreateAsync(
+            teamMember, actor, new DateOnly(2030, 9, 4), new DateOnly(2030, 9, 4));
+        await CreateAsync(
+            outsider, actor, new DateOnly(2030, 9, 5), new DateOnly(2030, 9, 5));
 
         await using (var context = _fixture.CreateContext())
         {
             var repository = new LeaveRequestRepository(context);
             await repository.TransitionAsync(
-                teamApproved.Id, actor, GlobalAccess(), LeaveRequestStatus.Approved,
+                ownApproved.Id, actor, GlobalAccess(), LeaveRequestStatus.Approved,
                 null, DateTime.UtcNow);
             await repository.TransitionAsync(
-                outsiderApproved.Id, actor, GlobalAccess(), LeaveRequestStatus.Approved,
+                teamApproved.Id, actor, GlobalAccess(), LeaveRequestStatus.Approved,
                 null, DateTime.UtcNow);
         }
 
-        var readAllButDecideTeam = new LeaveAccess([
-            new LeavePermissionGrant("leaves.read", ["All"]),
+        var readSelfButDecideTeam = new LeaveAccess([
+            new LeavePermissionGrant("leaves.read", ["Self"]),
             new LeavePermissionGrant("leaves.decide", ["Team"])
         ]);
 
         await using var summaryContext = _fixture.CreateContext();
         var summary = await new LeaveRequestRepository(summaryContext)
-            .GetSummaryAsync(actor, readAllButDecideTeam, [teamMember]);
+            .GetSummaryAsync(actor, readSelfButDecideTeam, [teamMember]);
 
-        Assert.Equal((Pending: 1, Approved: 2, Total: 5), summary);
-        Assert.NotEqual(LeaveRequestStatus.Approved, ownPending.Status);
-        Assert.NotEqual(LeaveRequestStatus.Approved, teamPending.Status);
-        Assert.NotEqual(LeaveRequestStatus.Approved, outsiderPending.Status);
+        // Pending comes only from Team decision scope; Approved and Total come only from Self read scope.
+        Assert.Equal((Pending: 1, Approved: 1, Total: 2), summary);
     }
 
     [LeaveSqlFact]
