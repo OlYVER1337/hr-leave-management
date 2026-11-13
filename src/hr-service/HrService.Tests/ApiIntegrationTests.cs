@@ -61,6 +61,32 @@ public sealed class ApiIntegrationTests
             Times.Never);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("?page=1")]
+    [InlineData("?pageSize=10")]
+    [InlineData("?page=0&pageSize=10")]
+    [InlineData("?page=1&pageSize=101")]
+    public async Task ManagerTeamList_RequiresValidPageAndPageSize(string query)
+    {
+        var employeeRepository = new Mock<IEmployeeRepository>();
+        using var host = await CreateHostAsync(employeeRepository);
+        using var client = host.GetTestClient();
+        AddPermissionHeaders(
+            client,
+            Guid.NewGuid(),
+            """[{"p":"employees.read","s":["Team"]}]""");
+
+        var response = await client.GetAsync($"/api/v1/me/team{query}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        employeeRepository.Verify(
+            repository => repository.ListDirectReportsPageAsync(
+                It.IsAny<Guid>(), It.IsAny<string?>(), It.IsAny<int>(),
+                It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
     [Fact]
     public async Task EmployeeList_RejectsLegacyHrRoleWithoutPermissionClaim()
     {
