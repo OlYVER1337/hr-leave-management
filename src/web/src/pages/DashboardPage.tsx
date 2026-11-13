@@ -5,9 +5,9 @@ import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer,
 import { Avatar, EmptyState, formatDate, PageHeader, StatCard, StatusBadge } from '../components/ui';
 import { useAuth } from '../contexts';
 import { getApprovalsInbox, getBalances, getLeaveRequests } from '../services/leaveService';
-import { getDepartments, getEmployees } from '../services/hrService';
+import { getDepartments, getEmployeePage } from '../services/hrService';
 import { getApiErrorMessage, getRejectedReason } from '../services/apiClient';
-import type { Department, Employee, LeaveBalance, LeaveRequest } from '../types';
+import type { Department, LeaveBalance, LeaveRequest } from '../types';
 
 const tooltipStyle = { border: '1px solid #e5eaf2', borderRadius: 12, boxShadow: '0 8px 24px rgba(17, 34, 68, 0.08)', fontSize: 12 };
 
@@ -16,7 +16,8 @@ export function DashboardPage() {
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [approvalInbox, setApprovalInbox] = useState<LeaveRequest[]>([]);
   const [balances, setBalances] = useState<LeaveBalance[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  // Số liệu nhân viên lấy từ totalCount của API phân trang, không tải danh sách đầy đủ.
+  const [employeeStats, setEmployeeStats] = useState({ total: 0, active: 0 });
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [approvalInboxLoaded, setApprovalInboxLoaded] = useState(false);
@@ -29,14 +30,24 @@ export function DashboardPage() {
       const results = await Promise.allSettled([
         user ? getLeaveRequests(user) : Promise.resolve([]),
         user ? getBalances(user) : Promise.resolve([]),
-        user?.role === 'HR' ? getEmployees() : Promise.resolve([]),
+        user?.role === 'HR'
+          ? Promise.all([
+              getEmployeePage({ page: 1, pageSize: 1 }),
+              getEmployeePage({ page: 1, pageSize: 1, isActive: true }),
+            ])
+          : Promise.resolve(null),
         user?.role === 'HR' ? getDepartments() : Promise.resolve([]),
         user?.role === 'Manager' ? getApprovalsInbox(user) : Promise.resolve([]),
       ]);
       if (!active) return;
       if (results[0].status === 'fulfilled') setRequests(results[0].value); else setLoadError(getApiErrorMessage(getRejectedReason(results[0])));
       if (results[1].status === 'fulfilled') setBalances(results[1].value); else setLoadError((current) => current || getApiErrorMessage(getRejectedReason(results[1])));
-      if (results[2].status === 'fulfilled') setEmployees(results[2].value); else setLoadError((current) => current || getApiErrorMessage(getRejectedReason(results[2])));
+      if (results[2].status === 'fulfilled') {
+        const [all, active] = results[2].value ?? [null, null];
+        setEmployeeStats({ total: all?.totalCount ?? 0, active: active?.totalCount ?? 0 });
+      } else {
+        setLoadError((current) => current || getApiErrorMessage(getRejectedReason(results[2])));
+      }
       if (results[3].status === 'fulfilled') setDepartments(results[3].value); else setLoadError((current) => current || getApiErrorMessage(getRejectedReason(results[3])));
       if (results[4].status === 'fulfilled') {
         setApprovalInbox(results[4].value);
@@ -91,7 +102,7 @@ export function DashboardPage() {
       <div className="welcome-strip"><div className="welcome-spark"><Sparkles size={20} /></div><div><strong>{user?.role === 'HR' ? 'Nắm bắt tình hình nhân sự.' : user?.role === 'Manager' ? 'Đội nhóm luôn trong tầm kiểm soát.' : 'Dành thời gian cho điều quan trọng.'}</strong><p>{user?.role === 'HR' ? 'Theo dõi hoạt động nghỉ phép và chính sách nhân sự.' : user?.role === 'Manager' ? managerPendingDescription : 'Chủ động lên kế hoạch và cập nhật ngày nghỉ của bạn.'}</p></div><div className="welcome-art"><span /><span /><span /><span /><span /></div></div>
       <section className="stat-grid">
         {user?.role === 'HR' ? <>
-          <StatCard label="Nhân viên đang hoạt động" value={employees.filter((employee) => employee.isActive).length || '—'} hint={`${employees.length} hồ sơ nhân viên`} icon={<Users size={19} />} tone="blue" />
+          <StatCard label="Nhân viên đang hoạt động" value={employeeStats.active || '—'} hint={`${employeeStats.total} hồ sơ nhân viên`} icon={<Users size={19} />} tone="blue" />
           <StatCard label="Đơn chờ phê duyệt" value={pendingCount} hint="Trong toàn tổ chức" icon={<Clock3 size={19} />} tone="amber" />
           <StatCard label="Đơn đã phê duyệt" value={requests.filter((item) => item.status === 'Approved').length} hint="Trong hệ thống" icon={<FileCheck2 size={19} />} tone="green" />
           <StatCard label="Phòng ban" value={departments.length || '—'} hint="Các đội nhóm hiện có" icon={<Coffee size={19} />} tone="violet" />
