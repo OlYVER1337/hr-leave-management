@@ -30,6 +30,31 @@ export interface PagedResult<T> {
   totalCount: number;
 }
 
+export interface EmployeeSummary {
+  total: number;
+  active: number;
+  managers: number;
+}
+
+export async function getEmployeeSummary(): Promise<EmployeeSummary> {
+  if (DEMO_MODE) {
+    const employees = loadDemoState().employees;
+    const activeEmployees = employees.filter((employee) => employee.isActive);
+    return {
+      total: employees.length,
+      active: activeEmployees.length,
+      managers: activeEmployees.filter((employee) => employee.role === 'Manager').length,
+    };
+  }
+
+  try {
+    const { data } = await hrApi.get<EmployeeSummary>('/api/v1/employees/summary');
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error));
+  }
+}
+
 export async function getEmployeePage(query: EmployeePageQuery): Promise<PagedResult<Employee>> {
   const page = Math.max(1, query.page);
   const pageSize = Math.min(100, Math.max(1, query.pageSize));
