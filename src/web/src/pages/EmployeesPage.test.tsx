@@ -80,8 +80,8 @@ describe('EmployeesPage filtering, sorting and pagination', () => {
     expect(screen.queryByText('Nhân viên 01')).not.toBeInTheDocument();
 
     await user.type(screen.getByRole('textbox', { name: 'Tìm nhân viên' }), 'Nhân viên 20');
-    expect(screen.getByText('Trang 1 / 1')).toBeInTheDocument();
-    expect(screen.getByText('Nhân viên 20')).toBeInTheDocument();
+    expect(await screen.findByText('Trang 1 / 1')).toBeInTheDocument();
+    expect(await screen.findByText('Nhân viên 20')).toBeInTheDocument();
     expect(screen.queryByText('Nhân viên 11')).not.toBeInTheDocument();
     expect(document.querySelector('.table-footer')?.textContent).toContain('Đang hiển thị 1–1 / 1 nhân viên');
   });
@@ -121,7 +121,7 @@ describe('EmployeesPage filtering, sorting and pagination', () => {
     expect(callsAfterPageTwo).toBe(1);
 
     await user.click(screen.getByRole('button', { name: 'Trang 3' }));
-    expect(screen.getByText('Nhân viên 21')).toBeInTheDocument();
+    expect(await screen.findByText('Nhân viên 21')).toBeInTheDocument();
     const callsAfterPageThree = vi.mocked(getEmployeePage).mock.calls.filter(([query]) =>
       query.search === '' && query.pageSize === 20 && query.sortBy === 'fullName').length;
     expect(callsAfterPageThree).toBe(2);

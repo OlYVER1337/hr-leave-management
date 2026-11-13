@@ -281,7 +281,7 @@ export async function getLeaveRequestsPage(
     });
     return {
       items: await mapApiRequests(data, user),
-      totalCount: Number(headers['x-total-count'] ?? data.length),
+      totalCount: Number(headers?.['x-total-count'] ?? data.length),
     };
   } catch (error) { throw new Error(getApiErrorMessage(error)); }
 }
