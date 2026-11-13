@@ -133,14 +133,37 @@ public sealed class LeaveRequestService(
             totalCount);
     }
 
-    public async Task<LeaveRequestResponse> GetByIdAsync(
+    public async Task<LeaveRequestResponse> GetVisibleByIdAsync(
         Guid employeeId,
+        string authorization,
         Guid requestId,
+        LeaveAccess access,
         CancellationToken cancellationToken = default)
     {
-        var result = await repository.GetByIdAsync(employeeId, requestId, cancellationToken)
-            ?? throw new LeaveNotFoundException($"Leave request with id '{requestId}' was not found.");
-        return ToResponse(result.Request, result.Balances);
+        ArgumentNullException.ThrowIfNull(access);
+        if (!access.CanRead)
+        {
+            throw new LeaveForbiddenException("The caller does not have leaves.read permission.");
+        }
+
+        var teamEmployeeIds = access.CanReadTeam && !access.CanReadAll
+            ? await hrClient.GetTeamEmployeeIdsAsync(employeeId, authorization, cancellationToken)
+            : Array.Empty<Guid>();
+
+        var result = await repository.GetVisibleByIdAsync(
+            employeeId,
+            requestId,
+            access,
+            teamEmployeeIds,
+            cancellationToken);
+
+        if (!result.HasValue)
+        {
+            // Do not reveal whether a request outside the caller's scope exists.
+            throw new LeaveNotFoundException($"Leave request with id '{requestId}' was not found.");
+        }
+
+        return ToResponse(result.Value.Request, result.Value.Balances);
     }
 
     public async Task<IReadOnlyList<LeaveRequestResponse>> GetPendingAsync(
@@ -340,9 +363,10 @@ public sealed class LeaveRequestService(
             // Team decisions always re-check the employee's current manager in HR.
             // Do not trust the approver snapshot stored on the leave request.
             var employee = await hrClient.GetEmployeeAsync(request.EmployeeId, authorization, cancellationToken);
-            if (employee.ManagerId != actorId)
+            if (!employee.IsActive || employee.ManagerId != actorId)
             {
-                throw new LeaveForbiddenException("Only the current manager or a global leave approver can decide this request.");
+                throw new LeaveForbiddenException(
+                    "Only the current active manager can decide a Team request.");
             }
 
             verifiedApproverId = employee.ManagerId;

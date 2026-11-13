@@ -87,20 +87,23 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
         CancellationToken cancellationToken)
     {
         var employeeId = GetCurrentEmployeeId();
-        if (!employeeId.HasValue)
+        var authorization = Request.Headers.Authorization.ToString();
+        if (!employeeId.HasValue || string.IsNullOrWhiteSpace(authorization))
         {
             return Unauthorized();
         }
 
-        var request = await leaveRequestService.GetByIdAsync(
+        var request = await leaveRequestService.GetVisibleByIdAsync(
             employeeId.Value,
+            authorization,
             id,
+            LeaveAccess.FromClaims(User),
             cancellationToken);
         return Ok(request);
     }
 
     [HttpGet("mine")]
-    [Authorize(Policy = LeavePermissionPolicies.LeavesRead)]
+    [Authorize(Policy = LeavePermissionPolicies.LeavesReadSelfOrAll)]
     public async Task<ActionResult<IReadOnlyList<LeaveRequestResponse>>> GetMine(
         [FromQuery, Range(1, int.MaxValue)] int? page,
         [FromQuery, Range(1, 100)] int? pageSize,

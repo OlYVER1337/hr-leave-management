@@ -238,6 +238,63 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
         return (request, balances);
     }
 
+    public async Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)?> GetVisibleByIdAsync(
+        Guid employeeId,
+        Guid requestId,
+        LeaveAccess access,
+        IReadOnlyCollection<Guid> teamEmployeeIds,
+        CancellationToken cancellationToken = default)
+    {
+        IQueryable<LeaveRequest> query = context.LeaveRequests
+            .AsNoTracking()
+            .Where(item => item.Id == requestId);
+
+        if (!access.CanReadAll)
+        {
+            var self = access.CanReadSelf;
+            var teamIds = access.CanReadTeam
+                ? teamEmployeeIds.Distinct().ToArray()
+                : Array.Empty<Guid>();
+            var team = teamIds.Length > 0;
+
+            if (self && team)
+            {
+                query = query.Where(item =>
+                    item.EmployeeId == employeeId || teamIds.Contains(item.EmployeeId));
+            }
+            else if (team)
+            {
+                query = query.Where(item => teamIds.Contains(item.EmployeeId));
+            }
+            else if (self)
+            {
+                query = query.Where(item => item.EmployeeId == employeeId);
+            }
+            else
+            {
+                query = query.Where(item => false);
+            }
+        }
+
+        var request = await query.SingleOrDefaultAsync(cancellationToken);
+        if (request is null)
+        {
+            return null;
+        }
+
+        // The visible request may belong to a Team member or any employee under All.
+        // Load balances for the request owner, not for the caller.
+        var balances = await context.LeaveBalances
+            .AsNoTracking()
+            .Where(item => item.EmployeeId == request.EmployeeId &&
+                           item.LeaveTypeId == request.LeaveTypeId &&
+                           item.Year >= request.StartDate.Year &&
+                           item.Year <= request.EndDate.Year)
+            .ToArrayAsync(cancellationToken);
+
+        return (request, balances);
+    }
+
     public async Task<IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>>
         ListPendingAsync(CancellationToken cancellationToken = default)
     {
@@ -506,15 +563,17 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
         EnsurePending(request);
         if (!access.CanDecideAll)
         {
-            // The service layer performs a live HR lookup for Team decisions.
-            // Keep the snapshot fallback for direct repository tests and internal callers.
-            var currentApproverId = verifiedApproverId ?? request.ApproverId;
-            if (currentApproverId != actorId)
+            // Team decisions must carry a successful live HR verification.
+            // Never fall back to ApproverId: it is only a historical snapshot.
+            if (!access.CanDecideTeam ||
+                !verifiedApproverId.HasValue ||
+                verifiedApproverId.Value != actorId)
             {
-                throw new LeaveForbiddenException("Only the assigned manager or a global leave approver can decide this request.");
+                throw new LeaveForbiddenException(
+                    "A current HR manager verification is required to decide a Team request.");
             }
 
-            request.ApproverId = currentApproverId;
+            request.ApproverId = verifiedApproverId.Value;
         }
 
         var balances = await UpdateBalancesAsync(

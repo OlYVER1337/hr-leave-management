@@ -225,7 +225,8 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
                 ManagerAccess(),
                 LeaveRequestStatus.Approved,
                 "Approved by manager",
-                DateTime.UtcNow);
+                DateTime.UtcNow,
+                verifiedApproverId: approvedManager);
             Assert.Equal(LeaveRequestStatus.Approved, result.Request.Status);
             Assert.Equal(0m, result.Balances.Single().Pending);
             Assert.Equal(2m, result.Balances.Single().Used);
@@ -242,7 +243,8 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
                 ManagerAccess(),
                 LeaveRequestStatus.Rejected,
                 "Not enough coverage",
-                DateTime.UtcNow);
+                DateTime.UtcNow,
+                verifiedApproverId: rejectedManager);
             Assert.Equal(LeaveRequestStatus.Rejected, result.Request.Status);
             Assert.Equal(0m, result.Balances.Single().Pending);
             Assert.Equal(0m, result.Balances.Single().Used);
@@ -460,7 +462,8 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
                     ManagerAccess(),
                     status,
                     null,
-                    DateTime.UtcNow);
+                    DateTime.UtcNow,
+                    verifiedApproverId: managerId);
                 return true;
             }
             catch (LeaveConflictException)
