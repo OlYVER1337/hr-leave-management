@@ -13,7 +13,7 @@ namespace LeaveService.Api.Controllers;
 public sealed class LeaveBalancesController(LeaveRequestService leaveRequestService) : ControllerBase
 {
     [HttpGet("mine")]
-    [Authorize(Policy = LeavePermissionPolicies.LeavesRead)]
+    [Authorize(Policy = LeavePermissionPolicies.LeavesReadSelfOrAll)]
     public async Task<ActionResult<IReadOnlyList<LeaveBalanceResponse>>> GetMine(
         [FromQuery] int? year,
         CancellationToken cancellationToken)
