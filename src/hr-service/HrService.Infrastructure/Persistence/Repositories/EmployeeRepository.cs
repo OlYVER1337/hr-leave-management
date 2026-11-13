@@ -56,12 +56,28 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
         if (actorId == Guid.Empty || (!includeSelf && !includeTeam && !includeAll))
             return (Array.Empty<EmployeeReadModel>(), 0);
 
-        var query = dbContext.Employees
-            .AsNoTracking()
-            .Where(employee =>
-                includeAll ||
-                (includeSelf && employee.Id == actorId) ||
-                (includeTeam && employee.IsActive && employee.ManagerId == actorId));
+        IQueryable<Employee> query = dbContext.Employees.AsNoTracking();
+
+        // Branch the unrestricted scope in application code. Avoid an always-present
+        // "includeAll OR ..." predicate that can make SQL Server's plan less selective.
+        if (!includeAll)
+        {
+            if (includeSelf && includeTeam)
+            {
+                query = query.Where(employee =>
+                    employee.Id == actorId ||
+                    (employee.IsActive && employee.ManagerId == actorId));
+            }
+            else if (includeSelf)
+            {
+                query = query.Where(employee => employee.Id == actorId);
+            }
+            else
+            {
+                query = query.Where(employee =>
+                    employee.IsActive && employee.ManagerId == actorId);
+            }
+        }
 
         if (!string.IsNullOrWhiteSpace(search))
         {
