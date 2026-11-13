@@ -46,6 +46,14 @@ interface EmployeeRecord {
   managerId: string | null;
   managerName: string | null;
 }
+export interface LeavePageQuery {
+  page: number;
+  pageSize: number;
+  search?: string;
+  status?: LeaveRequest['status'];
+  typeCode?: string;
+}
+
 interface LeaveRequestRecord {
   id: string;
   employeeId: string;
@@ -144,33 +152,57 @@ function countWeekdays(startDate: string, endDate: string, holidays: Holiday[]):
   return count;
 }
 
-async function getEmployeeDirectory(user: AuthUser): Promise<Map<string, EmployeeRecord>> {
-  if (user.role === 'HR') {
-    const { data } = await hrApi.get<EmployeeRecord[]>('/api/v1/employees');
-    return new Map(data.map((employee) => [employee.id, employee]));
+async function getEmployeeDirectory(
+  user: AuthUser,
+  records: LeaveRequestRecord[],
+): Promise<Map<string, EmployeeRecord>> {
+  if (user.role === 'Employee') {
+    const { data: currentEmployee } = await hrApi.get<EmployeeRecord>('/api/v1/me');
+    const directory = new Map<string, EmployeeRecord>([[currentEmployee.id, currentEmployee]]);
+    if (currentEmployee.managerId && currentEmployee.managerName) {
+      directory.set(currentEmployee.managerId, {
+        ...currentEmployee,
+        id: currentEmployee.managerId,
+        fullName: currentEmployee.managerName,
+      });
+    }
+    return directory;
   }
 
-  const { data: currentEmployee } = await hrApi.get<EmployeeRecord>('/api/v1/me');
-  const employees = [currentEmployee];
-  if (user.role === 'Manager') {
-    const { data: team } = await hrApi.get<EmployeeRecord[]>('/api/v1/me/team');
-    employees.push(...team);
+  const ids = [...new Set(records.flatMap((record) =>
+    [record.employeeId, record.approverId].filter((id): id is string => Boolean(id)),
+  ))];
+  const batches: string[][] = [];
+  for (let index = 0; index < ids.length; index += 100) {
+    batches.push(ids.slice(index, index + 100));
   }
-  const directory = new Map(employees.map((employee) => [employee.id, employee]));
-  if (currentEmployee.managerId && currentEmployee.managerName && !directory.has(currentEmployee.managerId)) {
-    directory.set(currentEmployee.managerId, {
-      ...currentEmployee,
-      id: currentEmployee.managerId,
-      fullName: currentEmployee.managerName,
-    });
+
+  const responses = await Promise.all(batches.map((batch) =>
+    hrApi.post<EmployeeRecord[]>('/api/v1/lookup/employees/batch', batch),
+  ));
+  const directory = new Map<string, EmployeeRecord>();
+  for (const response of responses) {
+    for (const employee of response.data) directory.set(employee.id, employee);
   }
+  // The caller is allowed to identify itself even when employees.read has Team but not Self.
+  directory.set(user.id, {
+    id: user.id,
+    code: '',
+    fullName: user.fullName,
+    role: user.role,
+    isActive: true,
+    departmentId: 0,
+    departmentName: '',
+    managerId: null,
+    managerName: null,
+  });
   return directory;
 }
 
 async function mapApiRequests(records: LeaveRequestRecord[], user: AuthUser): Promise<LeaveRequest[]> {
   const [{ data: leaveTypes }, employees] = await Promise.all([
     hrApi.get<LeaveTypeRecord[]>('/api/v1/leave-types', { params: { includeInactive: user.role === 'HR' } }),
-    getEmployeeDirectory(user),
+    getEmployeeDirectory(user, records),
   ]);
   return records.map((record) => {
     const employee = employees.get(record.employeeId);
@@ -181,8 +213,8 @@ async function mapApiRequests(records: LeaveRequestRecord[], user: AuthUser): Pr
       id: record.id,
       employeeId: record.employeeId,
       employeeName: employee?.fullName ?? record.employeeId,
-      employeeCode: employee?.code ?? record.employeeId,
-      departmentName: employee?.departmentName ?? String(record.departmentId),
+      employeeCode: employee?.code || record.employeeId,
+      departmentName: employee?.departmentName || String(record.departmentId),
       typeCode,
       typeName: getLocalizedLeaveTypeName(typeCode, leaveType?.name ?? typeCode),
       startDate: record.startDate,
@@ -196,22 +228,92 @@ async function mapApiRequests(records: LeaveRequestRecord[], user: AuthUser): Pr
   });
 }
 
-export async function getLeaveRequests(user: AuthUser): Promise<LeaveRequest[]> {
-  if (DEMO_MODE) return loadDemoState().requests.map(localizeLeaveRequest);
-  try {
-    const { data } = await leaveApi.get<LeaveRequestRecord[]>('/api/v1/leave-requests');
-    return await mapApiRequests(data, user);
+function filterDemoRequests(user: AuthUser, query: LeavePageQuery, pendingOnly = false): LeaveRequest[] {
+  const state = loadDemoState();
+  const allowedEmployeeIds = new Set(
+    user.role === 'HR'
+      ? state.employees.map((employee) => employee.id)
+      : user.role === 'Manager'
+        ? [user.id, ...state.employees.filter((employee) => employee.managerId === user.id).map((employee) => employee.id)]
+        : [user.id],
+  );
+  const search = query.search?.trim().toLocaleLowerCase('vi-VN') ?? '';
+  return state.requests
+    .filter((item) => allowedEmployeeIds.has(item.employeeId))
+    .filter((item) => !pendingOnly || item.status === 'Pending')
+    .filter((item) => !query.status || item.status === query.status)
+    .filter((item) => !query.typeCode || item.typeCode === query.typeCode)
+    .filter((item) => !search || [item.id, item.reason, item.employeeName, item.employeeCode, item.typeName]
+      .some((value) => value.toLocaleLowerCase('vi-VN').includes(search)))
+    .map(localizeLeaveRequest);
+}
+
+async function resolveLeaveTypeId(typeCode?: string): Promise<number | undefined> {
+  if (!typeCode) return undefined;
+  const { data: types } = await hrApi.get<LeaveTypeRecord[]>('/api/v1/leave-types', { params: { includeInactive: true } });
+  return types.find((item) => item.code.toUpperCase() === typeCode.toUpperCase())?.id ?? -1;
+}
+
+export async function getLeaveRequestsPage(
+  user: AuthUser,
+  query: LeavePageQuery,
+): Promise<{ items: LeaveRequest[]; totalCount: number }> {
+  const page = Math.max(1, query.page);
+  const pageSize = Math.min(100, Math.max(1, query.pageSize));
+  if (DEMO_MODE) {
+    const filtered = filterDemoRequests(user, query);
+    const offset = (page - 1) * pageSize;
+    return { items: filtered.slice(offset, offset + pageSize), totalCount: filtered.length };
   }
-  catch (error) { throw new Error(getApiErrorMessage(error)); }
+  try {
+    const leaveTypeId = await resolveLeaveTypeId(query.typeCode);
+    const { data, headers } = await leaveApi.get<LeaveRequestRecord[]>('/api/v1/leave-requests', {
+      params: {
+        page,
+        pageSize,
+        search: query.search || undefined,
+        status: query.status,
+        leaveTypeId: leaveTypeId === -1 ? -1 : leaveTypeId,
+      },
+    });
+    if (leaveTypeId === -1) return { items: [], totalCount: 0 };
+    return {
+      items: await mapApiRequests(data, user),
+      totalCount: Number(headers['x-total-count'] ?? data.length),
+    };
+  } catch (error) { throw new Error(getApiErrorMessage(error)); }
+}
+
+export async function getApprovalsInboxPage(
+  user: AuthUser,
+  query: Pick<LeavePageQuery, 'page' | 'pageSize' | 'search'>,
+): Promise<{ items: LeaveRequest[]; totalCount: number }> {
+  if (user.role === 'Employee') return { items: [], totalCount: 0 };
+  const page = Math.max(1, query.page);
+  const pageSize = Math.min(100, Math.max(1, query.pageSize));
+  if (DEMO_MODE) {
+    const filtered = filterDemoRequests(user, query, true);
+    const offset = (page - 1) * pageSize;
+    return { items: filtered.slice(offset, offset + pageSize), totalCount: filtered.length };
+  }
+  try {
+    const { data, headers } = await leaveApi.get<LeaveRequestRecord[]>('/api/v1/leave-requests/pending-approval', {
+      params: { page, pageSize, search: query.search || undefined },
+    });
+    return {
+      items: await mapApiRequests(data, user),
+      totalCount: Number(headers['x-total-count'] ?? data.length),
+    };
+  } catch (error) { throw new Error(getApiErrorMessage(error)); }
+}
+
+// Bounded compatibility reads for small summary widgets; table screens use the paged functions above.
+export async function getLeaveRequests(user: AuthUser): Promise<LeaveRequest[]> {
+  return (await getLeaveRequestsPage(user, { page: 1, pageSize: 100 })).items;
 }
 
 export async function getApprovalsInbox(user: AuthUser): Promise<LeaveRequest[]> {
-  if (user.role === 'Employee') return [];
-  if (DEMO_MODE) return loadDemoState().requests.filter((item) => item.status === 'Pending' && (user.role === 'HR' || item.approverName === user.fullName)).map(localizeLeaveRequest);
-  try {
-    const { data } = await leaveApi.get<LeaveRequestRecord[]>('/api/v1/leave-requests/pending-approval');
-    return await mapApiRequests(data, user);
-  } catch (error) { throw new Error(getApiErrorMessage(error)); }
+  return (await getApprovalsInboxPage(user, { page: 1, pageSize: 100 })).items;
 }
 
 export async function getCalendarLeaves(user: AuthUser, from: string, to: string): Promise<LeaveRequest[]> {
