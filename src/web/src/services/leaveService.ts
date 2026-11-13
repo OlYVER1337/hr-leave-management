@@ -32,8 +32,8 @@ interface LeaveCatalogRecord {
 }
 interface LeaveRequestSummaryRecord {
   pending: number;
-  approved: number;
-  total: number;
+  approved: number | null;
+  total: number | null;
 }
 interface LeaveBalanceRecord {
   leaveTypeId: number;
