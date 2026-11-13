@@ -208,11 +208,11 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
         var teamMember = Guid.NewGuid();
         var outsider = Guid.NewGuid();
 
-        var ownPending = await CreateAsync(
+        await CreateAsync(
             actor, null, new DateOnly(2030, 9, 1), new DateOnly(2030, 9, 1));
         var ownApproved = await CreateAsync(
             actor, null, new DateOnly(2030, 9, 2), new DateOnly(2030, 9, 2));
-        var teamPending = await CreateAsync(
+        await CreateAsync(
             teamMember, actor, new DateOnly(2030, 9, 3), new DateOnly(2030, 9, 3));
         var teamApproved = await CreateAsync(
             teamMember, actor, new DateOnly(2030, 9, 4), new DateOnly(2030, 9, 4));
