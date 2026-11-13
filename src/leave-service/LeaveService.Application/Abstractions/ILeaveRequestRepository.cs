@@ -29,6 +29,13 @@ public interface ILeaveRequestRepository
         Guid requestId,
         CancellationToken cancellationToken = default);
 
+    Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)?> GetVisibleByIdAsync(
+        Guid employeeId,
+        Guid requestId,
+        LeaveAccess access,
+        IReadOnlyCollection<Guid> teamEmployeeIds,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>>
         ListPendingAsync(CancellationToken cancellationToken = default);
 
