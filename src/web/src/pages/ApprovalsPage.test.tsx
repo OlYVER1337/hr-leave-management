@@ -115,6 +115,23 @@ describe('ApprovalsPage', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('hides read metrics when the caller only has decision permission', async () => {
+    vi.mocked(getLeaveRequestSummary).mockResolvedValue({
+      pending: 2,
+      approved: null,
+      total: null,
+    });
+
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <ApprovalsPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findAllByText('—')).toHaveLength(2);
+    expect(screen.getByText('Chờ bạn xem xét')).toBeInTheDocument();
+  });
+
   it('shows an error notification when the decision fails', async () => {
     const user = userEvent.setup();
     vi.mocked(decideLeaveRequest).mockRejectedValue(new Error('Đơn đã được xử lý.'));
