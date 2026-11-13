@@ -29,7 +29,10 @@ public sealed class CurrentEmployeeController(EmployeeService employeeService) :
     [HttpGet("team")]
     [Authorize(Policy = PermissionPolicies.EmployeesReadTeam)]
     public async Task<ActionResult<IReadOnlyList<EmployeeResponse>>> GetTeam(
-        CancellationToken cancellationToken)
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? search = null,
+        CancellationToken cancellationToken = default)
     {
         var employeeId = GetCurrentEmployeeId();
         if (!employeeId.HasValue)
@@ -37,8 +40,10 @@ public sealed class CurrentEmployeeController(EmployeeService employeeService) :
             return Unauthorized();
         }
 
-        var team = await employeeService.GetTeamAsync(employeeId.Value, cancellationToken);
-        return Ok(team);
+        var paged = await employeeService.GetTeamPagedAsync(
+            employeeId.Value, page, pageSize, search, cancellationToken);
+        Response.Headers["X-Total-Count"] = paged.TotalCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return Ok(paged.Items);
     }
 
     [HttpPut("password")]

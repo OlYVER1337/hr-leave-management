@@ -55,6 +55,12 @@ public interface IEmployeeRepository
     Task<IReadOnlyList<Employee>> GetDirectReportsAsync(
         Guid managerId,
         CancellationToken cancellationToken = default);
+    Task<(IReadOnlyList<EmployeeReadModel> Items, int TotalCount)> ListDirectReportsPageAsync(
+        Guid managerId,
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Guid>> GetDirectReportIdsAsync(
         Guid managerId,
         CancellationToken cancellationToken = default);

@@ -180,6 +180,28 @@ public sealed class EmployeeService(
         CancellationToken cancellationToken = default) =>
         employeeRepository.GetDirectReportIdsAsync(managerId, cancellationToken);
 
+    public async Task<PagedEmployeeResponse> GetTeamPagedAsync(
+        Guid managerId,
+        int page,
+        int pageSize,
+        string? search,
+        CancellationToken cancellationToken = default)
+    {
+        if (managerId == Guid.Empty)
+            throw new ForbiddenException();
+
+        var (items, totalCount) = await employeeRepository.ListDirectReportsPageAsync(
+            managerId,
+            search,
+            Math.Max(page, 1),
+            Math.Clamp(pageSize, 1, 100),
+            cancellationToken);
+
+        return new PagedEmployeeResponse(
+            items.Select(ToResponse).ToArray(),
+            totalCount);
+    }
+
     public async Task<IReadOnlyList<EmployeeResponse>> GetTeamAsync(
         Guid managerId,
         CancellationToken cancellationToken = default)
