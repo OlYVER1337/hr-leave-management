@@ -3,7 +3,7 @@ import { ArrowDown, ArrowDownUp, ArrowUp, Building2, ChevronDown, Download, Edit
 import { Avatar, EmptyState, formatDate, PageHeader } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { useToast } from '../components/ToastProvider';
-import { deactivateEmployee, getDepartments, getEmployeePage, saveEmployee, type EmployeeInput, type EmployeePageQuery } from '../services/hrService';
+import { deactivateEmployee, getDepartments, getEmployeePage, getEmployeeSummary, saveEmployee, type EmployeeInput, type EmployeePageQuery } from '../services/hrService';
 import { getApiErrorMessage, getRejectedReason } from '../services/apiClient';
 import type { Department, Employee, UserRole } from '../types';
 import { Pagination } from '../components/Pagination';
@@ -62,20 +62,17 @@ export function EmployeesPage() {
     setError('');
     const requests = await Promise.allSettled([
       getDepartments(),
-      getEmployeePage({ page: 1, pageSize: 1 }),
-      getEmployeePage({ page: 1, pageSize: 1, isActive: true }),
-      getEmployeePage({ page: 1, pageSize: 1, role: 'Manager', isActive: true }),
+      getEmployeeSummary(),
     ]);
-    if (requests[0].status === 'fulfilled') setDepartments(requests[0].value);
-    else setError(getApiErrorMessage(getRejectedReason(requests[0])));
-    if (requests[1].status === 'fulfilled') setSummary((value) => ({ ...value, total: requests[1].value.totalCount }));
-    else setError((value) => value || getApiErrorMessage(getRejectedReason(requests[1])));
-    if (requests[2].status === 'fulfilled') setSummary((value) => ({ ...value, active: requests[2].value.totalCount }));
-    else setError((value) => value || getApiErrorMessage(getRejectedReason(requests[2])));
-    if (requests[3].status === 'fulfilled') {
-      setSummary((value) => ({ ...value, managers: requests[3].value.totalCount }));
+    if (requests[0].status === 'fulfilled') {
+      setDepartments(requests[0].value);
     } else {
-      setError((value) => value || getApiErrorMessage(getRejectedReason(requests[3])));
+      setError(getApiErrorMessage(getRejectedReason(requests[0])));
+    }
+    if (requests[1].status === 'fulfilled') {
+      setSummary(requests[1].value);
+    } else {
+      setError((value) => value || getApiErrorMessage(getRejectedReason(requests[1])));
     }
     setAuxiliaryLoading(false);
   }, []);
