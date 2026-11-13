@@ -152,10 +152,10 @@ export function usePagedBlock<T>({
   }, [blockKey, cacheNamespace, countNamespace, requestPage, requestPageSize]);
 
   const hasTotalCount = Object.prototype.hasOwnProperty.call(knownCounts, countNamespace);
+  const itemOffset = offsetInBlock(normalizedPage, pagesPerBlock, normalizedPageSize);
 
   return {
-    items: block?.items.slice(offsetInBlock(normalizedPage, pagesPerBlock, normalizedPageSize),
-      offsetInBlock(normalizedPage, pagesPerBlock, normalizedPageSize) + normalizedPageSize) ?? [],
+    items: block?.items.slice(itemOffset, itemOffset + normalizedPageSize) ?? [],
     totalCount: knownCounts[countNamespace] ?? 0,
     hasTotalCount,
     loading: !block && !errors[blockKey],
