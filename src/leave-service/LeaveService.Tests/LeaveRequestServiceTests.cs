@@ -341,6 +341,32 @@ public sealed class LeaveRequestServiceTests
     }
 
     [Fact]
+    public async Task DecideAsync_RejectsInactiveEmployeeEvenWhenManagerSnapshotMatches()
+    {
+        var actorId = Guid.NewGuid();
+        var employeeId = Guid.NewGuid();
+        var request = new LeaveRequest
+        {
+            Id = Guid.NewGuid(),
+            EmployeeId = employeeId,
+            ApproverId = actorId,
+            Status = LeaveRequestStatus.Pending
+        };
+        var repository = new Mock<ILeaveRequestRepository>();
+        repository.Setup(item => item.GetForDecisionAsync(request.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(request);
+        var hrClient = new Mock<ILeaveHrClient>();
+        hrClient.Setup(item => item.GetEmployeeAsync(employeeId, "Bearer manager", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new HrEmployeeSnapshot(employeeId, "E1", "Employee", "Employee", false, 1, actorId));
+        var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
+
+        await Assert.ThrowsAsync<LeaveForbiddenException>(() =>
+            service.DecideAsync(actorId, "Bearer manager", request.Id, approve: true, ManagerAccess(), note: null));
+
+        AssertNoTransition(repository);
+    }
+
+    [Fact]
     public async Task DecideAsync_AllowsNewManagerAfterReassignmentEvenWhenSnapshotIsStale()
     {
         var newManagerId = Guid.NewGuid();
