@@ -67,7 +67,7 @@ Không nên ghép thêm nhiều tầng dấu nháy vào lệnh `sqlcmd -Q` trên
 
 ## 4. Workforce reads — 50 và 100 VU
 
-Workload phân phối request đến HR Employees, Leave Requests, Leave Calendar và Manager Approval Inbox. Metric tách biệt request trực tiếp vào HR và các HTTP call nội bộ từ Leave Service sang HR.
+Workload phân phối request đến HR Employees, Leave Requests, Leave Calendar và Manager Approval Inbox. Metric tách biệt request trực tiếp vào HR và các HTTP call nội bộ từ Leave Service sang HR. Calendar được đo trong cửa sổ 31 ngày (01/01–31/01 theo `YEAR`) vì API giới hạn mỗi truy vấn lịch tối đa 62 ngày; không dùng query cả năm.
 
 Service `k6` được khai báo trong profile `loadtest`, vì vậy phải thêm `--profile loadtest` vào lệnh Compose:
 
