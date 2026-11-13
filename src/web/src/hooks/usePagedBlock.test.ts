@@ -1,13 +1,13 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { usePagedBlock } from './usePagedBlock';
 import type { PagedResult } from '../services/hrService';
 
-function createPage(page: number, pageSize: number): PagedResult<number> {
+function createPage(page: number, pageSize: number, totalCount = 45): PagedResult<number> {
   const first = (page - 1) * pageSize + 1;
   return {
     items: Array.from({ length: pageSize }, (_, index) => first + index),
-    totalCount: 45,
+    totalCount,
   };
 }
 
@@ -68,7 +68,7 @@ describe('usePagedBlock', () => {
 
   it('does not request more than 100 records for a UI page size of 100', async () => {
     const load = vi.fn((page: number, pageSize: number) =>
-      Promise.resolve(createPage(page, pageSize)),
+      Promise.resolve(createPage(page, pageSize, 250)),
     );
 
     const { result, rerender } = renderHook(
