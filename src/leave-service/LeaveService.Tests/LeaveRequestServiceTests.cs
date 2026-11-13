@@ -933,14 +933,11 @@ public sealed class LeaveRequestServiceTests
     }
 
     [Fact]
-    public async Task GetSummaryAsync_RejectsMissingReadOrDecisionPermissionBeforeCallingDependencies()
+    public async Task GetSummaryAsync_RejectsCallerWithoutDecisionPermissionBeforeCallingDependencies()
     {
         var actorId = Guid.NewGuid();
         var readOnly = new LeaveAccess([
             new LeavePermissionGrant("leaves.read", ["Self"])
-        ]);
-        var decideOnly = new LeaveAccess([
-            new LeavePermissionGrant("leaves.decide", ["Team"])
         ]);
 
         var repository = new Mock<ILeaveRequestRepository>();
@@ -949,11 +946,44 @@ public sealed class LeaveRequestServiceTests
 
         await Assert.ThrowsAsync<LeaveForbiddenException>(() =>
             service.GetSummaryAsync(actorId, "Bearer token", readOnly));
-        await Assert.ThrowsAsync<LeaveForbiddenException>(() =>
-            service.GetSummaryAsync(actorId, "Bearer token", decideOnly));
 
         repository.VerifyNoOtherCalls();
         hrClient.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetSummaryAsync_DecisionOnlyCallerReceivesPendingCountAndNoReadMetrics()
+    {
+        var actorId = Guid.NewGuid();
+        var teamMemberId = Guid.NewGuid();
+        var access = new LeaveAccess([
+            new LeavePermissionGrant("leaves.decide", ["Team"])
+        ]);
+        var repository = new Mock<ILeaveRequestRepository>();
+        repository.Setup(item => item.GetSummaryAsync(
+                actorId,
+                access,
+                It.Is<IReadOnlyCollection<Guid>>(ids => ids.Count == 1 && ids.Contains(teamMemberId)),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Pending: 2, Approved: 0, Total: 0));
+
+        var hrClient = new Mock<ILeaveHrClient>();
+        hrClient.Setup(item => item.GetTeamEmployeeIdsAsync(
+                actorId, "Bearer manager", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([teamMemberId]);
+
+        var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
+
+        var result = await service.GetSummaryAsync(actorId, "Bearer manager", access);
+
+        Assert.Equal(new LeaveRequestSummaryResponse(2, null, null), result);
+        hrClient.Verify(item => item.GetTeamEmployeeIdsAsync(
+            actorId, "Bearer manager", It.IsAny<CancellationToken>()), Times.Once);
+        repository.Verify(item => item.GetSummaryAsync(
+            actorId,
+            access,
+            It.Is<IReadOnlyCollection<Guid>>(ids => ids.Count == 1 && ids.Contains(teamMemberId)),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
