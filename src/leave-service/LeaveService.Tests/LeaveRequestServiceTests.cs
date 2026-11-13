@@ -932,6 +932,88 @@ public sealed class LeaveRequestServiceTests
             Times.Once);
     }
 
+    [Fact]
+    public async Task GetSummaryAsync_RejectsMissingReadOrDecisionPermissionBeforeCallingDependencies()
+    {
+        var actorId = Guid.NewGuid();
+        var readOnly = new LeaveAccess([
+            new LeavePermissionGrant("leaves.read", ["Self"])
+        ]);
+        var decideOnly = new LeaveAccess([
+            new LeavePermissionGrant("leaves.decide", ["Team"])
+        ]);
+
+        var repository = new Mock<ILeaveRequestRepository>();
+        var hrClient = new Mock<ILeaveHrClient>();
+        var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
+
+        await Assert.ThrowsAsync<LeaveForbiddenException>(() =>
+            service.GetSummaryAsync(actorId, "Bearer token", readOnly));
+        await Assert.ThrowsAsync<LeaveForbiddenException>(() =>
+            service.GetSummaryAsync(actorId, "Bearer token", decideOnly));
+
+        repository.VerifyNoOtherCalls();
+        hrClient.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetSummaryAsync_UsesCurrentTeamAndKeepsReadAndDecisionScopesSeparate()
+    {
+        var actorId = Guid.NewGuid();
+        var teamMemberId = Guid.NewGuid();
+        var access = new LeaveAccess([
+            new LeavePermissionGrant("leaves.read", ["All"]),
+            new LeavePermissionGrant("leaves.decide", ["Team"])
+        ]);
+        var repository = new Mock<ILeaveRequestRepository>();
+        repository.Setup(item => item.GetSummaryAsync(
+                actorId,
+                access,
+                It.Is<IReadOnlyCollection<Guid>>(ids => ids.Count == 1 && ids.Contains(teamMemberId)),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Pending: 2, Approved: 5, Total: 11));
+
+        var hrClient = new Mock<ILeaveHrClient>();
+        hrClient.Setup(item => item.GetTeamEmployeeIdsAsync(
+                actorId, "Bearer manager", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([teamMemberId]);
+
+        var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
+
+        var result = await service.GetSummaryAsync(actorId, "Bearer manager", access);
+
+        Assert.Equal(new LeaveRequestSummaryResponse(2, 5, 11), result);
+        hrClient.Verify(item => item.GetTeamEmployeeIdsAsync(
+            actorId, "Bearer manager", It.IsAny<CancellationToken>()), Times.Once);
+        repository.Verify(item => item.GetSummaryAsync(
+            actorId,
+            access,
+            It.Is<IReadOnlyCollection<Guid>>(ids => ids.Count == 1 && ids.Contains(teamMemberId)),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetSummaryAsync_GlobalScopesDoNotCallHr()
+    {
+        var actorId = Guid.NewGuid();
+        var access = GlobalAccess();
+        var repository = new Mock<ILeaveRequestRepository>();
+        repository.Setup(item => item.GetSummaryAsync(
+                actorId,
+                access,
+                It.Is<IReadOnlyCollection<Guid>>(ids => ids.Count == 0),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Pending: 3, Approved: 7, Total: 15));
+
+        var hrClient = new Mock<ILeaveHrClient>();
+        var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
+
+        var result = await service.GetSummaryAsync(actorId, "Bearer hr", access);
+
+        Assert.Equal(new LeaveRequestSummaryResponse(3, 7, 15), result);
+        hrClient.VerifyNoOtherCalls();
+    }
+
     private static void AssertNoTransition(Mock<ILeaveRequestRepository> repository) =>
         repository.Verify(
             item => item.TransitionAsync(

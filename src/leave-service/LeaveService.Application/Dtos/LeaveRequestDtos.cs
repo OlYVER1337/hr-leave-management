@@ -10,6 +10,10 @@ public sealed record CreateLeaveRequest(
 
 public sealed record LeaveDecisionRequest(string? Note);
 
+public sealed record LeaveDecisionCommand(string Decision, string? Note);
+
+public sealed record LeaveRequestSummaryResponse(int Pending, int Approved, int Total);
+
 public sealed record CancelLeaveRequest(string? Note);
 
 public sealed record LeaveBalanceResponse(

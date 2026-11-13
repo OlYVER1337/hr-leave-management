@@ -267,6 +267,35 @@ public sealed class LeaveRequestService(
             totalCount);
     }
 
+    public async Task<LeaveRequestSummaryResponse> GetSummaryAsync(
+        Guid employeeId,
+        string authorization,
+        LeaveAccess access,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(access);
+        if (!access.CanRead)
+            throw new LeaveForbiddenException("The caller does not have leaves.read permission.");
+        if (!access.CanDecide)
+            throw new LeaveForbiddenException("The caller does not have leaves.decide permission.");
+
+        // Read and decision scopes can differ. The same live team membership is used
+        // only as input; the repository applies each permission to its own counters.
+        var needsTeam = (access.CanReadTeam && !access.CanReadAll) ||
+                        (access.CanDecideTeam && !access.CanDecideAll);
+        var teamEmployeeIds = needsTeam
+            ? await hrClient.GetTeamEmployeeIdsAsync(employeeId, authorization, cancellationToken)
+            : Array.Empty<Guid>();
+
+        var counts = await repository.GetSummaryAsync(
+            employeeId,
+            access,
+            teamEmployeeIds,
+            cancellationToken);
+
+        return new LeaveRequestSummaryResponse(counts.Pending, counts.Approved, counts.Total);
+    }
+
     public async Task<IReadOnlyList<LeaveRequestResponse>> GetVisibleAsync(
         Guid employeeId,
         string authorization,

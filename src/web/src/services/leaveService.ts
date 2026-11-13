@@ -26,6 +26,15 @@ interface LeaveTypeRecord {
   isActive?: boolean;
 }
 interface LeavePolicyRecord { id: number; leaveTypeId: number; year: number; daysPerYear: number; }
+interface LeaveCatalogRecord {
+  leaveTypes: LeaveTypeRecord[];
+  leavePolicies: LeavePolicyRecord[];
+}
+interface LeaveRequestSummaryRecord {
+  pending: number;
+  approved: number;
+  total: number;
+}
 interface LeaveBalanceRecord {
   leaveTypeId: number;
   year: number;
@@ -427,6 +436,22 @@ export async function getApprovalsInbox(user: AuthUser): Promise<LeaveRequest[]>
   return (await getApprovalsInboxPage(user, { page: 1, pageSize: 100 })).items;
 }
 
+export async function getLeaveRequestSummary(user: AuthUser): Promise<LeaveRequestSummaryRecord> {
+  if (DEMO_MODE) {
+    const visible = filterDemoRequests(user, { page: 1, pageSize: 100 });
+    return {
+      pending: visible.filter((item) => item.status === 'Pending').length,
+      approved: visible.filter((item) => item.status === 'Approved').length,
+      total: visible.length,
+    };
+  }
+
+  try {
+    const { data } = await leaveApi.get<LeaveRequestSummaryRecord>('/api/v1/leave-requests/summary');
+    return data;
+  } catch (error) { throw new Error(getApiErrorMessage(error)); }
+}
+
 export async function getCalendarLeaves(user: AuthUser, from: string, to: string): Promise<LeaveRequest[]> {
   if (DEMO_MODE) return loadDemoState().requests.filter((item) => ['Pending', 'Approved'].includes(item.status) && item.startDate <= to && item.endDate >= from).map(localizeLeaveRequest);
   try {
@@ -450,11 +475,11 @@ export async function getBalances(user: AuthUser): Promise<LeaveBalance[]> {
   }
   try {
     const year = new Date().getFullYear();
-    const [{ data: response }, { data: types }, { data: policies }] = await Promise.all([
+    const [{ data: response }, { data: catalog }] = await Promise.all([
       leaveApi.get<LeaveBalanceRecord[]>('/api/v1/leave-balances/mine', { params: { year } }),
-      hrApi.get<LeaveTypeRecord[]>('/api/v1/leave-types'),
-      hrApi.get<LeavePolicyRecord[]>('/api/v1/leave-policies', { params: { year } }),
+      hrApi.get<LeaveCatalogRecord>('/api/v1/leave-catalog', { params: { year } }),
     ]);
+    const { leaveTypes: types, leavePolicies: policies } = catalog;
     return types.map((type) => {
       const balance = response.find((item) => item.leaveTypeId === type.id);
       const policy = policies.find((item) => item.leaveTypeId === type.id);
@@ -533,8 +558,12 @@ export async function decideLeaveRequest(id: string, decision: 'approve' | 'reje
     });
     return;
   }
-  try { await leaveApi.post(`/api/v1/leave-requests/${encodeURIComponent(id)}/${decision}`, { note }); }
-  catch (error) { throw new Error(getApiErrorMessage(error)); }
+  try {
+    await leaveApi.patch(`/api/v1/leave-requests/${encodeURIComponent(id)}/decision`, {
+      decision,
+      note,
+    });
+  } catch (error) { throw new Error(getApiErrorMessage(error)); }
 }
 
 export async function getPolicies(year = new Date().getFullYear() + 1): Promise<LeavePolicy[]> {
@@ -567,10 +596,10 @@ export async function getPolicies(year = new Date().getFullYear() + 1): Promise<
     });
   }
   try {
-    const [{ data: types }, { data: policies }] = await Promise.all([
-      hrApi.get<LeaveTypeRecord[]>('/api/v1/leave-types', { params: { includeInactive: true } }),
-      hrApi.get<LeavePolicyRecord[]>('/api/v1/leave-policies', { params: { year } }),
-    ]);
+    const { data: catalog } = await hrApi.get<LeaveCatalogRecord>('/api/v1/leave-catalog', {
+      params: { year, includeInactive: true },
+    });
+    const { leaveTypes: types, leavePolicies: policies } = catalog;
     return builtInLeaveTypes.map((definition) => {
       const type = types.find((candidate) => candidate.code.toUpperCase() === definition.code);
       const policy = type && policies.find((candidate) => candidate.leaveTypeId === type.id && candidate.year === year);
@@ -622,10 +651,10 @@ export async function restoreBuiltInLeaveType(policy: LeavePolicy): Promise<void
   }
 
   try {
-    const [{ data: types }, { data: policies }] = await Promise.all([
-      hrApi.get<LeaveTypeRecord[]>('/api/v1/leave-types', { params: { includeInactive: true } }),
-      hrApi.get<LeavePolicyRecord[]>('/api/v1/leave-policies', { params: { year } }),
-    ]);
+    const { data: catalog } = await hrApi.get<LeaveCatalogRecord>('/api/v1/leave-catalog', {
+      params: { year, includeInactive: true },
+    });
+    const { leaveTypes: types, leavePolicies: policies } = catalog;
     const existingType = types.find((item) => item.code.toUpperCase() === definition.code);
     let leaveTypeId: number;
     const typePayload = {

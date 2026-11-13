@@ -55,6 +55,41 @@ export async function getEmployeeSummary(): Promise<EmployeeSummary> {
   }
 }
 
+export interface EmployeeOverview extends PagedResult<Employee> {
+  summary: EmployeeSummary;
+}
+
+export async function getEmployeeOverviewPage(
+  query: EmployeePageQuery,
+): Promise<EmployeeOverview> {
+  const page = Math.max(1, query.page);
+  const pageSize = Math.min(100, Math.max(1, query.pageSize));
+
+  if (DEMO_MODE) {
+    const [result, summary] = await Promise.all([
+      getEmployeePage({ ...query, page, pageSize }),
+      getEmployeeSummary(),
+    ]);
+    return { ...result, summary };
+  }
+
+  try {
+    const { data } = await hrApi.get<EmployeeOverview>('/api/v1/employees/overview', {
+      params: {
+        page,
+        pageSize,
+        search: query.search || undefined,
+        role: query.role,
+        isActive: query.isActive,
+        departmentId: query.departmentId,
+        sortBy: query.sortBy ?? 'fullName',
+        sortDirection: query.sortDirection ?? 'asc',
+      },
+    });
+    return data;
+  } catch (error) { throw new Error(getApiErrorMessage(error)); }
+}
+
 export async function getEmployeePage(query: EmployeePageQuery): Promise<PagedResult<Employee>> {
   const page = Math.max(1, query.page);
   const pageSize = Math.min(100, Math.max(1, query.pageSize));

@@ -295,6 +295,44 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
         return (request, balances);
     }
 
+    public async Task<(int Pending, int Approved, int Total)> GetSummaryAsync(
+        Guid employeeId,
+        LeaveAccess access,
+        IReadOnlyCollection<Guid> teamEmployeeIds,
+        CancellationToken cancellationToken = default)
+    {
+        var teamIds = teamEmployeeIds.Distinct().ToArray();
+        var canReadAll = access.CanReadAll;
+        var canReadSelf = access.CanReadSelf;
+        var canReadTeam = access.CanReadTeam && teamIds.Length > 0;
+        var canDecideAll = access.CanDecideAll;
+        var canDecideTeam = access.CanDecideTeam && teamIds.Length > 0;
+
+        var result = await context.LeaveRequests
+            .AsNoTracking()
+            .GroupBy(_ => 1)
+            .Select(group => new
+            {
+                Pending = group.Count(item =>
+                    item.Status == LeaveRequestStatus.Pending &&
+                    (canDecideAll || (canDecideTeam && teamIds.Contains(item.EmployeeId)))),
+                Approved = group.Count(item =>
+                    item.Status == LeaveRequestStatus.Approved &&
+                    (canReadAll ||
+                     (canReadSelf && item.EmployeeId == employeeId) ||
+                     (canReadTeam && teamIds.Contains(item.EmployeeId)))),
+                Total = group.Count(item =>
+                    canReadAll ||
+                    (canReadSelf && item.EmployeeId == employeeId) ||
+                    (canReadTeam && teamIds.Contains(item.EmployeeId)))
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        return result is null
+            ? (0, 0, 0)
+            : (result.Pending, result.Approved, result.Total);
+    }
+
     public async Task<IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>>
         ListPendingAsync(CancellationToken cancellationToken = default)
     {

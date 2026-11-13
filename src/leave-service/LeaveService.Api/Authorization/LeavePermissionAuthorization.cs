@@ -8,6 +8,7 @@ public static class LeavePermissionPolicies
 {
     public const string LeavesRead = "permission:leaves.read";
     public const string LeavesReadSelfOrAll = "permission:leaves.read:self-or-all";
+    public const string LeavesSummary = "permission:leaves.summary";
     public const string LeavesCreate = "permission:leaves.create";
     public const string LeavesDecide = "permission:leaves.decide";
     public const string LeavesCancel = "permission:leaves.cancel";
@@ -57,6 +58,11 @@ public static class LeavePermissionAuthorizationExtensions
             options.AddPolicy(LeavePermissionPolicies.LeavesReadSelfOrAll, policy =>
                 policy.RequireAuthenticatedUser()
                     .AddRequirements(new LeavePermissionRequirement("leaves.read", "Self", "All")));
+            options.AddPolicy(LeavePermissionPolicies.LeavesSummary, policy =>
+                policy.RequireAuthenticatedUser()
+                    .AddRequirements(
+                        new LeavePermissionRequirement("leaves.read", "Self", "Team", "All"),
+                        new LeavePermissionRequirement("leaves.decide", "Team", "All")));
             options.AddPolicy(LeavePermissionPolicies.LeavesCreate, policy =>
                 policy.RequireAuthenticatedUser()
                     .AddRequirements(new LeavePermissionRequirement("leaves.create", "Self")));

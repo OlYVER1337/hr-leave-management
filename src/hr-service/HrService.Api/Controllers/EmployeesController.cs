@@ -57,6 +57,50 @@ public sealed class EmployeesController(EmployeeService employeeService) : Contr
         return Ok(paged.Items);
     }
 
+    [HttpGet("overview")]
+    [Authorize(Policy = PermissionPolicies.EmployeesRead)]
+    public async Task<ActionResult<EmployeeOverviewResponse>> GetOverview(
+        [FromQuery, Range(1, int.MaxValue)] int? page,
+        [FromQuery, Range(1, 100)] int? pageSize,
+        [FromQuery] string? search = null,
+        [FromQuery] string? role = null,
+        [FromQuery] bool? isActive = null,
+        [FromQuery] int? departmentId = null,
+        [FromQuery] string? sortBy = "fullName",
+        [FromQuery] string? sortDirection = "asc",
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsValidPagination(page, pageSize))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Invalid pagination",
+                Detail = "Both page and pageSize are required. page must be at least 1 and pageSize must be between 1 and 100."
+            });
+        }
+
+        var actorId = AuthorizationClaimReader.GetEmployeeId(User);
+        if (!actorId.HasValue)
+            return Unauthorized();
+
+        var overview = await employeeService.GetVisibleOverviewPagedAsync(
+            actorId.Value,
+            AuthorizationClaimReader.Read(User),
+            page!.Value,
+            pageSize!.Value,
+            search,
+            role,
+            isActive,
+            departmentId,
+            sortBy,
+            sortDirection,
+            cancellationToken);
+
+        Response.Headers["X-Total-Count"] = overview.TotalCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return Ok(overview);
+    }
+
     [HttpGet("summary")]
     [Authorize(Policy = PermissionPolicies.EmployeesRead)]
     public async Task<ActionResult<EmployeeSummaryResponse>> GetSummary(

@@ -7,6 +7,7 @@ import { useAuth } from '../contexts';
 import {
   decideLeaveRequest,
   getApprovalsInboxPage,
+  getLeaveRequestSummary,
   getLeaveRequestsPage,
 } from '../services/leaveService';
 import { ApprovalsPage } from './ApprovalsPage';
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   notify: vi.fn(),
   decideLeaveRequest: vi.fn(),
   getApprovalsInboxPage: vi.fn(),
+  getLeaveRequestSummary: vi.fn(),
   getLeaveRequestsPage: vi.fn(),
 }));
 
@@ -24,6 +26,7 @@ vi.mock('../components/ToastProvider', () => ({ useToast: () => mocks.notify }))
 vi.mock('../services/leaveService', () => ({
   decideLeaveRequest: mocks.decideLeaveRequest,
   getApprovalsInboxPage: mocks.getApprovalsInboxPage,
+  getLeaveRequestSummary: mocks.getLeaveRequestSummary,
   getLeaveRequestsPage: mocks.getLeaveRequestsPage,
 }));
 
@@ -76,6 +79,7 @@ describe('ApprovalsPage', () => {
     });
     vi.mocked(getLeaveRequestsPage).mockResolvedValue({ items: [pendingRequest], totalCount: 1 });
     vi.mocked(getApprovalsInboxPage).mockResolvedValue({ items: [pendingRequest], totalCount: 1 });
+    vi.mocked(getLeaveRequestSummary).mockResolvedValue({ pending: 1, approved: 2, total: 3 });
     vi.mocked(decideLeaveRequest).mockResolvedValue(undefined);
   });
 
@@ -102,6 +106,11 @@ describe('ApprovalsPage', () => {
     expect(mocks.notify).toHaveBeenCalledWith('Đã phê duyệt đơn nghỉ.');
     expect(getApprovalsInboxPage).toHaveBeenCalledWith(manager, expect.objectContaining({ page: 1, pageSize: 20 }));
     expect(getApprovalsInboxPage).toHaveBeenCalled();
+    expect(getLeaveRequestSummary).toHaveBeenCalledTimes(1);
+    expect(getLeaveRequestsPage).not.toHaveBeenCalledWith(
+      manager,
+      expect.objectContaining({ pageSize: 1 }),
+    );
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 

@@ -36,6 +36,12 @@ public interface ILeaveRequestRepository
         IReadOnlyCollection<Guid> teamEmployeeIds,
         CancellationToken cancellationToken = default);
 
+    Task<(int Pending, int Approved, int Total)> GetSummaryAsync(
+        Guid employeeId,
+        LeaveAccess access,
+        IReadOnlyCollection<Guid> teamEmployeeIds,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>>
         ListPendingAsync(CancellationToken cancellationToken = default);
 

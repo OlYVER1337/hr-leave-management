@@ -1,19 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthUser } from '../types';
-import { getLeaveRequests, getLeaveRequestsPage, getPolicies, restoreBuiltInLeaveType } from './leaveService';
+import { decideLeaveRequest, getLeaveRequestSummary, getLeaveRequests, getLeaveRequestsPage, getPolicies, restoreBuiltInLeaveType } from './leaveService';
 
 const mocks = vi.hoisted(() => ({
   hrGet: vi.fn(),
   hrPost: vi.fn(),
   hrPut: vi.fn(),
   leaveGet: vi.fn(),
+  leavePatch: vi.fn(),
 }));
 
 vi.mock('./config', () => ({ DEMO_MODE: false }));
 vi.mock('./apiClient', () => ({
   getApiErrorMessage: (error: unknown) => String(error),
   hrApi: { get: mocks.hrGet, post: mocks.hrPost, put: mocks.hrPut },
-  leaveApi: { get: mocks.leaveGet },
+  leaveApi: { get: mocks.leaveGet, patch: mocks.leavePatch },
 }));
 vi.mock('./mockStore', () => ({
   loadDemoState: vi.fn(),
@@ -53,6 +54,46 @@ const requestRecord = {
   status: 'Approved',
   createdAtUtc: '2098-12-01T10:00:00Z',
 };
+
+describe('leave request summary and decisions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('loads the permission-scoped leave summary in one request', async () => {
+    const manager: AuthUser = {
+      id: 'manager-1',
+      fullName: 'Trần Minh Anh',
+      email: 'manager@example.com',
+      role: 'Manager',
+      accessToken: 'test-token',
+    };
+    mocks.leaveGet.mockResolvedValue({
+      data: { pending: 4, approved: 8, total: 16 },
+    });
+
+    await expect(getLeaveRequestSummary(manager)).resolves.toEqual({
+      pending: 4,
+      approved: 8,
+      total: 16,
+    });
+
+    expect(mocks.leaveGet).toHaveBeenCalledTimes(1);
+    expect(mocks.leaveGet).toHaveBeenCalledWith('/api/v1/leave-requests/summary');
+  });
+
+  it('sends a decision through the shared decision endpoint', async () => {
+    mocks.leavePatch.mockResolvedValue({ data: {} });
+
+    await decideLeaveRequest('request-123', 'approve', 'Đã bàn giao công việc.');
+
+    expect(mocks.leavePatch).toHaveBeenCalledTimes(1);
+    expect(mocks.leavePatch).toHaveBeenCalledWith(
+      '/api/v1/leave-requests/request-123/decision',
+      { decision: 'approve', note: 'Đã bàn giao công việc.' },
+    );
+  });
+});
 
 describe('getLeaveRequests', () => {
   beforeEach(() => {
@@ -152,23 +193,23 @@ describe('built-in leave policies', () => {
   });
 
   it('returns only the fixed three types and represents a deleted type as restorable', async () => {
-    const year = new Date().getFullYear();
+    const year = new Date().getFullYear() + 1;
     mocks.hrGet.mockImplementation(async (path: string) => {
-      if (path === '/api/v1/leave-types') {
+      if (path === '/api/v1/leave-catalog') {
         return {
-          data: [
-            { id: 1, code: 'ANNUAL', name: 'Custom annual', isPaid: true, deductsBalance: true, isActive: true },
-            { id: 2, code: 'PARENTAL', name: 'Nghỉ chăm con', isPaid: true, deductsBalance: true, isActive: true },
-          ],
+          data: {
+            leaveTypes: [
+              { id: 1, code: 'ANNUAL', name: 'Custom annual', isPaid: true, deductsBalance: true, isActive: true },
+              { id: 2, code: 'PARENTAL', name: 'Nghỉ chăm con', isPaid: true, deductsBalance: true, isActive: true },
+            ],
+            leavePolicies: [{ id: 12, leaveTypeId: 1, year, daysPerYear: 15 }],
+          },
         };
       }
-      if (path === '/api/v1/leave-policies') {
-        return { data: [{ id: 12, leaveTypeId: 1, year, daysPerYear: 15 }] };
-      }
-      throw new Error(`Unexpected HR API path: ${path}`);
+      throw new Error('Unexpected HR API path: ' + path);
     });
 
-    const result = await getPolicies();
+    const result = await getPolicies(year);
 
     expect(result.map((policy) => policy.typeCode)).toEqual(['ANNUAL', 'SICK', 'UNPAID']);
     expect(result.find((policy) => policy.typeCode === 'ANNUAL')).toMatchObject({
@@ -181,14 +222,19 @@ describe('built-in leave policies', () => {
       leaveTypeId: undefined,
       daysPerYear: 10,
     });
+    expect(mocks.hrGet).toHaveBeenCalledTimes(1);
+    expect(mocks.hrGet).toHaveBeenCalledWith('/api/v1/leave-catalog', {
+      params: { year, includeInactive: true },
+    });
   });
 
   it('restores a missing built-in type and creates its default annual policy', async () => {
-    const year = new Date().getFullYear();
+    const year = new Date().getFullYear() + 1;
     mocks.hrGet.mockImplementation(async (path: string) => {
-      if (path === '/api/v1/leave-types') return { data: [] };
-      if (path === '/api/v1/leave-policies') return { data: [] };
-      throw new Error(`Unexpected HR API path: ${path}`);
+      if (path === '/api/v1/leave-catalog') {
+        return { data: { leaveTypes: [], leavePolicies: [] } };
+      }
+      throw new Error('Unexpected HR API path: ' + path);
     });
     mocks.hrPost.mockResolvedValue({ data: { id: 4 } });
 
@@ -204,6 +250,10 @@ describe('built-in leave policies', () => {
       year,
     });
 
+    expect(mocks.hrGet).toHaveBeenCalledTimes(1);
+    expect(mocks.hrGet).toHaveBeenCalledWith('/api/v1/leave-catalog', {
+      params: { year, includeInactive: true },
+    });
     expect(mocks.hrPost).toHaveBeenNthCalledWith(1, '/api/v1/leave-types', {
       code: 'SICK',
       name: 'Nghỉ ốm',
