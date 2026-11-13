@@ -27,7 +27,7 @@ public sealed class ApiIntegrationTests
         using var host = await CreateHostAsync();
         using var client = host.GetTestClient();
 
-        var response = await client.GetAsync("/api/v1/employees");
+        var response = await client.GetAsync("/api/v1/employees?page=1&pageSize=10");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -39,7 +39,7 @@ public sealed class ApiIntegrationTests
         using var client = host.GetTestClient();
         client.DefaultRequestHeaders.Add("X-Test-Role", "HR");
 
-        var response = await client.GetAsync("/api/v1/employees");
+        var response = await client.GetAsync("/api/v1/employees?page=1&pageSize=10");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -50,20 +50,26 @@ public sealed class ApiIntegrationTests
         var actorId = Guid.NewGuid();
         var employeeRepository = new Mock<IEmployeeRepository>();
         employeeRepository
-            .Setup(repository => repository.ListVisibleAsync(
-                actorId, false, false, true, It.IsAny<CancellationToken>()))
-            .ReturnsAsync([]);
+            .Setup(repository => repository.ListVisiblePageAsync(
+                actorId, false, false, true,
+                It.IsAny<string?>(), It.IsAny<HrService.Domain.Entities.Role?>(),
+                It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<string>(),
+                It.IsAny<bool>(), 1, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Array.Empty<HrService.Application.Abstractions.EmployeeReadModel>(), 0));
         using var host = await CreateHostAsync(employeeRepository);
         using var client = host.GetTestClient();
         AddPermissionHeaders(client, actorId, """[{"p":"employees.read","s":["All"]}]""");
 
-        var response = await client.GetAsync("/api/v1/employees");
+        var response = await client.GetAsync("/api/v1/employees?page=1&pageSize=10");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("[]", await response.Content.ReadAsStringAsync());
         employeeRepository.Verify(
-            repository => repository.ListVisibleAsync(
-                actorId, false, false, true, It.IsAny<CancellationToken>()),
+            repository => repository.ListVisiblePageAsync(
+                actorId, false, false, true,
+                It.IsAny<string?>(), It.IsAny<HrService.Domain.Entities.Role?>(),
+                It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<string>(),
+                It.IsAny<bool>(), 1, 10, It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -73,19 +79,25 @@ public sealed class ApiIntegrationTests
         var actorId = Guid.NewGuid();
         var employeeRepository = new Mock<IEmployeeRepository>();
         employeeRepository
-            .Setup(repository => repository.ListVisibleAsync(
-                actorId, true, true, false, It.IsAny<CancellationToken>()))
-            .ReturnsAsync([]);
+            .Setup(repository => repository.ListVisiblePageAsync(
+                actorId, true, true, false,
+                It.IsAny<string?>(), It.IsAny<HrService.Domain.Entities.Role?>(),
+                It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<string>(),
+                It.IsAny<bool>(), 1, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Array.Empty<HrService.Application.Abstractions.EmployeeReadModel>(), 0));
         using var host = await CreateHostAsync(employeeRepository);
         using var client = host.GetTestClient();
         AddPermissionHeaders(client, actorId, """[{"p":"employees.read","s":["Self","Team"]}]""");
 
-        var response = await client.GetAsync("/api/v1/employees");
+        var response = await client.GetAsync("/api/v1/employees?page=1&pageSize=10");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         employeeRepository.Verify(
-            repository => repository.ListVisibleAsync(
-                actorId, true, true, false, It.IsAny<CancellationToken>()),
+            repository => repository.ListVisiblePageAsync(
+                actorId, true, true, false,
+                It.IsAny<string?>(), It.IsAny<HrService.Domain.Entities.Role?>(),
+                It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<string>(),
+                It.IsAny<bool>(), 1, 10, It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -99,7 +111,7 @@ public sealed class ApiIntegrationTests
             Guid.NewGuid(),
             """[{"p":"employees.read","s":["Department"]}]""");
 
-        var response = await client.GetAsync("/api/v1/employees");
+        var response = await client.GetAsync("/api/v1/employees?page=1&pageSize=10");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
