@@ -15,6 +15,18 @@ namespace HrService.Tests;
 public sealed class EmployeeServiceTests
 {
     [Fact]
+    public void EmployeeOverviewEndpointUsesExistingDynamicReadPolicy()
+    {
+        var method = typeof(EmployeesController).GetMethod(nameof(EmployeesController.GetOverview));
+        Assert.NotNull(method);
+
+        var authorization = method!.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>();
+        Assert.Contains(authorization, attribute =>
+            attribute.Policy == PermissionPolicies.EmployeesRead && attribute.Roles is null);
+    }
+
+    [Fact]
     public async Task GetVisibleAsync_CombinesSelfAndTeamScopes()
     {
         var actorId = Guid.NewGuid();
