@@ -16,13 +16,23 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
     [HttpGet]
     [Authorize(Policy = LeavePermissionPolicies.LeavesRead)]
     public async Task<ActionResult<IReadOnlyList<LeaveRequestResponse>>> GetVisible(
-        [FromQuery, Range(1, int.MaxValue)] int page,
-        [FromQuery, Range(1, 100)] int pageSize,
+        [FromQuery, Range(1, int.MaxValue)] int? page,
+        [FromQuery, Range(1, 100)] int? pageSize,
         [FromQuery] string? search = null,
         [FromQuery] string? status = null,
         [FromQuery] int? leaveTypeId = null,
         CancellationToken cancellationToken = default)
     {
+        if (!IsValidPagination(page, pageSize))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Invalid pagination",
+                Detail = "Both page and pageSize are required. page must be at least 1 and pageSize must be between 1 and 100."
+            });
+        }
+
         var employeeId = GetCurrentEmployeeId();
         if (!employeeId.HasValue)
         {
@@ -36,8 +46,8 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
             employeeId.Value,
             authorization,
             access,
-            page,
-            pageSize,
+            page!.Value,
+            pageSize!.Value,
             search,
             status,
             leaveTypeId,
@@ -92,13 +102,23 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
     [HttpGet("mine")]
     [Authorize(Policy = LeavePermissionPolicies.LeavesRead)]
     public async Task<ActionResult<IReadOnlyList<LeaveRequestResponse>>> GetMine(
-        [FromQuery, Range(1, int.MaxValue)] int page,
-        [FromQuery, Range(1, 100)] int pageSize,
+        [FromQuery, Range(1, int.MaxValue)] int? page,
+        [FromQuery, Range(1, 100)] int? pageSize,
         [FromQuery] string? search = null,
         [FromQuery] string? status = null,
         [FromQuery] int? leaveTypeId = null,
         CancellationToken cancellationToken = default)
     {
+        if (!IsValidPagination(page, pageSize))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Invalid pagination",
+                Detail = "Both page and pageSize are required. page must be at least 1 and pageSize must be between 1 and 100."
+            });
+        }
+
         var employeeId = GetCurrentEmployeeId();
         if (!employeeId.HasValue)
         {
@@ -106,7 +126,7 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
         }
 
         var paged = await leaveRequestService.GetMinePagedAsync(
-            employeeId.Value, page, pageSize, search, status, leaveTypeId, cancellationToken);
+            employeeId.Value, page!.Value, pageSize!.Value, search, status, leaveTypeId, cancellationToken);
         Response.Headers["X-Total-Count"] = paged.TotalCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
         return Ok(paged.Items);
     }
@@ -135,11 +155,21 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
     [Authorize(Policy = LeavePermissionPolicies.LeavesDecide)]
     [HttpGet("pending-approval")]
     public async Task<ActionResult<IReadOnlyList<LeaveRequestResponse>>> GetPendingApproval(
-        [FromQuery, Range(1, int.MaxValue)] int page,
-        [FromQuery, Range(1, 100)] int pageSize,
+        [FromQuery, Range(1, int.MaxValue)] int? page,
+        [FromQuery, Range(1, 100)] int? pageSize,
         [FromQuery] string? search = null,
         CancellationToken cancellationToken = default)
     {
+        if (!IsValidPagination(page, pageSize))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Invalid pagination",
+                Detail = "Both page and pageSize are required. page must be at least 1 and pageSize must be between 1 and 100."
+            });
+        }
+
         var actorId = GetCurrentEmployeeId();
         var authorization = Request.Headers.Authorization.ToString();
         if (!actorId.HasValue || string.IsNullOrWhiteSpace(authorization))
@@ -151,8 +181,8 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
             actorId.Value,
             authorization,
             LeaveAccess.FromClaims(User),
-            page,
-            pageSize,
+            page!.Value,
+            pageSize!.Value,
             search,
             cancellationToken);
         Response.Headers["X-Total-Count"] = paged.TotalCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -219,6 +249,10 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
             cancellationToken);
         return Ok(updated);
     }
+
+    private static bool IsValidPagination(int? page, int? pageSize) =>
+        page.HasValue && page.Value >= 1 &&
+        pageSize.HasValue && pageSize.Value is >= 1 and <= 100;
 
     private Guid? GetCurrentEmployeeId()
     {
