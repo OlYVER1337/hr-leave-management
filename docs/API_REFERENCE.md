@@ -104,6 +104,23 @@ hệ thống sẽ bỏ qua Redis và đọc dữ liệu trực tiếp từ SQL.
 | `POST /api/v1/leave-requests/{id}/cancel` | `leaves.cancel:Self` | Chỉ chủ đơn được hủy khi đơn còn Pending |
 | `GET /api/v1/leave-balances/mine?year=2026` | `leaves.read`: Self hoặc All | Xem số dư phép của người dùng hiện tại theo từng loại nghỉ |
 
+Ví dụ request cho quyết định duyệt/từ chối:
+
+```http
+PATCH /api/v1/leave-requests/{id}/decision
+Content-Type: application/json
+Authorization: Bearer <access-token>
+
+{
+  "decision": "approve",
+  "note": "Đã sắp xếp nhân sự thay ca."
+}
+```
+
+`decision` nhận `approve` hoặc `reject`. Các route POST `/approve` và `/reject` vẫn được giữ để tương thích client cũ.
+
+Summary trả về `pending` theo quyền `leaves.decide`. Hai trường `approved` và `total` là số nguyên khi có `leaves.read`, nếu không sẽ là `null`.
+
 Hiện tại hệ thống **không có endpoint riêng cho báo cáo hoặc xuất dữ liệu**.
 
 Các chỉ số trên Dashboard được tổng hợp từ các API hiện có về:
