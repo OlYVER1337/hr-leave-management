@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { usePagedBlock } from './usePagedBlock';
 import type { PagedResult } from '../services/hrService';
@@ -113,6 +113,70 @@ describe('usePagedBlock', () => {
     expect(result.current.totalCount).toBe(0);
     await waitFor(() => expect(load).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(result.current.hasTotalCount).toBe(true));
+  });
+
+  it('keeps the last known count while refreshing the same filter', async () => {
+    let resolveRefresh: ((value: PagedResult<number>) => void) | undefined;
+    const load = vi.fn((page: number, pageSize: number) => {
+      if (load.mock.calls.length === 1) {
+        return Promise.resolve(createPage(page, pageSize, 45));
+      }
+      return new Promise<PagedResult<number>>((resolve) => {
+        resolveRefresh = resolve;
+      });
+    });
+
+    const { result, rerender } = renderHook(
+      ({ refreshToken }) => usePagedBlock({
+        page: 1,
+        pageSize: 10,
+        queryKey: 'all-employees',
+        refreshToken,
+        load,
+      }),
+      { initialProps: { refreshToken: 0 } },
+    );
+
+    await waitFor(() => expect(result.current.hasTotalCount).toBe(true));
+    rerender({ refreshToken: 1 });
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(2));
+
+    expect(result.current.hasTotalCount).toBe(true);
+    expect(result.current.totalCount).toBe(45);
+
+    await act(async () => {
+      resolveRefresh?.(createPage(1, 20, 40));
+    });
+
+    await waitFor(() => expect(result.current.totalCount).toBe(40));
+  });
+
+  it('evicts old blocks after four blocks have been cached', async () => {
+    const load = vi.fn((page: number, pageSize: number) =>
+      Promise.resolve(createPage(page, pageSize, 100)),
+    );
+
+    const { result, rerender } = renderHook(
+      ({ page }) => usePagedBlock({
+        page,
+        pageSize: 10,
+        queryKey: 'all-employees',
+        refreshToken: 0,
+        load,
+      }),
+      { initialProps: { page: 1 } },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    for (const page of [3, 5, 7, 9]) {
+      rerender({ page });
+      await waitFor(() => expect(result.current.loading).toBe(false));
+    }
+
+    rerender({ page: 1 });
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(6));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(load).toHaveBeenNthCalledWith(6, 1, 20);
   });
 
   it('exposes a failed block request without remaining in loading state', async () => {
