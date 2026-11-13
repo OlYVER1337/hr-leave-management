@@ -106,7 +106,8 @@ describe('ApprovalsPage', () => {
     expect(mocks.notify).toHaveBeenCalledWith('Đã phê duyệt đơn nghỉ.');
     expect(getApprovalsInboxPage).toHaveBeenCalledWith(manager, expect.objectContaining({ page: 1, pageSize: 20 }));
     expect(getApprovalsInboxPage).toHaveBeenCalled();
-    expect(getLeaveRequestSummary).toHaveBeenCalledTimes(1);
+    // One initial summary load and one refresh after the decision.
+    expect(getLeaveRequestSummary).toHaveBeenCalledTimes(2);
     expect(getLeaveRequestsPage).not.toHaveBeenCalledWith(
       manager,
       expect.objectContaining({ pageSize: 1 }),
