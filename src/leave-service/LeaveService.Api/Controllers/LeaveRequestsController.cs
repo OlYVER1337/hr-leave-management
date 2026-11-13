@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using LeaveService.Api.Authorization;
 using LeaveService.Application.Dtos;
@@ -15,8 +16,8 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
     [HttpGet]
     [Authorize(Policy = LeavePermissionPolicies.LeavesRead)]
     public async Task<ActionResult<IReadOnlyList<LeaveRequestResponse>>> GetVisible(
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 10,
+        [FromQuery, Range(1, int.MaxValue)] int page,
+        [FromQuery, Range(1, 100)] int pageSize,
         [FromQuery] string? search = null,
         [FromQuery] string? status = null,
         [FromQuery] int? leaveTypeId = null,
@@ -91,8 +92,8 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
     [HttpGet("mine")]
     [Authorize(Policy = LeavePermissionPolicies.LeavesRead)]
     public async Task<ActionResult<IReadOnlyList<LeaveRequestResponse>>> GetMine(
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 10,
+        [FromQuery, Range(1, int.MaxValue)] int page,
+        [FromQuery, Range(1, 100)] int pageSize,
         [FromQuery] string? search = null,
         [FromQuery] string? status = null,
         [FromQuery] int? leaveTypeId = null,
@@ -134,8 +135,8 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
     [Authorize(Policy = LeavePermissionPolicies.LeavesDecide)]
     [HttpGet("pending-approval")]
     public async Task<ActionResult<IReadOnlyList<LeaveRequestResponse>>> GetPendingApproval(
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 10,
+        [FromQuery, Range(1, int.MaxValue)] int page,
+        [FromQuery, Range(1, 100)] int pageSize,
         [FromQuery] string? search = null,
         CancellationToken cancellationToken = default)
     {
