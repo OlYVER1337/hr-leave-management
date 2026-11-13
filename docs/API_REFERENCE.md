@@ -22,7 +22,7 @@ Trừ khi có ghi chú khác, các route yêu cầu:
 Authorization: Bearer <access-token>
 ```
 
-Danh sách nhân viên yêu cầu cả hai query parameter `page` và `pageSize`; `page` bắt đầu từ 1 và `pageSize` nằm trong khoảng 1–100. API trả danh sách tại response body và tổng số bản ghi trong header `X-Total-Count`. Endpoint summary sử dụng cùng phạm vi `employees.read` nhưng không nhận tham số phân trang.
+Danh sách nhân viên yêu cầu cả hai query parameter `page` và `pageSize`; `page` bắt đầu từ 1 và `pageSize` nằm trong khoảng 1–100. API trả danh sách tại response body và tổng số bản ghi trong header `X-Total-Count`. Endpoint `overview` trả cùng danh sách, tổng số bản ghi và thống kê nhân viên trong một response; endpoint `summary` cũ vẫn được giữ để tương thích.
 
 Các vai trò trong hệ thống gồm:
 
@@ -30,7 +30,7 @@ Các vai trò trong hệ thống gồm:
 - `Manager`
 - `Employee`
 
-HR chịu trách nhiệm quản lý tổ chức và danh mục cấu hình. Chỉ HR và Manager có thể truy cập hộp thư phê duyệt và thực hiện quyết định phê duyệt; ngoài ra hệ thống còn kiểm tra Manager có thực sự được phân công xử lý yêu cầu đó hay không.
+HR chịu trách nhiệm quản lý tổ chức và danh mục cấu hình. Quyền truy cập hộp thư phê duyệt và thao tác quyết định được xác định bằng permission/scope trong JWT; với scope Team, Leave Service còn xác minh quan hệ quản lý hiện tại qua HR Service.
 
 Refresh token được thiết lập dưới dạng **HttpOnly Cookie** khi đăng nhập vào HR Service và không được trả về trong JSON.
 
@@ -51,7 +51,8 @@ Refresh token được thiết lập dưới dạng **HttpOnly Cookie** khi đă
 | `PUT /api/v1/departments/{id}` | HR | Cập nhật phòng ban |
 | `DELETE /api/v1/departments/{id}` | HR | Xóa phòng ban khi thỏa mãn các điều kiện nghiệp vụ |
 | `GET /api/v1/employees?page=1&pageSize=20` | `employees.read` với scope `Self`, `Team` hoặc `All` | Xem danh sách nhân viên trong phạm vi được cấp; hỗ trợ tìm kiếm, lọc và sắp xếp |
-| `GET /api/v1/employees/summary` | `employees.read` với scope `Self`, `Team` hoặc `All` | Lấy tổng số nhân viên, số đang hoạt động và số Manager đang hoạt động trong cùng phạm vi quyền |
+| `GET /api/v1/employees/overview?page=1&pageSize=20` | `employees.read` với scope `Self`, `Team` hoặc `All` | Trả danh sách phân trang, `totalCount` và `summary` trong cùng response |
+| `GET /api/v1/employees/summary` | `employees.read` với scope `Self`, `Team` hoặc `All` | API summary tương thích cũ; lấy số nhân viên, số đang hoạt động và số Manager đang hoạt động trong phạm vi quyền |
 | `GET /api/v1/employees/{id}` | `employees.read` với scope phù hợp | Xem thông tin một nhân viên thuộc phạm vi được cấp |
 | `POST /api/v1/employees` | Permission tạo nhân viên | Tạo nhân viên; mã nhân viên được hệ thống tự động tạo |
 | `PUT /api/v1/employees/{id}` | HR | Cập nhật nhân viên |
@@ -59,6 +60,7 @@ Refresh token được thiết lập dưới dạng **HttpOnly Cookie** khi đă
 | `PUT /api/v1/employees/{id}/password` | HR | Đặt lại mật khẩu nhân viên |
 | `GET /api/v1/lookup/employees/{id}` | Service đã xác thực | Lấy snapshot thông tin nhân viên cho Leave Service |
 | `GET /api/v1/lookup/employees/{managerId}/team` | Service đã xác thực | Tra cứu danh sách nhân viên thuộc Manager |
+| `GET /api/v1/leave-catalog?year=2027` | Đã xác thực | Trả `leaveTypes` và `leavePolicies` theo năm trong một response; `includeInactive=true` yêu cầu `leave-types.update:All` |
 | `GET /api/v1/leave-types[/{id}]` | Đã xác thực | Xem danh mục loại nghỉ |
 | `POST /api/v1/leave-types` | HR | Khôi phục một loại nghỉ mặc định bị thiếu (`ANNUAL`, `SICK`, `UNPAID`); không cho phép tạo loại nghỉ tùy ý |
 | `PUT /api/v1/leave-types/{id}` | HR | Cập nhật loại nghỉ |
@@ -95,10 +97,12 @@ hệ thống sẽ bỏ qua Redis và đọc dữ liệu trực tiếp từ SQL.
 | `GET /api/v1/leave-requests/mine?page=1&pageSize=20` | `leaves.read`: Self hoặc All | Chỉ lấy đơn có EmployeeId bằng người đang đăng nhập |
 | `POST /api/v1/leave-requests` | `leaves.create:Self` | Tạo đơn cho chính người đang đăng nhập |
 | `GET /api/v1/leave-requests/pending-approval?page=1&pageSize=20` | `leaves.decide`: Team hoặc All | Hộp chờ; Team chỉ gồm nhân viên thuộc Manager hiện tại |
-| `POST /api/v1/leave-requests/{id}/approve` | `leaves.decide`: Team hoặc All | Duyệt; Team phải xác minh Manager hiện tại qua HR Service |
-| `POST /api/v1/leave-requests/{id}/reject` | `leaves.decide`: Team hoặc All | Từ chối; Team phải xác minh Manager hiện tại qua HR Service |
+| `GET /api/v1/leave-requests/summary` | Cần `leaves.read`: Self/Team/All và `leaves.decide`: Team/All | Trả số đơn Pending theo scope `decide`; số Approved và Total theo scope `read`. Hai scope được áp dụng độc lập |
+| `PATCH /api/v1/leave-requests/{id}/decision` | `leaves.decide`: Team hoặc All | Một endpoint cho quyết định approve/reject; body nhận `decision` (`approve` hoặc `reject`) và `note` |
+| `POST /api/v1/leave-requests/{id}/approve` | `leaves.decide`: Team hoặc All | Route tương thích cũ để duyệt; Team phải xác minh Manager hiện tại qua HR Service |
+| `POST /api/v1/leave-requests/{id}/reject` | `leaves.decide`: Team hoặc All | Route tương thích cũ để từ chối; Team phải xác minh Manager hiện tại qua HR Service |
 | `POST /api/v1/leave-requests/{id}/cancel` | `leaves.cancel:Self` | Chỉ chủ đơn được hủy khi đơn còn Pending |
-| `GET /api/v1/leave-balances/mine?year=2026` | Đã xác thực | Xem số dư phép của người dùng hiện tại theo từng loại nghỉ |
+| `GET /api/v1/leave-balances/mine?year=2026` | `leaves.read`: Self hoặc All | Xem số dư phép của người dùng hiện tại theo từng loại nghỉ |
 
 Hiện tại hệ thống **không có endpoint riêng cho báo cáo hoặc xuất dữ liệu**.
 
