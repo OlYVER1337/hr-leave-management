@@ -38,6 +38,56 @@ public sealed class LeaveCatalogServiceTests
     }
 
     [Fact]
+    public async Task GetLeaveCatalogAsync_ReturnsTypesAndYearPoliciesUsingCachedReads()
+    {
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var cache = new InMemoryLeaveCatalogCache();
+        repository
+            .Setup(item => item.ListLeaveTypesAsync(true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+            [
+                new LeaveType { Id = 1, Code = "ANNUAL", Name = "Annual", IsActive = true },
+                new LeaveType { Id = 2, Code = "SICK", Name = "Sick", IsActive = false }
+            ]);
+        repository
+            .Setup(item => item.ListLeavePoliciesAsync(null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+            [
+                new LeavePolicy
+                {
+                    Id = 10,
+                    LeaveTypeId = 1,
+                    LeaveType = new LeaveType { Id = 1, Code = "ANNUAL", Name = "Annual" },
+                    Year = 2027,
+                    DaysPerYear = 15m
+                },
+                new LeavePolicy
+                {
+                    Id = 11,
+                    LeaveTypeId = 1,
+                    LeaveType = new LeaveType { Id = 1, Code = "ANNUAL", Name = "Annual" },
+                    Year = 2028,
+                    DaysPerYear = 16m
+                }
+            ]);
+        var service = CreateService(repository, cache);
+
+        var catalog = await service.GetLeaveCatalogAsync(2027, includeInactive: false);
+
+        Assert.Single(catalog.LeaveTypes);
+        Assert.Equal("ANNUAL", catalog.LeaveTypes[0].Code);
+        var policy = Assert.Single(catalog.LeavePolicies);
+        Assert.Equal(2027, policy.Year);
+        Assert.Equal(15m, policy.DaysPerYear);
+        repository.Verify(
+            item => item.ListLeaveTypesAsync(true, It.IsAny<CancellationToken>()),
+            Times.Once);
+        repository.Verify(
+            item => item.ListLeavePoliciesAsync(null, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
     public async Task CreateLeaveTypeAsync_UsesBuiltInDefinitionAndInvalidatesCacheAfterSave()
     {
         var repository = new Mock<ILeaveCatalogRepository>();
