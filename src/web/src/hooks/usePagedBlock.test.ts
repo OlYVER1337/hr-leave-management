@@ -5,8 +5,9 @@ import type { PagedResult } from '../services/hrService';
 
 function createPage(page: number, pageSize: number, totalCount = 45): PagedResult<number> {
   const first = (page - 1) * pageSize + 1;
+  const itemCount = Math.max(0, Math.min(pageSize, totalCount - first + 1));
   return {
-    items: Array.from({ length: pageSize }, (_, index) => first + index),
+    items: Array.from({ length: itemCount }, (_, index) => first + index),
     totalCount,
   };
 }
@@ -115,12 +116,10 @@ describe('usePagedBlock', () => {
     await waitFor(() => expect(result.current.hasTotalCount).toBe(true));
   });
 
-  it('keeps the last known count while refreshing the same filter', async () => {
+  it('keeps the known count when the UI page size changes', async () => {
     let resolveRefresh: ((value: PagedResult<number>) => void) | undefined;
-    let loadCount = 0;
     const load = vi.fn((page: number, pageSize: number) => {
-      loadCount += 1;
-      if (loadCount === 1) {
+      if (load.mock.calls.length === 1) {
         return Promise.resolve(createPage(page, pageSize, 45));
       }
       return new Promise<PagedResult<number>>((resolve) => {
@@ -129,31 +128,32 @@ describe('usePagedBlock', () => {
     });
 
     const { result, rerender } = renderHook(
-      ({ refreshToken }) => usePagedBlock({
+      ({ pageSize }) => usePagedBlock({
         page: 1,
-        pageSize: 10,
+        pageSize,
         queryKey: 'all-employees',
-        refreshToken,
+        refreshToken: 0,
         load,
       }),
-      { initialProps: { refreshToken: 0 } },
+      { initialProps: { pageSize: 10 } },
     );
 
     await waitFor(() => expect(result.current.hasTotalCount).toBe(true));
-    rerender({ refreshToken: 1 });
-    await waitFor(() => expect(load).toHaveBeenCalledTimes(2));
+    rerender({ pageSize: 25 });
 
     expect(result.current.hasTotalCount).toBe(true);
     expect(result.current.totalCount).toBe(45);
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(2));
+    expect(load).toHaveBeenNthCalledWith(2, 1, 50);
 
     await act(async () => {
-      resolveRefresh?.(createPage(1, 20, 40));
+      resolveRefresh?.(createPage(1, 50, 40));
     });
 
     await waitFor(() => expect(result.current.totalCount).toBe(40));
   });
 
-  it('evicts old blocks after four blocks have been cached', async () => {
+  it('evicts the least recently used block after four blocks have been cached', async () => {
     const load = vi.fn((page: number, pageSize: number) =>
       Promise.resolve(createPage(page, pageSize, 100)),
     );
@@ -170,15 +170,30 @@ describe('usePagedBlock', () => {
     );
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    for (const page of [3, 5, 7, 9]) {
+    for (const page of [3, 5, 7]) {
       rerender({ page });
       await waitFor(() => expect(result.current.loading).toBe(false));
     }
 
+    // Revisit block zero so it becomes the most recently used block.
     rerender({ page: 1 });
+    expect(result.current.items[0]).toBe(1);
+    expect(load).toHaveBeenCalledTimes(4);
+
+    // Adding block four should evict block one, not the recently used block zero.
+    rerender({ page: 9 });
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(5));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    rerender({ page: 1 });
+    expect(result.current.items[0]).toBe(1);
+    expect(load).toHaveBeenCalledTimes(5);
+
+    rerender({ page: 3 });
     await waitFor(() => expect(load).toHaveBeenCalledTimes(6));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(load).toHaveBeenNthCalledWith(6, 1, 20);
+    expect(load).toHaveBeenNthCalledWith(6, 2, 20);
+    expect(result.current.items[0]).toBe(21);
   });
 
   it('exposes a failed block request without remaining in loading state', async () => {
