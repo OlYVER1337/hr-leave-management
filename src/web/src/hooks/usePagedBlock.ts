@@ -25,6 +25,8 @@ export function usePagedBlock<T>({
   const blocksRef = useRef(blocks);
   const loadRef = useRef(load);
   const inFlightRef = useRef(new Map<string, Promise<PagedResult<T>>>());
+  // Keys are ordered from least recently used to most recently used.
+  const accessOrderRef = useRef<string[]>([]);
   blocksRef.current = blocks;
   loadRef.current = load;
 
@@ -41,9 +43,32 @@ export function usePagedBlock<T>({
   const blockIndex = Math.floor((normalizedPage - 1) / pagesPerBlock);
   const requestPage = blockIndex + 1;
   const requestPageSize = normalizedPageSize * pagesPerBlock;
-  const countNamespace = `${queryKey}|${normalizedPageSize}|`;
-  const cacheNamespace = `${refreshToken}|${countNamespace}`;
+
+  // Total count depends on the filters, not the selected UI page size.
+  const countNamespace = queryKey;
+  // The row cache does depend on page size because block boundaries change.
+  const cacheNamespace = `${refreshToken}|${queryKey}|${normalizedPageSize}|`;
   const blockKey = `${cacheNamespace}${blockIndex}`;
+
+  const touchBlock = (key: string) => {
+    accessOrderRef.current = [
+      ...accessOrderRef.current.filter((item) => item !== key),
+      key,
+    ];
+  };
+
+  useEffect(() => {
+    accessOrderRef.current = accessOrderRef.current.filter((key) =>
+      key.startsWith(cacheNamespace),
+    );
+  }, [cacheNamespace]);
+
+  const block = blocks[blockKey];
+
+  // Promote a cached block when the user navigates back to it.
+  useEffect(() => {
+    if (block) touchBlock(blockKey);
+  }, [blockKey, block]);
 
   useEffect(() => {
     if (blocksRef.current[blockKey]) return;
@@ -67,18 +92,27 @@ export function usePagedBlock<T>({
       .then((result) => {
         if (!active) return;
 
+        touchBlock(blockKey);
         setBlocks((current) => {
           const retainedKeys = Object.keys(current)
             .filter((key) => key.startsWith(cacheNamespace) && key !== blockKey)
+            .sort((left, right) =>
+              accessOrderRef.current.indexOf(left) -
+              accessOrderRef.current.indexOf(right),
+            )
             .slice(-(MAX_CACHED_BLOCKS - 1));
           const retained = Object.fromEntries(
             retainedKeys.map((key) => [key, current[key]]),
+          );
+          const retainedSet = new Set([...retainedKeys, blockKey]);
+          accessOrderRef.current = accessOrderRef.current.filter((key) =>
+            retainedSet.has(key),
           );
           return { ...retained, [blockKey]: result };
         });
 
         // Keep the count for the active filter namespace independently from
-        // block insertion order, eviction, or the currently selected page.
+        // block insertion order, cache eviction, page size, or current page.
         setKnownCounts((current) => ({
           ...Object.fromEntries(
             Object.entries(current).filter(([key]) => key === countNamespace),
@@ -115,17 +149,20 @@ export function usePagedBlock<T>({
     return () => {
       active = false;
     };
-  }, [blockKey, cacheNamespace, requestPage, requestPageSize]);
+  }, [blockKey, cacheNamespace, countNamespace, requestPage, requestPageSize]);
 
-  const block = blocks[blockKey];
-  const offsetInBlock = ((normalizedPage - 1) % pagesPerBlock) * normalizedPageSize;
   const hasTotalCount = Object.prototype.hasOwnProperty.call(knownCounts, countNamespace);
 
   return {
-    items: block?.items.slice(offsetInBlock, offsetInBlock + normalizedPageSize) ?? [],
+    items: block?.items.slice(offsetInBlock(normalizedPage, pagesPerBlock, normalizedPageSize),
+      offsetInBlock(normalizedPage, pagesPerBlock, normalizedPageSize) + normalizedPageSize) ?? [],
     totalCount: knownCounts[countNamespace] ?? 0,
     hasTotalCount,
     loading: !block && !errors[blockKey],
     error: errors[blockKey] || '',
   };
+}
+
+function offsetInBlock(page: number, pagesPerBlock: number, pageSize: number): number {
+  return ((page - 1) % pagesPerBlock) * pageSize;
 }
