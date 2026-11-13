@@ -192,6 +192,51 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
         return Ok(paged.Items);
     }
 
+    [Authorize(Policy = LeavePermissionPolicies.LeavesSummary)]
+    [HttpGet("summary")]
+    public async Task<ActionResult<LeaveRequestSummaryResponse>> GetSummary(
+        CancellationToken cancellationToken)
+    {
+        var actorId = GetCurrentEmployeeId();
+        var authorization = Request.Headers.Authorization.ToString();
+        if (!actorId.HasValue || string.IsNullOrWhiteSpace(authorization))
+            return Unauthorized();
+
+        var summary = await leaveRequestService.GetSummaryAsync(
+            actorId.Value,
+            authorization,
+            LeaveAccess.FromClaims(User),
+            cancellationToken);
+        return Ok(summary);
+    }
+
+    [Authorize(Policy = LeavePermissionPolicies.LeavesDecide)]
+    [HttpPatch("{id:guid}/decision")]
+    public async Task<ActionResult<LeaveRequestResponse>> Decide(
+        Guid id,
+        [FromBody] LeaveDecisionCommand request,
+        CancellationToken cancellationToken)
+    {
+        var approve = request.Decision?.Trim().ToLowerInvariant() switch
+        {
+            "approve" or "approved" => true,
+            "reject" or "rejected" => false,
+            _ => (bool?)null
+        };
+
+        if (!approve.HasValue)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Invalid leave decision",
+                Detail = "decision must be either 'approve' or 'reject'."
+            });
+        }
+
+        return await DecideAsync(id, new LeaveDecisionRequest(request.Note), approve.Value, cancellationToken);
+    }
+
     [Authorize(Policy = LeavePermissionPolicies.LeavesDecide)]
     [HttpPost("{id:guid}/approve")]
     public Task<ActionResult<LeaveRequestResponse>> Approve(
