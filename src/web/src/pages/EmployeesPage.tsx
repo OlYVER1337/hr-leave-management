@@ -4,7 +4,7 @@ import { Avatar, EmptyState, formatDate, PageHeader } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { useToast } from '../components/ToastProvider';
 import { deactivateEmployee, getDepartments, getEmployeePage, getEmployeeOverviewPage, saveEmployee, type EmployeeInput, type EmployeePageQuery } from '../services/hrService';
-import { getApiErrorMessage, getRejectedReason } from '../services/apiClient';
+import { getApiErrorMessage } from '../services/apiClient';
 import type { Department, Employee, UserRole } from '../types';
 import { Pagination } from '../components/Pagination';
 import { usePagedBlock } from '../hooks/usePagedBlock';
