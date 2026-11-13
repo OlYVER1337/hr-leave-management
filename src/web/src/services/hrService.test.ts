@@ -20,7 +20,29 @@ vi.mock('./mockStore', () => ({
   updateDemoState: vi.fn(),
 }));
 
-import { getEmployeePage } from './hrService';
+import { getEmployeePage, getEmployeeSummary } from './hrService';
+
+describe('getEmployeeSummary', () => {
+  beforeEach(() => {
+    hrGetMock.mockReset();
+  });
+
+  it('requests the permission-scoped employee summary endpoint', async () => {
+    hrGetMock.mockResolvedValue({
+      data: { total: 25, active: 23, managers: 4 },
+      headers: {},
+    });
+
+    await expect(getEmployeeSummary()).resolves.toEqual({
+      total: 25,
+      active: 23,
+      managers: 4,
+    });
+
+    expect(hrGetMock).toHaveBeenCalledTimes(1);
+    expect(hrGetMock).toHaveBeenCalledWith('/api/v1/employees/summary');
+  });
+});
 
 describe('getEmployeePage', () => {
   beforeEach(() => {
