@@ -12,6 +12,7 @@ public sealed class LeaveRequestService(
 {
     private const int MaximumReasonLength = 1000;
     private const int MaximumRangeDays = 366;
+    private const int MaximumCalendarRangeDays = 62;
 
     public async Task<LeaveRequestResponse> CreateAsync(
         Guid employeeId,
@@ -258,9 +259,20 @@ public sealed class LeaveRequestService(
             throw new LeaveForbiddenException("The caller does not have leaves.read permission.");
         }
 
+        if (calendarOnly && (!from.HasValue || !to.HasValue))
+        {
+            throw Invalid("from", "Calendar queries require both from and to dates.");
+        }
+
         if (from.HasValue && to.HasValue && from.Value > to.Value)
         {
             throw Invalid("from", "The start date must not be later than the end date.");
+        }
+
+        if (calendarOnly &&
+            to!.Value.DayNumber - from!.Value.DayNumber + 1 > MaximumCalendarRangeDays)
+        {
+            throw Invalid("to", $"Calendar queries cannot exceed {MaximumCalendarRangeDays} days.");
         }
 
         // Team scope is resolved from HR at request time (current manager), not from ApproverId.
