@@ -97,7 +97,7 @@ hệ thống sẽ bỏ qua Redis và đọc dữ liệu trực tiếp từ SQL.
 | `GET /api/v1/leave-requests/mine?page=1&pageSize=20` | `leaves.read`: Self hoặc All | Chỉ lấy đơn có EmployeeId bằng người đang đăng nhập |
 | `POST /api/v1/leave-requests` | `leaves.create:Self` | Tạo đơn cho chính người đang đăng nhập |
 | `GET /api/v1/leave-requests/pending-approval?page=1&pageSize=20` | `leaves.decide`: Team hoặc All | Hộp chờ; Team chỉ gồm nhân viên thuộc Manager hiện tại |
-| `GET /api/v1/leave-requests/summary` | Cần `leaves.read`: Self/Team/All và `leaves.decide`: Team/All | Trả số đơn Pending theo scope `decide`; số Approved và Total theo scope `read`. Hai scope được áp dụng độc lập |
+| `GET /api/v1/leave-requests/summary` | `leaves.decide`: Team/All | Trả số đơn Pending theo scope `decide`; Approved và Total theo scope `read`. Nếu không có `leaves.read`, hai trường này là `null` và UI ẩn bằng dấu gạch ngang |
 | `PATCH /api/v1/leave-requests/{id}/decision` | `leaves.decide`: Team hoặc All | Một endpoint cho quyết định approve/reject; body nhận `decision` (`approve` hoặc `reject`) và `note` |
 | `POST /api/v1/leave-requests/{id}/approve` | `leaves.decide`: Team hoặc All | Route tương thích cũ để duyệt; Team phải xác minh Manager hiện tại qua HR Service |
 | `POST /api/v1/leave-requests/{id}/reject` | `leaves.decide`: Team hoặc All | Route tương thích cũ để từ chối; Team phải xác minh Manager hiện tại qua HR Service |
