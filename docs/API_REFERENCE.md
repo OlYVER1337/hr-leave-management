@@ -22,6 +22,8 @@ Trừ khi có ghi chú khác, các route yêu cầu:
 Authorization: Bearer <access-token>
 ```
 
+Danh sách nhân viên yêu cầu cả hai query parameter `page` và `pageSize`; `page` bắt đầu từ 1 và `pageSize` nằm trong khoảng 1–100. API trả danh sách tại response body và tổng số bản ghi trong header `X-Total-Count`. Endpoint summary sử dụng cùng phạm vi `employees.read` nhưng không nhận tham số phân trang.
+
 Các vai trò trong hệ thống gồm:
 
 - `HR`
@@ -48,8 +50,10 @@ Refresh token được thiết lập dưới dạng **HttpOnly Cookie** khi đă
 | `POST /api/v1/departments` | HR | Tạo phòng ban |
 | `PUT /api/v1/departments/{id}` | HR | Cập nhật phòng ban |
 | `DELETE /api/v1/departments/{id}` | HR | Xóa phòng ban khi thỏa mãn các điều kiện nghiệp vụ |
-| `GET /api/v1/employees[/{id}]` | HR | Xem danh sách/thông tin nhân viên |
-| `POST /api/v1/employees` | HR | Tạo nhân viên; mã nhân viên được hệ thống tự động tạo |
+| `GET /api/v1/employees?page=1&pageSize=20` | `employees.read` với scope `Self`, `Team` hoặc `All` | Xem danh sách nhân viên trong phạm vi được cấp; hỗ trợ tìm kiếm, lọc và sắp xếp |
+| `GET /api/v1/employees/summary` | `employees.read` với scope `Self`, `Team` hoặc `All` | Lấy tổng số nhân viên, số đang hoạt động và số Manager đang hoạt động trong cùng phạm vi quyền |
+| `GET /api/v1/employees/{id}` | `employees.read` với scope phù hợp | Xem thông tin một nhân viên thuộc phạm vi được cấp |
+| `POST /api/v1/employees` | Permission tạo nhân viên | Tạo nhân viên; mã nhân viên được hệ thống tự động tạo |
 | `PUT /api/v1/employees/{id}` | HR | Cập nhật nhân viên |
 | `POST /api/v1/employees/{id}/deactivate` | HR | Vô hiệu hóa nhân viên và thu hồi refresh token |
 | `PUT /api/v1/employees/{id}/password` | HR | Đặt lại mật khẩu nhân viên |
