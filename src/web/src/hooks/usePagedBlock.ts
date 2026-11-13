@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PagedResult } from '../services/hrService';
 
 // Mỗi request tải tối đa 2 trang UI nhưng không vượt giới hạn 100 bản ghi của API.
@@ -50,12 +50,12 @@ export function usePagedBlock<T>({
   const cacheNamespace = `${refreshToken}|${queryKey}|${normalizedPageSize}|`;
   const blockKey = `${cacheNamespace}${blockIndex}`;
 
-  const touchBlock = (key: string) => {
+  const touchBlock = useCallback((key: string) => {
     accessOrderRef.current = [
       ...accessOrderRef.current.filter((item) => item !== key),
       key,
     ];
-  };
+  }, []);
 
   useEffect(() => {
     accessOrderRef.current = accessOrderRef.current.filter((key) =>
@@ -68,7 +68,7 @@ export function usePagedBlock<T>({
   // Promote a cached block when the user navigates back to it.
   useEffect(() => {
     if (block) touchBlock(blockKey);
-  }, [blockKey, block]);
+  }, [blockKey, block, touchBlock]);
 
   useEffect(() => {
     if (blocksRef.current[blockKey]) return;
@@ -149,7 +149,7 @@ export function usePagedBlock<T>({
     return () => {
       active = false;
     };
-  }, [blockKey, cacheNamespace, countNamespace, requestPage, requestPageSize]);
+  }, [blockKey, cacheNamespace, countNamespace, requestPage, requestPageSize, touchBlock]);
 
   const hasTotalCount = Object.prototype.hasOwnProperty.call(knownCounts, countNamespace);
   const itemOffset = offsetInBlock(normalizedPage, pagesPerBlock, normalizedPageSize);
