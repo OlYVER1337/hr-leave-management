@@ -91,6 +91,7 @@ export function EmployeesPage() {
   const {
     items: blockEmployees,
     totalCount,
+    hasTotalCount,
     loading: pageLoading,
     error: pageError,
   } = usePagedBlock<Employee>({
