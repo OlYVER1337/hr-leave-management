@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using HrService.Api.Authorization;
 using HrService.Application.Dtos;
 using HrService.Application.Services;
@@ -14,8 +15,8 @@ public sealed class EmployeesController(EmployeeService employeeService) : Contr
     [HttpGet]
     [Authorize(Policy = PermissionPolicies.EmployeesRead)]
     public async Task<ActionResult<IReadOnlyList<EmployeeResponse>>> GetAll(
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 10,
+        [FromQuery, Range(1, int.MaxValue)] int page,
+        [FromQuery, Range(1, 100)] int pageSize,
         [FromQuery] string? search = null,
         [FromQuery] string? role = null,
         [FromQuery] bool? isActive = null,
