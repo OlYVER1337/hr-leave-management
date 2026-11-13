@@ -15,9 +15,12 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
     [HttpGet]
     [Authorize(Policy = LeavePermissionPolicies.LeavesRead)]
     public async Task<ActionResult<IReadOnlyList<LeaveRequestResponse>>> GetVisible(
-        [FromQuery] int? page,
-        [FromQuery] int? pageSize,
-        CancellationToken cancellationToken)
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? search = null,
+        [FromQuery] string? status = null,
+        [FromQuery] int? leaveTypeId = null,
+        CancellationToken cancellationToken = default)
     {
         var employeeId = GetCurrentEmployeeId();
         if (!employeeId.HasValue)
@@ -28,17 +31,16 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
         var authorization = Request.Headers.Authorization.ToString();
         var access = LeaveAccess.FromClaims(User);
 
-        // Không truyền page/pageSize: giữ nguyên hành vi cũ.
-        if (page is null && pageSize is null)
-        {
-            var all = await leaveRequestService.GetVisibleAsync(
-                employeeId.Value, authorization, access,
-                calendarOnly: false, from: null, to: null, cancellationToken);
-            return Ok(all);
-        }
-
         var paged = await leaveRequestService.GetVisiblePagedAsync(
-            employeeId.Value, authorization, access, page ?? 1, pageSize ?? 20, cancellationToken);
+            employeeId.Value,
+            authorization,
+            access,
+            page,
+            pageSize,
+            search,
+            status,
+            leaveTypeId,
+            cancellationToken);
         Response.Headers["X-Total-Count"] = paged.TotalCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
         return Ok(paged.Items);
     }
@@ -125,7 +127,10 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
     [Authorize(Policy = LeavePermissionPolicies.LeavesDecide)]
     [HttpGet("pending-approval")]
     public async Task<ActionResult<IReadOnlyList<LeaveRequestResponse>>> GetPendingApproval(
-        CancellationToken cancellationToken)
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? search = null,
+        CancellationToken cancellationToken = default)
     {
         var actorId = GetCurrentEmployeeId();
         var authorization = Request.Headers.Authorization.ToString();
@@ -134,12 +139,16 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
             return Unauthorized();
         }
 
-        var requests = await leaveRequestService.GetPendingAsync(
+        var paged = await leaveRequestService.GetPendingPagedAsync(
             actorId.Value,
             authorization,
             LeaveAccess.FromClaims(User),
+            page,
+            pageSize,
+            search,
             cancellationToken);
-        return Ok(requests);
+        Response.Headers["X-Total-Count"] = paged.TotalCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return Ok(paged.Items);
     }
 
     [Authorize(Policy = LeavePermissionPolicies.LeavesDecide)]

@@ -40,6 +40,18 @@ public interface ILeaveRequestRepository
             bool calendarOnly,
             DateOnly? from,
             DateOnly? to,
+            LeaveRequestStatus? status,
+            int? leaveTypeId,
+            string? search,
+            int page,
+            int pageSize,
+            CancellationToken cancellationToken = default);
+
+    Task<(IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> Items, int TotalCount)>
+        ListPendingPageAsync(
+            IReadOnlyCollection<Guid> employeeIds,
+            bool includeAll,
+            string? search,
             int page,
             int pageSize,
             CancellationToken cancellationToken = default);

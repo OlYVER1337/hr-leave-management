@@ -152,13 +152,16 @@ public sealed class LeaveRequestService(
         LeaveAccess access,
         int page,
         int pageSize,
+        string? search,
+        string? status,
+        int? leaveTypeId,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(access);
         if (!access.CanRead)
-        {
             throw new LeaveForbiddenException("The caller does not have leaves.read permission.");
-        }
+        if (leaveTypeId is <= 0)
+            throw Invalid("leaveTypeId", "Leave type ID must be a positive integer.");
 
         var teamEmployeeIds = access.CanReadTeam && !access.CanReadAll
             ? await hrClient.GetTeamEmployeeIdsAsync(employeeId, authorization, cancellationToken)
@@ -171,6 +174,40 @@ public sealed class LeaveRequestService(
             calendarOnly: false,
             from: null,
             to: null,
+            ParseStatusFilter(status),
+            leaveTypeId,
+            search,
+            Math.Max(1, page),
+            Math.Clamp(pageSize, 1, 100),
+            cancellationToken);
+
+        return new PagedLeaveRequestResponse(
+            rows.Select(item => ToResponse(item.Request, item.Balances)).ToArray(),
+            totalCount);
+    }
+
+    public async Task<PagedLeaveRequestResponse> GetPendingPagedAsync(
+        Guid actorId,
+        string authorization,
+        LeaveAccess access,
+        int page,
+        int pageSize,
+        string? search,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(access);
+        if (!access.CanDecide)
+            throw new LeaveForbiddenException("The caller does not have leaves.decide permission.");
+
+        var includeAll = access.CanDecideAll;
+        var teamEmployeeIds = includeAll
+            ? Array.Empty<Guid>()
+            : await hrClient.GetTeamEmployeeIdsAsync(actorId, authorization, cancellationToken);
+
+        var (rows, totalCount) = await repository.ListPendingPageAsync(
+            teamEmployeeIds,
+            includeAll,
+            search,
             Math.Max(1, page),
             Math.Clamp(pageSize, 1, 100),
             cancellationToken);
@@ -300,6 +337,20 @@ public sealed class LeaveRequestService(
             timeProvider.GetUtcNow().UtcDateTime,
             cancellationToken);
         return ToResponse(result.Request, result.Balances);
+    }
+
+    private static LeaveRequestStatus? ParseStatusFilter(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+            return null;
+
+        if (!Enum.TryParse<LeaveRequestStatus>(status, ignoreCase: true, out var parsed) ||
+            !Enum.IsDefined(parsed))
+        {
+            throw Invalid("status", "Status must be Pending, Approved, Rejected, or Cancelled.");
+        }
+
+        return parsed;
     }
 
     private static void EnsurePending(LeaveRequest request)
