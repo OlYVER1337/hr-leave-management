@@ -84,20 +84,21 @@ export function ApprovalsPage() {
       getLeaveRequestsPage(user, { page: 1, pageSize: 1 }),
     ]).then((results) => {
       if (!active) return;
-      if (results[0].status === 'fulfilled') {
-        setSummary((value) => ({ ...value, pending: results[0].value.totalCount }));
+      const [pendingResult, approvedResult, totalResult] = results;
+      if (pendingResult.status === 'fulfilled') {
+        setSummary((value) => ({ ...value, pending: pendingResult.value.totalCount }));
       } else {
-        setSummaryError(getApiErrorMessage(results[0].reason));
+        setSummaryError(getApiErrorMessage(pendingResult.reason));
       }
-      if (results[1].status === 'fulfilled') {
-        setSummary((value) => ({ ...value, approved: results[1].value.totalCount }));
+      if (approvedResult.status === 'fulfilled') {
+        setSummary((value) => ({ ...value, approved: approvedResult.value.totalCount }));
       } else {
-        setSummaryError((value) => value || getApiErrorMessage(results[1].reason));
+        setSummaryError((value) => value || getApiErrorMessage(approvedResult.reason));
       }
-      if (results[2].status === 'fulfilled') {
-        setSummary((value) => ({ ...value, total: results[2].value.totalCount }));
+      if (totalResult.status === 'fulfilled') {
+        setSummary((value) => ({ ...value, total: totalResult.value.totalCount }));
       } else {
-        setSummaryError((value) => value || getApiErrorMessage(results[2].reason));
+        setSummaryError((value) => value || getApiErrorMessage(totalResult.reason));
       }
     });
     return () => { active = false; };
