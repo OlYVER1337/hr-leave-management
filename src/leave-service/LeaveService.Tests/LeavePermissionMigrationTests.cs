@@ -15,6 +15,8 @@ public sealed class LeavePermissionMigrationTests
     [InlineData(nameof(LeaveRequestsController.GetCalendar), "permission:leaves.read")]
     [InlineData(nameof(LeaveRequestsController.GetById), "permission:leaves.read")]
     [InlineData(nameof(LeaveRequestsController.GetMine), "permission:leaves.read:self-or-all")]
+    [InlineData(nameof(LeaveRequestsController.GetSummary), "permission:leaves.summary")]
+    [InlineData(nameof(LeaveRequestsController.Decide), "permission:leaves.decide")]
     [InlineData(nameof(LeaveRequestsController.Create), "permission:leaves.create")]
     [InlineData(nameof(LeaveRequestsController.GetPendingApproval), "permission:leaves.decide")]
     [InlineData(nameof(LeaveRequestsController.Approve), "permission:leaves.decide")]
@@ -30,6 +32,17 @@ public sealed class LeavePermissionMigrationTests
         Assert.Contains(authorization, attribute =>
             attribute.Policy == expectedPolicy && attribute.Roles is null);
         Assert.DoesNotContain(authorization, attribute => !string.IsNullOrWhiteSpace(attribute.Roles));
+    }
+
+    [Fact]
+    public void PersonalBalanceEndpoint_RequiresSelfOrAllReadScope()
+    {
+        var method = typeof(LeaveBalancesController).GetMethod(nameof(LeaveBalancesController.GetMine));
+        Assert.NotNull(method);
+
+        var authorization = method!.GetCustomAttributes<AuthorizeAttribute>(inherit: true).ToArray();
+        Assert.Contains(authorization, attribute =>
+            attribute.Policy == "permission:leaves.read:self-or-all" && attribute.Roles is null);
     }
 
     [Fact]
