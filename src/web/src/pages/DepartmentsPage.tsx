@@ -40,21 +40,22 @@ export function DepartmentsPage() {
       ),
     ]);
 
-    if (requests[0].status === 'fulfilled') {
-      setEmployeeSummary((current) => ({ ...current, total: requests[0].value.totalCount }));
+    const [totalEmployeesResult, activeEmployeesResult, ...departmentResults] = requests;
+    if (totalEmployeesResult.status === 'fulfilled') {
+      setEmployeeSummary((current) => ({ ...current, total: totalEmployeesResult.value.totalCount }));
     } else {
-      setError(getApiErrorMessage(getRejectedReason(requests[0])));
+      setError(getApiErrorMessage(getRejectedReason(totalEmployeesResult)));
     }
-    if (requests[1].status === 'fulfilled') {
-      setEmployeeSummary((current) => ({ ...current, active: requests[1].value.totalCount }));
+    if (activeEmployeesResult.status === 'fulfilled') {
+      setEmployeeSummary((current) => ({ ...current, active: activeEmployeesResult.value.totalCount }));
     } else {
-      setError((current) => current || getApiErrorMessage(getRejectedReason(requests[1])));
+      setError((current) => current || getApiErrorMessage(getRejectedReason(activeEmployeesResult)));
     }
 
     const members: Record<number, Employee[]> = {};
     const counts: Record<number, number> = {};
     nextDepartments.forEach((department, index) => {
-      const result = requests[index + 2];
+      const result = departmentResults[index];
       if (result.status === 'fulfilled') {
         members[department.id] = result.value.items;
         counts[department.id] = result.value.totalCount;
