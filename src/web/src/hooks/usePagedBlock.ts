@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PagedResult } from '../services/hrService';
 
-const BUFFER_PAGES = 2;
+// Mỗi request tải một block gồm 2 trang UI. Chuyển trang trong block dùng cache;
+// chỉ khi sang block mới mới gọi API.
+const PAGES_PER_BLOCK = 2;
+const MAX_CACHED_BLOCKS = 4;
 
 export function usePagedBlock<T>({
   page,
@@ -24,15 +27,15 @@ export function usePagedBlock<T>({
   blocksRef.current = blocks;
   loadRef.current = load;
 
-  const blockIndex = Math.floor((page - 1) / BUFFER_PAGES);
+  const blockIndex = Math.floor((page - 1) / PAGES_PER_BLOCK);
   const requestPage = blockIndex + 1;
-  const requestPageSize = Math.min(pageSize * BUFFER_PAGES, 100);
-  const blockKey = `${refreshToken}|${queryKey}|${pageSize}|${blockIndex}`;
-  const queryPrefix = `|${queryKey}|${pageSize}|`;
-  const refreshPrefix = `${refreshToken}${queryPrefix}`;
+  const requestPageSize = Math.min(pageSize * PAGES_PER_BLOCK, 100);
+  const cacheNamespace = `${refreshToken}|${queryKey}|${pageSize}|`;
+  const blockKey = `${cacheNamespace}${blockIndex}`;
 
   useEffect(() => {
     if (blocksRef.current[blockKey]) return;
+
     let active = true;
     setLoadingKey(blockKey);
     setErrors((current) => ({ ...current, [blockKey]: '' }));
@@ -40,11 +43,13 @@ export function usePagedBlock<T>({
     loadRef.current(requestPage, requestPageSize)
       .then((result) => {
         if (!active) return;
+
         setBlocks((current) => {
-          const retained = Object.entries(current)
-            .filter(([key]) => key.startsWith(refreshPrefix))
-            .slice(-2);
-          return { ...Object.fromEntries(retained), [blockKey]: result };
+          const matching = Object.entries(current)
+            .filter(([key]) => key.startsWith(cacheNamespace))
+            .slice(-MAX_CACHED_BLOCKS + 1);
+
+          return { ...Object.fromEntries(matching), [blockKey]: result };
         });
       })
       .catch((reason: unknown) => {
@@ -55,22 +60,22 @@ export function usePagedBlock<T>({
         }));
       })
       .finally(() => {
-        setLoadingKey((current) => current === blockKey ? null : current);
+        if (active) setLoadingKey((current) => current === blockKey ? null : current);
       });
 
     return () => { active = false; };
-  }, [blockKey, refreshPrefix, requestPage, requestPageSize]);
+  }, [blockKey, cacheNamespace, requestPage, requestPageSize]);
 
   const block = blocks[blockKey];
   const lastKnownBlock = Object.entries(blocks)
-    .filter(([key]) => key.includes(queryPrefix))
+    .filter(([key]) => key.startsWith(cacheNamespace))
     .at(-1)?.[1];
-  const offsetInBlock = ((page - 1) % BUFFER_PAGES) * pageSize;
+  const offsetInBlock = ((page - 1) % PAGES_PER_BLOCK) * pageSize;
 
   return {
     items: block?.items.slice(offsetInBlock, offsetInBlock + pageSize) ?? [],
     totalCount: block?.totalCount ?? lastKnownBlock?.totalCount ?? 0,
-    loading: !block && !errors[blockKey],
+    loading: !block && loadingKey === blockKey && !errors[blockKey],
     error: errors[blockKey] || '',
   };
 }
