@@ -7,9 +7,17 @@ const leaveBaseUrl = __ENV.LEAVE_BASE_URL || 'http://host.docker.internal:18082'
 const vuCount = Number(__ENV.VUS || 50);
 const duration = __ENV.DURATION || '5m';
 const year = Number(__ENV.YEAR || new Date().getUTCFullYear());
-// PAGE_SIZE rỗng: đo danh sách không phân trang (như trước). PAGE_SIZE=50: đo danh sách có phân trang.
-const pageSize = __ENV.PAGE_SIZE || '';
-const listQuery = pageSize ? `?page=1&pageSize=${pageSize}` : '';
+// Pagination is mandatory on list APIs. Keep the benchmark bounded and reproducible.
+const pageSize = Number(__ENV.PAGE_SIZE || 50);
+if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+  throw new Error('PAGE_SIZE must be an integer between 1 and 100.');
+}
+const listQuery = `?page=1&pageSize=${pageSize}`;
+const paginationContractRoutes = [
+  { name: 'employees', url: `${hrBaseUrl}/api/v1/employees`, token: 'hr' },
+  { name: 'all_leave_requests', url: `${leaveBaseUrl}/api/v1/leave-requests`, token: 'hr' },
+  { name: 'manager_approvals', url: `${leaveBaseUrl}/api/v1/leave-requests/pending-approval`, token: 'manager' },
+];
 const httpErrors = new Counter('workforce_http_errors');
 const workforceRequests = new Counter('workforce_requests');
 const workforceDuration = new Trend('workforce_request_duration_ms');
@@ -52,7 +60,7 @@ const routes = [
   },
   {
     name: 'manager_approvals',
-    url: `${leaveBaseUrl}/api/v1/leave-requests/pending-approval`,
+    url: `${leaveBaseUrl}/api/v1/leave-requests/pending-approval${listQuery}`,
     token: 'manager',
   },
 ];
@@ -79,6 +87,17 @@ export function setup() {
     hr: login(__ENV.HR_EMAIL, __ENV.HR_PASSWORD, 'HR'),
     manager: login(__ENV.MANAGER_EMAIL, __ENV.MANAGER_PASSWORD, 'Manager'),
   };
+
+  // Verify the API contract on every run: an omitted page/pageSize must be rejected.
+  for (const route of paginationContractRoutes) {
+    const response = http.get(route.url, {
+      headers: { Authorization: authorizationHeader(tokens[route.token]) },
+      tags: { endpoint: route.name, phase: 'pagination-contract' },
+    });
+    if (response.status !== 400) {
+      throw new Error(`Pagination contract failed for ${route.name}: expected HTTP 400 without page/pageSize, got ${response.status}`);
+    }
+  }
 
   for (const route of routes) {
     const response = http.get(route.url, {
@@ -194,6 +213,9 @@ export function handleSummary(data) {
     workload: 'employee-and-leave-reads',
     vus: vuCount,
     duration,
+    page_size: pageSize,
+    git_sha: __ENV.GIT_SHA || 'not-provided',
+    image_tag: __ENV.IMAGE_TAG || 'not-provided',
     year,
     requests,
     rps: measuredSeconds > 0 ? requests / measuredSeconds : 0,
