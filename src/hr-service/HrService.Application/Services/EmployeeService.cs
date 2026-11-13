@@ -60,7 +60,7 @@ public sealed class EmployeeService(
             normalizedSize,
             cancellationToken);
 
-        return new PagedEmployeeResponse(items.Select(ToResponse).ToArray(), totalCount);
+        return new PagedEmployeeResponse(items.Select(item => ToResponse(item)).ToArray(), totalCount);
     }
 
     public async Task<EmployeeResponse> GetVisibleByIdAsync(
@@ -463,6 +463,20 @@ public sealed class EmployeeService(
             employee.Department?.Name ?? string.Empty,
             employee.ManagerId,
             employee.Manager?.FullName);
+
+    private static EmployeeResponse ToResponse(EmployeeReadModel employee) =>
+        new(
+            employee.Id,
+            employee.Code,
+            employee.FullName,
+            employee.Email,
+            employee.Role.ToString(),
+            employee.HireDate,
+            employee.IsActive,
+            employee.DepartmentId,
+            employee.DepartmentName,
+            employee.ManagerId,
+            employee.ManagerName);
 
     private static EmployeeLookupResponse ToLookupResponse(EmployeeResponse employee) =>
         new(

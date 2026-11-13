@@ -38,7 +38,7 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<(IReadOnlyList<Employee> Items, int TotalCount)> ListVisiblePageAsync(
+    public async Task<(IReadOnlyList<EmployeeReadModel> Items, int TotalCount)> ListVisiblePageAsync(
         Guid actorId,
         bool includeSelf,
         bool includeTeam,
@@ -48,9 +48,8 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
         CancellationToken cancellationToken = default)
     {
         if (actorId == Guid.Empty || (!includeSelf && !includeTeam && !includeAll))
-            return (Array.Empty<Employee>(), 0);
+            return (Array.Empty<EmployeeReadModel>(), 0);
 
-        // Phạm vi áp trong WHERE; COUNT và OFFSET/FETCH đều chạy trên SQL, không tải toàn bộ bảng.
         var visible = dbContext.Employees
             .AsNoTracking()
             .Where(employee =>
@@ -60,13 +59,24 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
 
         var totalCount = await visible.CountAsync(cancellationToken);
 
+        // SELECT đúng các cột cần; không kéo PasswordHash và các cột thừa của Manager/Department.
         var items = await visible
-            .Include(employee => employee.Department)
-            .Include(employee => employee.Manager)
             .OrderBy(employee => employee.FullName)
             .ThenBy(employee => employee.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
+            .Select(employee => new EmployeeReadModel(
+                employee.Id,
+                employee.Code,
+                employee.FullName,
+                employee.Email,
+                employee.Role,
+                employee.HireDate,
+                employee.IsActive,
+                employee.DepartmentId,
+                employee.Department != null ? employee.Department.Name : string.Empty,
+                employee.ManagerId,
+                employee.Manager != null ? employee.Manager.FullName : null))
             .ToListAsync(cancellationToken);
 
         return (items, totalCount);

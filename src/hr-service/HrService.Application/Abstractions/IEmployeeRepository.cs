@@ -12,7 +12,7 @@ public interface IEmployeeRepository
         bool includeAll,
         CancellationToken cancellationToken = default);
 
-    Task<(IReadOnlyList<Employee> Items, int TotalCount)> ListVisiblePageAsync(
+    Task<(IReadOnlyList<EmployeeReadModel> Items, int TotalCount)> ListVisiblePageAsync(
         Guid actorId,
         bool includeSelf,
         bool includeTeam,
@@ -48,3 +48,17 @@ public interface IEmployeeRepository
     Task<bool> HasDirectReportsAsync(Guid managerId, CancellationToken cancellationToken = default);
     void Add(Employee employee);
 }
+
+// Chỉ các cột cần để trả về API: không đọc PasswordHash, không nạp nguyên entity Manager/Department.
+public sealed record EmployeeReadModel(
+    Guid Id,
+    string Code,
+    string FullName,
+    string Email,
+    Role Role,
+    DateOnly HireDate,
+    bool IsActive,
+    int DepartmentId,
+    string DepartmentName,
+    Guid? ManagerId,
+    string? ManagerName);
