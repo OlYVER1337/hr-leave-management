@@ -145,6 +145,55 @@ public sealed class LeaveRequestServiceTests
     }
 
     [Fact]
+    public async Task GetVisibleAsync_CalendarRequiresBothDateBounds()
+    {
+        var repository = new Mock<ILeaveRequestRepository>();
+        var hrClient = new Mock<ILeaveHrClient>();
+        var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
+
+        await Assert.ThrowsAsync<LeaveValidationException>(() =>
+            service.GetVisibleAsync(
+                Guid.NewGuid(),
+                "Bearer test",
+                ManagerAccess(),
+                calendarOnly: true,
+                from: null,
+                to: new DateOnly(2026, 2, 1)));
+
+        await Assert.ThrowsAsync<LeaveValidationException>(() =>
+            service.GetVisibleAsync(
+                Guid.NewGuid(),
+                "Bearer test",
+                ManagerAccess(),
+                calendarOnly: true,
+                from: new DateOnly(2026, 2, 1),
+                to: null));
+
+        repository.VerifyNoOtherCalls();
+        hrClient.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetVisibleAsync_CalendarRejectsRangesLongerThan62Days()
+    {
+        var repository = new Mock<ILeaveRequestRepository>();
+        var hrClient = new Mock<ILeaveHrClient>();
+        var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
+
+        await Assert.ThrowsAsync<LeaveValidationException>(() =>
+            service.GetVisibleAsync(
+                Guid.NewGuid(),
+                "Bearer test",
+                ManagerAccess(),
+                calendarOnly: true,
+                from: new DateOnly(2026, 1, 1),
+                to: new DateOnly(2026, 3, 4)));
+
+        repository.VerifyNoOtherCalls();
+        hrClient.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task CreateAsync_RejectsInactiveEmployee()
     {
         var employeeId = Guid.NewGuid();
