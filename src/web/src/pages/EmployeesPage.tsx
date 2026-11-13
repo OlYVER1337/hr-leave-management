@@ -68,17 +68,17 @@ export function EmployeesPage() {
   }
   useEffect(() => { void reloadAuxiliary(); }, []);
 
-  const query: EmployeePageQuery = {
-    page: Math.floor((page - 1) / 2) + 1,
-    pageSize: Math.min(pageSize * 2, 100),
-    search: debouncedSearch,
+  // Page/size are owned by usePagedBlock; this object only identifies the
+  // filters and sort order that define a distinct result set.
+  const query: Omit<EmployeePageQuery, 'page' | 'pageSize'> = {
+    search: debouncedSearch || undefined,
     role: role === 'All' ? undefined : role,
     isActive: activeFilter === 'All' ? undefined : activeFilter === 'Active',
     departmentId: departmentFilter === 'All' ? undefined : Number(departmentFilter),
     sortBy: sortField,
     sortDirection,
   };
-  const queryKey = JSON.stringify({ ...query, page: undefined, pageSize: pageSize });
+  const queryKey = JSON.stringify(query);
   const loadBlock = useCallback(
     (requestPage: number, requestPageSize: number) => getEmployeePage({
       ...query,
