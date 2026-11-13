@@ -363,9 +363,10 @@ public sealed class LeaveRequestService(
             // Team decisions always re-check the employee's current manager in HR.
             // Do not trust the approver snapshot stored on the leave request.
             var employee = await hrClient.GetEmployeeAsync(request.EmployeeId, authorization, cancellationToken);
-            if (employee.ManagerId != actorId)
+            if (!employee.IsActive || employee.ManagerId != actorId)
             {
-                throw new LeaveForbiddenException("Only the current manager or a global leave approver can decide this request.");
+                throw new LeaveForbiddenException(
+                    "Only the current active manager can decide a Team request.");
             }
 
             verifiedApproverId = employee.ManagerId;
