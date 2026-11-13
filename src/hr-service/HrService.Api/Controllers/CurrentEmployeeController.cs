@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using HrService.Api.Authorization;
 using HrService.Application.Dtos;
 using HrService.Application.Services;
@@ -29,8 +30,8 @@ public sealed class CurrentEmployeeController(EmployeeService employeeService) :
     [HttpGet("team")]
     [Authorize(Policy = PermissionPolicies.EmployeesReadTeam)]
     public async Task<ActionResult<IReadOnlyList<EmployeeResponse>>> GetTeam(
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 10,
+        [FromQuery, Range(1, int.MaxValue)] int page,
+        [FromQuery, Range(1, 100)] int pageSize,
         [FromQuery] string? search = null,
         CancellationToken cancellationToken = default)
     {
