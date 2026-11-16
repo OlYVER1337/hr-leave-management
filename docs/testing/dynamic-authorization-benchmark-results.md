@@ -208,3 +208,74 @@ Script `scripts/load-test/workforce.js` đã được cập nhật:
 - Raw JSON có `benchmark_metadata`: Git SHA, image tag/ID do người chạy truyền vào, page size, VU, duration, năm dữ liệu và timestamp UTC.
 
 Lần benchmark tiếp theo cần build/recreate hai service từ cùng Git SHA trước khi chạy. So sánh page size 10/50/100 bằng cùng VU, duration và dữ liệu seed; không dùng lần đo không phân trang của binary cũ làm benchmark hiệu năng. Lệnh chạy có trong `dynamic-authorization-validation.md`.
+
+
+## 10. Workforce paged-v2 — ba lần chạy mới ngày 16/11/2026
+
+### 10.1. Cấu hình và giới hạn dữ liệu
+
+Sáu JSON mới được lưu trong docs/testing/evidence/dynamic-authorization/:
+- workforce-50vu-paged-v2-run1.json
+- workforce-50vu-paged-v2-run2.json
+- workforce-50vu-paged-v2-run3.json
+- workforce-100vu-paged-v2-run1.json
+- workforce-100vu-paged-v2-run2.json
+- workforce-100vu-paged-v2-run3.json
+
+Metadata ghi nhận:
+- workload: employee-and-leave-reads
+- duration: 5m
+- page_size: 50
+- year: 2026
+- 50 hoặc 100 VU
+- các lần chạy kéo dài khoảng 300,3–300,4 giây
+- git_sha = not-provided và image_tag = not-provided ở cả sáu file.
+
+Workforce script hiện chia đều request qua bốn route: HR employee list; Leave request list; Leave calendar trong khoảng 01/01–31/01; Leave pending approval inbox. List API bắt buộc page/pageSize, script setup xác minh thiếu pagination trả 400 rồi warm-up với page size hợp lệ. Custom RPS được tính từ số workload requests chia cho duration cấu hình 300 giây; login, contract checks và warm-up không tính vào custom workload counter.
+
+### 10.2. Kết quả từng lần
+
+| VU | Lượt | Requests | RPS theo script | P50 (ms) | P95 (ms) | HTTP error rate |
+|---:|---:|---:|---:|---:|---:|---:|
+| 50 | 1 | 136.413 | 454,25 | 9,34 | 16,99 | 0% |
+| 50 | 2 | 136.054 | 452,90 | 9,41 | 18,34 | 0% |
+| 50 | 3 | 136.199 | 453,54 | 9,34 | 18,22 | 0% |
+| 100 | 1 | 226.551 | 754,40 | 24,76 | 77,17 | 0% |
+| 100 | 2 | 226.203 | 753,20 | 24,81 | 77,45 | 0% |
+| 100 | 3 | 234.976 | 782,27 | 21,42 | 65,23 | 0% |
+
+### 10.3. Trung bình số học giữa ba lần chạy
+
+| Chỉ số | 50 VU | 100 VU |
+|---|---:|---:|
+| Requests trung bình | 136.222 | 229.243 |
+| RPS trung bình theo script | 453,56 | 763,29 |
+| P50 trung bình của từng lượt | 9,37 ms | 23,66 ms |
+| P95 trung bình của từng lượt | 17,85 ms | 73,28 ms |
+| HTTP errors | 0 | 0 |
+| Error rate | 0% | 0% |
+| HR direct requests trung bình | 34.056 | 57.304 |
+| Leave → HR calls trung bình | 34.054 | 57.307 |
+
+Các giá trị P50/P95 trong bảng trung bình là trung bình số học của ba percentile từng lượt; **không phải percentile tính trên dữ liệu gộp**.
+
+### 10.4. Diễn giải
+
+- Khi tăng VU từ 50 lên 100, RPS trung bình tăng khoảng 68,3%, nhưng P95 trung bình tăng khoảng 4,1 lần.
+- Cả sáu lần chạy đều hoàn tất đủ workload xấp xỉ 5 phút và ghi nhận 0 HTTP errors.
+- Số HR calls nội bộ của Leave Service tăng tương ứng với lượng request inbox/route cần Team lookup. Những con số này phản ánh mix endpoint của script, không phải số lookup trên mọi Leave request.
+- Đây là kết quả tốt hơn rõ rệt so với workload không phân trang lịch sử. Tuy nhiên, không thể kết luận riêng thay đổi query là nguyên nhân duy nhất vì chưa có Git SHA/image ID gắn với các lần chạy.
+- P95 tăng mạnh ở 100 VU là dấu hiệu contention/áp lực concurrency. Không đủ bằng chứng để quy nguyên nhân cho SQL Server, HR Service, Leave Service, network hoặc connection pool.
+- Không suy ra production capacity từ benchmark một máy local.
+
+### 10.5. Hành động để tạo baseline tái lập
+
+Lần chạy tiếp theo cần:
+1. Checkout một commit cố định và ghi GIT_SHA từ git rev-parse HEAD.
+2. Build/recreate cả HR và Leave từ cùng source; lưu image ID bất biến sau build.
+3. Truyền GIT_SHA và IMAGE_TAG vào k6 bằng biến môi trường để benchmark_metadata không còn not-provided.
+4. Giữ PAGE_SIZE=50, seed version, số nhân viên/đơn, VU, duration, CPU/RAM limit và trạng thái cache giống nhau khi so sánh.
+5. Thu thập Docker CPU/memory và SQL waits/query durations đồng bộ với toàn bộ 5 phút workload.
+
+Lệnh PowerShell tham khảo nằm ở docs/testing/dynamic-authorization-validation.md. Benchmark catalog Redis ON/OFF trong docs/performance/redis-performance.md là workload riêng, không trộn với số liệu Workforce paged-v2.
+
