@@ -11,7 +11,7 @@ Các sơ đồ được chia theo định dạng để tiện sửa và xem:
 - `svg/`: ảnh vector khi cần phóng to.
 - `legacy-png/`: các bản PNG cũ giữ lại để bảo toàn lịch sử; dùng bản trong `png/` làm bản hiển thị hiện hành.
 
-| Sơ đồ | PNG hiện hành | SVG | Mermaid |
+| Sơ đồ | PNG (snapshot cũ) | SVG (snapshot cũ) | Mermaid source (chuẩn hiện tại) |
 |---|---|---|---|
 | Kiến trúc API | [PNG](diagrams/png/api-architecture.png) | [SVG](diagrams/svg/api-architecture.svg) | [Source](diagrams/mermaid/api-architecture.mmd) |
 | ERD HR database | [PNG](diagrams/png/erd-hr-db.png) | [SVG](diagrams/svg/erd-hr-db.svg) | [Source](diagrams/mermaid/erd-hr-db.mmd) |
