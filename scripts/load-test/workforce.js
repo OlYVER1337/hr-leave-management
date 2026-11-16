@@ -95,6 +95,8 @@ export function setup() {
     const response = http.get(route.url, {
       headers: { Authorization: authorizationHeader(tokens[route.token]) },
       tags: { endpoint: route.name, phase: 'pagination-contract' },
+      // 400 here is the expected result; keep it out of http_req_failed.
+      responseCallback: http.expectedStatuses(400),
     });
     if (response.status !== 400) {
       throw new Error(`Pagination contract failed for ${route.name}: expected HTTP 400 without page/pageSize, got ${response.status}`);
