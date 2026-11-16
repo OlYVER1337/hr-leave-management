@@ -339,9 +339,9 @@ công trực tiếp. Trang chỉ có quyền đọc, không có thao tác quản
     │ Avatar + Email     │ EMP-...    │ Kỹ thuật │ Employee│ Date       │ Active  │ [View]
     └────────────────────┴────────────┴──────────┴─────────┴────────────┴─────────┘
 
-- Manager chỉ truy vấn nhân viên có `ManagerId` bằng ID của tài khoản hiện tại.
-- Backend chỉ trả về direct reports đang hoạt động qua GET /api/v1/me/team; endpoint yêu cầu page và pageSize (1–100), trả tổng số qua X-Total-Count.
-- Search lọc trên tên, email, mã nhân viên và phòng ban trong tập dữ liệu được phép.
+- API mode gọi GET /api/v1/me/team; backend xác định Manager từ JWT, không nhận managerId do client chọn.
+- Chỉ trả direct reports đang hoạt động; endpoint yêu cầu page và pageSize (1–100), trả tổng số qua X-Total-Count.
+- Search ở server theo họ tên, email, mã nhân viên và phòng ban; UI sử dụng server pagination và có loading/error/empty states.
 - Nút “Xem hồ sơ” mở modal read-only: họ tên, mã, email, vai trò, phòng ban,
   ngày vào làm, quản lý trực tiếp và trạng thái.
 - Không có nút thêm, sửa, vô hiệu hóa hoặc đổi mật khẩu. API quản trị
@@ -375,28 +375,6 @@ Create/edit modal fields:
 HR API also supports reset employee password (PUT /api/v1/employees/{id}/password), but current UI does not expose it. Export button is a toast placeholder.
 
 Deactivation is a soft account disable, not delete. Keep employee row and show “Đã vô hiệu hóa”.
-
-### 4.9a. Nhân viên phụ trách — /my-team (Manager only)
-
-    ┌────────────────────────────────────────────────────────────────────────────┐
-    │ QUẢN LÝ ĐỘI NHÓM                                                          │
-    │ Nhân viên phụ trách                                                       │
-    │ Tra cứu hồ sơ những nhân viên được phân công trực tiếp cho bạn.           │
-    ├─────────────────┬─────────────────┬────────────────────────────────────────┤
-    │ Đang phụ trách  │ Đang hoạt động  │ Phòng ban có nhân viên                  │
-    ├────────────────────────────────────────────────────────────────────────────┤
-    │ [🔍 Tìm tên, email, mã nhân viên, phòng ban…]  Chỉ nhân viên trực tiếp     │
-    ├────────────┬─────────┬──────────┬───────────┬──────────┬─────────┬──────────┤
-    │ Nhân viên  │ Mã NV   │ Phòng ban│ Vai trò   │ Hire date│ Status  │ [Xem]    │
-    └────────────┴─────────┴──────────┴───────────┴──────────┴─────────┴──────────┘
-
-- Chỉ Manager mới có route và menu này.
-- API mode gọi `GET /api/v1/me/team`; backend xác định Manager từ JWT.
-- Chỉ hiển thị nhân viên đang hoạt động có quan hệ báo cáo trực tiếp.
-- Tìm kiếm theo họ tên, email, mã nhân viên và phòng ban trong tập dữ liệu trả về.
-- Nút **Xem hồ sơ** mở modal chỉ đọc: họ tên, mã nhân viên, email, vai trò,
-  phòng ban, ngày vào làm, quản lý trực tiếp và trạng thái.
-- Không có thao tác thêm, sửa, vô hiệu hóa hoặc tìm kiếm toàn bộ tổ chức.
 
 ### 4.9. Phòng ban — /departments (HR only)
 
