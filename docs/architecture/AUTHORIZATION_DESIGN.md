@@ -223,3 +223,23 @@ Outbox, asynchronous read model, backfill/reconciliation giữa hai service khô
 - Không trả PasswordHash hoặc entity trực tiếp.
 - Resource không tồn tại hoặc ngoài quyền có thể trả 404 để tránh lộ sự tồn tại; thiếu permission trả 403.
 - Không tin cậy role/scope do client gửi trong query hoặc body.
+
+
+## As-built boundary và phần chưa triển khai (16/11/2026)
+
+### Đã có trong backend
+- HR migration AddDynamicAuthorizationSchema và các bảng Roles, Permissions, UserRoles, RolePermissions, PermissionScopeRules, RolePermissionScopes, AuthzAuditLog.
+- AuthorizationSeeder seed baseline Employee, Manager, HR, Auditor và permission/scope; backfill UserRoles từ Employee.Role theo hướng idempotent.
+- Login/refresh tính quyền lại và phát authz_v=1 cùng perm JSON.
+- HR write APIs, employee list/detail/lookup, UserRole assignment API và Leave API đã có permission/scope policies.
+- UserRole grant/revoke dùng transaction; có kiểm tra actor hiện thời, chặn tự cấp quyền và privilege escalation, bảo vệ admin cuối cùng, đồng thời ghi audit.
+
+### Giới hạn hiện tại
+- API quản trị hiện chỉ xem danh mục Role đang active và gán/xem/thu hồi UserRole assignment. Chưa có API tạo Role tùy ý, activate/deactivate Role/Permission hoặc sửa RolePermissions/RolePermissionScopes.
+- Danh mục Role/Permission baseline được quản lý qua code seeder/migration, chưa phải catalog management UI.
+- React vẫn dùng legacy Role cho navigation và route guard. Frontend chưa đọc/áp dụng từng permission/scope để ẩn/hiện action. Backend vẫn là enforcement cuối cùng.
+- Employee.Role và Role claim legacy chưa bị loại bỏ; chỉ duy trì compatibility/UI/backfill, không dùng để authorize các endpoint đã migrate.
+- Department scope có trong schema nhưng chưa được seed/cấp cho baseline và không có repository filter thực thi.
+- Access JWT đã phát không bị thu hồi tức thời khi gán/thu hồi Role hoặc deactivate; permission mới áp dụng sau login/refresh, token cũ còn hiệu lực đến expiry.
+
+Không nên mô tả V1 là hệ thống có thể tạo Role/Permission tùy ý end-to-end cho tới khi catalog CRUD và permission-driven frontend được triển khai.
