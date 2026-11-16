@@ -61,7 +61,7 @@ describe('ManagerTeamPage', () => {
       signIn: vi.fn(),
       signOut: vi.fn(),
     });
-    vi.mocked(getMyTeamPage).mockImplementation(async (managerId, page, pageSize, search) => {
+    vi.mocked(getMyTeamPage).mockImplementation(async (_managerId, page, pageSize, search) => {
       const term = search?.trim().toLocaleLowerCase('vi-VN') ?? '';
       const filtered = team.filter((employee) =>
         !term || [
@@ -84,7 +84,7 @@ describe('ManagerTeamPage', () => {
 
     expect(await screen.findByText('Nguyễn An')).toBeInTheDocument();
     expect(screen.getByText('Trần Bình')).toBeInTheDocument();
-    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('Tổng nhân viên phụ trách').parentElement?.textContent).toContain('2');
     expect(getMyTeamPage).toHaveBeenCalledWith(manager.id, 1, 20, undefined);
   });
 
