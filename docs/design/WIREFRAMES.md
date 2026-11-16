@@ -1,7 +1,7 @@
 
 # Wireframe — Peopleflow HR Leave Management
 
-> Đặc tả wireframe dựa trên React/TypeScript frontend, HR Service và Leave Service trên branch master tại thời điểm rà soát 02/11/2026. Nội dung phân biệt rõ chức năng đang có và đề xuất chưa triển khai.
+> Đặc tả wireframe được rà soát theo source branch feature/dynamic-authorization-v1 ngày 16/11/2026. Mô tả bên dưới phân biệt UI thực tế, backend permission/scope và các chức năng chưa triển khai.
 
 ## 1. Phạm vi và cách đọc
 
@@ -34,7 +34,7 @@ Không được mô tả dữ liệu Demo như dữ liệu production. Những m
 | Manager | Quản lý | Yêu cầu bản thân và các yêu cầu thuộc phạm vi phê duyệt |
 | HR | Nhân sự | Quản lý nhân sự/danh mục và xem đơn toàn tổ chức |
 
-Backend là nguồn quyết định quyền cuối cùng. Ẩn link/action trong React chỉ là UX, không thay thế authorization.
+Backend là nguồn quyết định quyền cuối cùng. HR_DB cấp Role/Permission/Scope động và JWT chứa authz_v=1 cùng perm JSON; API kiểm tra permission/scope ở server. Tuy nhiên UI hiện vẫn dùng Employee.Role legacy (HR/Manager/Employee) cho nav và route guards, chưa permission-driven. Ẩn link/action trong React chỉ là UX, không thay thế authorization. Scope backend hiện thực thi là Self/Team/All; Department chưa được dùng để lọc dữ liệu.
 
 ### 2.2. Menu hiện tại trong AppShell
 
@@ -201,7 +201,7 @@ CTA “Tạo đơn” chỉ hiển thị Employee/Manager; HR không được ph
 
 Scope:
 - Employee thấy request của bản thân.
-- Manager thấy request của bản thân và request có ApproverId snapshot trỏ tới manager.
+- Manager thấy request của bản thân và request của direct reports theo reporting line hiện tại được Leave Service resolve qua HR. ApproverId trên request là snapshot lịch sử, không phải nguồn Team authorization.
 - HR dùng route /all-leaves để xem toàn tổ chức.
 
 Search hiện lọc id, employee name/code, reason và leave type; filter theo status và type. Cancel xuất hiện chỉ với request Pending của user hiện tại.
@@ -238,7 +238,7 @@ Client validation đang có:
 - Ngày bắt đầu/kết thúc từ hôm nay trở đi.
 - Ngày kết thúc không trước ngày bắt đầu.
 - Ít nhất một ngày làm việc (estimate bỏ cuối tuần và holidays).
-- Lý do bắt buộc, UI max length 600.
+- Lý do bắt buộc; UI giới hạn 600 ký tự, backend hiện nhận tối đa 1.000 ký tự.
 - Không cho gửi nếu vượt balance đang hiển thị.
 
 Backend authoritative validation:
@@ -317,8 +317,8 @@ UI hiện có: search, toggle Pending-only, summary cards, modal có note option
 - Chọn ngày để xem request và holiday.
 - Calendar hiển thị request Pending/Approved và holidays.
 - Upcoming list tối đa 5 request từ dữ liệu đang tải.
-- API scope: HR toàn tổ chức; non-HR thấy request bản thân hoặc request có approver snapshot trỏ tới họ.
-- Calendar manager scope hiện không giống Approval Inbox: inbox dựa trên reporting line hiện tại; calendar dựa trên approver snapshot. Cần quyết định scope sản phẩm và đồng bộ.
+- API scope: HR có All; Manager có Self/Team theo direct reports hiện tại do HR cung cấp; Employee có Self. Leave Service sử dụng cùng cơ chế Team scope hiện hành cho calendar và approval inbox; ApproverId snapshot không cấp quyền đọc/duyệt.
+- Calendar UI đang có CTA tạo đơn cho Employee/Manager; HR không thấy CTA này.
 - Mô tả “Lịch nghỉ của nhóm” có thể gây hiểu nhầm nếu user không phải HR và dữ liệu không bao gồm toàn bộ team theo reporting line.
 
 ### 4.7. Nhân viên phụ trách — /my-team (Manager only)
@@ -340,7 +340,7 @@ công trực tiếp. Trang chỉ có quyền đọc, không có thao tác quản
     └────────────────────┴────────────┴──────────┴─────────┴────────────┴─────────┘
 
 - Manager chỉ truy vấn nhân viên có `ManagerId` bằng ID của tài khoản hiện tại.
-- Backend chỉ trả về direct reports đang hoạt động qua `GET /api/v1/me/team`.
+- Backend chỉ trả về direct reports đang hoạt động qua GET /api/v1/me/team; endpoint yêu cầu page và pageSize (1–100), trả tổng số qua X-Total-Count.
 - Search lọc trên tên, email, mã nhân viên và phòng ban trong tập dữ liệu được phép.
 - Nút “Xem hồ sơ” mở modal read-only: họ tên, mã, email, vai trò, phòng ban,
   ngày vào làm, quản lý trực tiếp và trạng thái.
@@ -558,9 +558,9 @@ Endpoints are relative to each service's API base URL.
 | Đã xử lý | Có thể tạo các loại nghỉ ngoài danh mục nghiệp vụ | Giới hạn danh mục ở `ANNUAL`, `SICK`, `UNPAID`; xóa để ngừng hoạt động và cho phép khôi phục loại chuẩn |
 | Hoãn theo quyết định | API reset password employee có nhưng UI thiếu | Chỉ thêm HR action sau khi backend hỗ trợ mật khẩu tạm thời và bắt buộc đổi mật khẩu |
 | Đã xử lý | “Cài đặt” điều hướng tới /policies | Đổi thành “Chính sách nghỉ phép” và chỉ hiện với HR |
-| P2 | Danh sách nhân viên và hộp thư phê duyệt phân trang phía client, chọn 10/25/50 dòng mỗi trang | Nếu API cần phục vụ quy mô lớn hơn, chuyển sang pagination phía server và giữ tìm kiếm/lọc trên toàn bộ tập dữ liệu |
-| P2 | Calendar manager scope không như approval inbox | Chốt scope theo current reporting line hay approver snapshot rồi đồng bộ |
-| P2 | Reason UI max 600 nhưng backend nhận 1000 | Đồng bộ giới hạn hoặc ghi rõ lý do UI giới hạn ngắn hơn |
+| Đã cập nhật | Danh sách Employees, Manager Team và Leave lists | Backend đã yêu cầu page/pageSize, giới hạn pageSize 1–100, filter/search và count ở server; frontend sử dụng paged API. Cần duy trì test contract và stable ordering |
+| Đã cập nhật | Calendar và Approval Team scope | Cả hai luồng Leave dùng current reporting line; ApproverId là snapshot, không phải authorization hiện tại |
+| P2 | Reason length khác nhau | UI giới hạn 600, backend tối đa 1.000; quyết định đồng bộ một giới hạn và cập nhật validation/test |
 | P2 | Text “nhóm/tổ chức” không luôn khớp scope API | Dùng mô tả theo role/scope |
 
 ## 8. Acceptance checklist
