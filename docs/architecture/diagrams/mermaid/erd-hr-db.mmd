@@ -1,6 +1,15 @@
 erDiagram
   DEPARTMENTS ||--o{ EMPLOYEES : "có"
-  EMPLOYEES |o--o{ EMPLOYEES : "quản lý (ManagerId)"
+  EMPLOYEES |o--o{ EMPLOYEES : "quản lý trực tiếp"
+  EMPLOYEES ||--o{ USER_ROLES : "được gán"
+  ROLES ||--o{ USER_ROLES : "được gán cho"
+  ROLES ||--o{ ROLE_PERMISSIONS : "có quyền"
+  PERMISSIONS ||--o{ ROLE_PERMISSIONS : "được cấp"
+  PERMISSIONS ||--o{ PERMISSION_SCOPE_RULES : "cho phép scope"
+  ROLE_PERMISSIONS ||--o{ ROLE_PERMISSION_SCOPES : "được giới hạn"
+  PERMISSION_SCOPE_RULES ||--o{ ROLE_PERMISSION_SCOPES : "scope hợp lệ"
+  EMPLOYEES ||--o{ AUTHZ_AUDIT_LOG : "actor"
+  EMPLOYEES |o--o{ AUTHZ_AUDIT_LOG : "target"
   LEAVE_TYPES ||--o{ LEAVE_POLICIES : "định nghĩa"
   DEPARTMENTS {
     int Id PK
@@ -12,11 +21,62 @@ erDiagram
     string FullName
     string Email UK
     string PasswordHash
-    string Role "Employee, Manager, HR"
+    string Role "legacy UI/backfill"
     date HireDate
     bool IsActive
     int DepartmentId FK
-    guid ManagerId FK "null nếu là cấp cao nhất"
+    guid ManagerId FK
+  }
+  ROLES {
+    int Id PK
+    string Code UK
+    string Name
+    bool IsSystem
+    bool IsActive
+    datetime CreatedAtUtc
+  }
+  PERMISSIONS {
+    int Id PK
+    string Code UK
+    string Name
+    bool IsActive
+  }
+  USER_ROLES {
+    bigint Id PK
+    guid EmployeeId FK
+    int RoleId FK
+    guid GrantedByEmployeeId
+    datetime GrantedAtUtc
+    datetime ExpiresAtUtc
+    guid RevokedByEmployeeId
+    datetime RevokedAtUtc
+  }
+  ROLE_PERMISSIONS {
+    int RoleId PK,FK
+    int PermissionId PK,FK
+    guid GrantedByEmployeeId
+    datetime GrantedAtUtc
+  }
+  PERMISSION_SCOPE_RULES {
+    int PermissionId PK,FK
+    string Scope PK "Self, Team, Department, All"
+  }
+  ROLE_PERMISSION_SCOPES {
+    int RoleId PK,FK
+    int PermissionId PK,FK
+    string Scope PK,FK
+  }
+  AUTHZ_AUDIT_LOG {
+    bigint Id PK
+    guid ActorEmployeeId FK
+    guid TargetEmployeeId FK
+    string Action
+    string TargetType
+    string TargetId
+    string BeforeJson
+    string AfterJson
+    string CorrelationId
+    datetime CreatedAtUtc
   }
   LEAVE_TYPES {
     int Id PK
@@ -29,7 +89,7 @@ erDiagram
   LEAVE_POLICIES {
     int Id PK
     int LeaveTypeId FK
-    int Year "UK cùng LeaveTypeId"
+    int Year
     decimal DaysPerYear
   }
   HOLIDAYS {
