@@ -79,7 +79,7 @@ describe('EmployeesPage filtering, sorting and pagination', () => {
 
     expect(getEmployeeOverviewPage).toHaveBeenCalledTimes(1);
     expect(getEmployeeOverviewPage).toHaveBeenCalledWith(
-      expect.objectContaining({ page: 1, pageSize: 10 }),
+      expect.objectContaining({ page: 1, pageSize: 20 }),
     );
     expect(screen.getByText('25')).toBeInTheDocument();
   });
