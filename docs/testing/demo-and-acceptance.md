@@ -278,7 +278,7 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
 | [x] | Redis cache | Tối thiểu 2 nhóm dữ liệu có key/TTL/invalidation; cache miss đọc SQL | [Redis report](../performance/redis-performance.md) |
 | [x] | Redis outage | Catalog vẫn đọc được từ SQL; nghiệp vụ không dựa cache cũ | [Redis report](../performance/redis-performance.md) |
 | [x] | HR outage | Tác vụ cần HR trả lỗi dependency phù hợp và không lưu đơn dở dang | `HrServiceOutageTests`; [Redis report](../performance/redis-performance.md) |
-| [x] | Regression backend | HR 53/53 và Leave 25/25 pass; không skip khi có test dependencies | Lượt chạy HR mới nhất; TRX lưu sẵn trong `evidence/dotnet/` |
+| Lịch sử | Regression backend (03/11) | HR 53/53 và Leave 25/25 được ghi nhận ở lượt chạy khi đó | Không phải kết quả exact HEAD; TRX committed hiện có ngày 05/11 và ghi HR 57 pass/1 skip, Leave 19 pass/6 skip. Cần chạy lại và lưu TRX mới trước sign-off |
 | [x] | Regression frontend | 31 UI tests pass và production build thành công | Vitest/build lượt mới nhất, báo cáo mục 1 |
 | [x] | Load test catalog Redis ON/OFF | 50 và 100 VU, 5 phút mỗi lượt; báo cáo RPS/p50/p95/error và cấu hình máy | [Redis performance report](../performance/redis-performance.md) |
 | [x] | Load test workforce — Redis ON | 50/100 VU, 5 phút, dataset 1.000 nhân viên/5.000 đơn | 50 VU 0 lỗi; lượt đầu 100 VU 21 HTTP 500; hai lần chạy lại 100 VU 0 lỗi; [summary](./evidence/workforce-load-summary.json) |
