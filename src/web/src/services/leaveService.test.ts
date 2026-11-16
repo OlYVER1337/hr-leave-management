@@ -60,6 +60,30 @@ describe('leave request summary and decisions', () => {
     vi.clearAllMocks();
   });
 
+  it('sends an approval decision through the PATCH endpoint', async () => {
+    mocks.leavePatch.mockResolvedValue({ data: {} });
+
+    await decideLeaveRequest('request-1', 'approve', 'Đã kiểm tra');
+
+    expect(mocks.leavePatch).toHaveBeenCalledTimes(1);
+    expect(mocks.leavePatch).toHaveBeenCalledWith(
+      '/api/v1/leave-requests/request-1/decision',
+      { decision: 'approve', note: 'Đã kiểm tra' },
+    );
+  });
+
+  it('sends a rejection decision through the PATCH endpoint', async () => {
+    mocks.leavePatch.mockResolvedValue({ data: {} });
+
+    await decideLeaveRequest('request-2', 'reject');
+
+    expect(mocks.leavePatch).toHaveBeenCalledTimes(1);
+    expect(mocks.leavePatch).toHaveBeenCalledWith(
+      '/api/v1/leave-requests/request-2/decision',
+      { decision: 'reject', note: '' },
+    );
+  });
+
   it('loads the permission-scoped leave summary in one request', async () => {
     const manager: AuthUser = {
       id: 'manager-1',
