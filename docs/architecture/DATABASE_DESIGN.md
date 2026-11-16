@@ -68,6 +68,34 @@ Cascade Delete
 (EmployeeId, RevokedAtUtc, ExpiresAtUtc)
 ```
 
+
+## Dynamic Authorization tables trong HR_DB
+
+Migration `20261111043715_AddDynamicAuthorizationSchema` bổ sung:
+
+| Bảng | Khóa / dữ liệu chính | Vai trò |
+|---|---|---|
+| `Roles` | `Id` int PK; `Code` nvarchar(50) unique; Name, Description, IsSystem, IsActive, CreatedAtUtc | Danh mục Role |
+| `Permissions` | `Id` int PK; `Code` nvarchar(100) unique; Name, Description, IsActive | Danh mục permission dạng resource.action |
+| `UserRoles` | `Id` bigint PK; EmployeeId, RoleId; GrantedBy/At, ExpiresAtUtc, RevokedBy/At | Assignment Role theo nhân viên, hỗ trợ expiry/revoke |
+| `RolePermissions` | Composite PK (RoleId, PermissionId); GrantedByEmployeeId, GrantedAtUtc | Permission được gắn cho Role |
+| `PermissionScopeRules` | Composite PK (PermissionId, Scope); Scope có check constraint | Scope hợp lệ theo permission |
+| `RolePermissionScopes` | Composite PK (RoleId, PermissionId, Scope) | Scope được cấp cho Role-Permission |
+| `AuthzAuditLog` | bigint PK; ActorEmployeeId, TargetEmployeeId, Action, TargetType, TargetId, BeforeJson, AfterJson, CorrelationId, CreatedAtUtc | Audit thay đổi authorization |
+
+Index và constraint quan trọng:
+- `Roles.Code`, `Permissions.Code` là unique.
+- `UserRoles(EmployeeId, RoleId)` là unique có filter `RevokedAtUtc IS NULL`; có index lookup theo EmployeeId/RevokedAtUtc/ExpiresAtUtc và RoleId.
+- `RolePermissions` có khóa ghép RoleId + PermissionId.
+- `PermissionScopeRules` và `RolePermissionScopes` giới hạn Scope bằng check constraint: Self, Team, Department, All.
+- `RolePermissionScopes` có composite FK tới RolePermission và PermissionScopeRule, ngăn cấp scope không có permission hoặc scope không hợp lệ.
+- Các FK employee/role/permission dùng Restrict theo mapping hiện tại.
+- Audit log có index theo TargetEmployeeId + CreatedAtUtc và ActorEmployeeId + CreatedAtUtc.
+
+Các Scope đang được thực thi trong API là Self, Team và All. Department tồn tại trong schema để mở rộng nhưng chưa được dùng làm điều kiện lọc dữ liệu.
+
+`Employee.Role` dạng enum/string vẫn được giữ để tương thích/backfill và UI. AuthorizationSeeder tạo baseline Role/Permission/Scope, sau đó backfill UserRoles từ Employee.Role theo hướng idempotent. Employee.Role không phải nguồn quyết định backend authorization của các endpoint đã migrate.
+
 ---
 
 # Cấu trúc Leave_DB
@@ -155,6 +183,7 @@ EF Core Migrations được version theo từng Infrastructure Project sở hữ
 ```text
 20261026043924_InitialHrSchema
 20261102014444_AddRefreshTokens
+20261111043715_AddDynamicAuthorizationSchema
 ```
 
 ### Leave Service
@@ -171,7 +200,7 @@ EF Core Migrations được version theo từng Infrastructure Project sở hữ
 
 Leave API cũng áp dụng migrations trước khi bắt đầu phục vụ request.
 
-Mỗi project có một **Model Snapshot**.
+Mỗi project có một **Model Snapshot**. HR model snapshot bao gồm các bảng Dynamic Authorization; Leave DB không chứa bảng Role/Permission và không tạo cross-database foreign keys.
 
 Đối với các thay đổi schema trong tương lai:
 
@@ -189,7 +218,7 @@ của từng service.
 
 # Seed Data
 
-Các Seeder có tính chất **idempotent** và sẽ không chạy nếu chưa được cấu hình bật.
+Initial HR và Demo Seeder có tính chất **idempotent** và chỉ chạy khi được bật qua cấu hình. AuthorizationSeeder chạy khi HR database khởi tạo để seed baseline Role/Permission/Scope và backfill UserRoles; không tự khôi phục assignment đã revoke/hết hạn.
 
 ## Tài khoản HR ban đầu
 

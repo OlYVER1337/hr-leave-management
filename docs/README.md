@@ -1,44 +1,47 @@
 # Tài liệu dự án HR Leave Management
 
-Mục lục dưới đây sắp xếp tài liệu theo mục đích. Nếu mới tiếp cận dự án, nên đọc
-theo thứ tự: **yêu cầu → kiến trúc → thiết kế giao diện → hiệu năng/kiểm thử →
-kịch bản demo**.
+Mục lục này tách **yêu cầu ban đầu**, **mô tả hệ thống đã triển khai**, **bằng chứng kiểm thử** và **kế hoạch tiếp theo**. Khi các tài liệu khác nhau, mã nguồn ở branch đang bàn giao và EF Core migrations là nguồn đối chiếu cuối cùng.
 
-## 1. Yêu cầu và phạm vi
+## 1. Bắt đầu và phạm vi
 
-- [Đề tài thực tập 2026](requirements/internship-project-2026.docx): yêu cầu và tiêu chí bàn giao gốc.
-- [Mô tả hệ thống HR Leave Management](requirements/system-description.docx): nghiệp vụ, vai trò và phạm vi hệ thống.
-- [Backlog](planning/BACKLOG.md): các gap còn mở và thứ tự ưu tiên hoàn thiện dự án.
+- [README dự án](../README.md): cấu hình môi trường, Docker Compose, seed tài khoản và lệnh test.
+- [Mô tả hệ thống gốc](requirements/system-description.docx): yêu cầu/đề xuất ban đầu, không phải mô tả bảo đảm của code hiện tại.
+- [Đề tài thực tập 2026](requirements/internship-project-2026.docx): tiêu chí bàn giao gốc.
+- [Backlog](planning/BACKLOG.md): gap đã xác nhận và thứ tự ưu tiên tiếp theo.
 
-## 2. Kiến trúc và sơ đồ
+## 2. Kiến trúc, bảo mật và API
 
-- [Danh mục sơ đồ kiến trúc và database](architecture/README.md): kiến trúc tổng thể, ERD và sequence diagram; mỗi sơ đồ có source Mermaid và bản xem PNG/SVG.
-- [System design](architecture/SYSTEM_DESIGN.md): trách nhiệm service, quyền sở hữu dữ liệu, luồng giao tiếp và xử lý lỗi.
-- [Database design](architecture/DATABASE_DESIGN.md): schema, index, constraints, migrations và seed data.
-- [API reference](API_REFERENCE.md): endpoint theo service/role, ví dụ request/response, lỗi và OpenAPI.
+- [System design](architecture/SYSTEM_DESIGN.md): service boundary, data ownership, request flow, consistency, failure mode và giới hạn vận hành.
+- [Database design](architecture/DATABASE_DESIGN.md): HR_DB/Leave_DB schema, Dynamic RBAC, indexes, constraints, migrations và seed data.
+- [Dynamic Authorization Design](architecture/AUTHORIZATION_DESIGN.md): permissions, scopes, JWT, UserRole assignment, escalation protection và Team rules.
+- [API reference](API_REFERENCE.md): route, permission/scope, pagination, payload và lỗi HTTP.
+- [Sơ đồ kiến trúc và database](architecture/README.md): Mermaid source và các bản xuất hình.
 
 ## 3. Giao diện
 
-- [Design System](design/DESIGN_SYSTEM.md): màu sắc, typography, layout, component, responsive và accessibility.
-- [Wireframes](design/WIREFRAMES.md): màn hình và luồng theo vai trò.
+- [Design System](design/DESIGN_SYSTEM.md): visual token, typography, layout, component, responsive và accessibility.
+- [Wireframes](design/WIREFRAMES.md): màn hình, route guard, API trace và giới hạn frontend hiện tại.
+- [Hướng dẫn sử dụng, test và demo](USER-GUIDE.md): thao tác theo HR/Manager/Employee ở Demo mode và API mode.
 
-## 4. Hiệu năng và kiểm thử
+## 4. Kiểm thử và hiệu năng
 
-- [Báo cáo Redis và load test ON/OFF](performance/redis-performance.md): cache, fallback, concurrency và benchmark 50/100 VU.
-- [Kết quả kiểm thử, chẩn đoán và checklist nghiệm thu](testing/demo-and-acceptance.md): test regression/integration, CPU/SQL/query plan và kịch bản demo.
-- [Hướng dẫn xác minh Dynamic RBAC và chạy benchmark](testing/dynamic-authorization-validation.md): dựng stack `hrbench`, test với SQL Server/Redis, seed dữ liệu và chạy k6.
-- [Kết quả benchmark Dynamic RBAC và HR lookup](testing/dynamic-authorization-benchmark-results.md): số liệu Workforce/Approval 50–100 VU, lần repeat, tài nguyên quan sát và giới hạn diễn giải.
-- [Hướng dẫn sử dụng, chạy test và demo](USER-GUIDE.md): cách thao tác theo vai trò, bật demo, trình diễn luồng API thật và chạy bộ kiểm thử.
-- [Bằng chứng kiểm thử thô](testing/evidence/): TRX, log build, kết quả k6 và số liệu container.
+- [Kịch bản demo, kết quả test và acceptance](testing/demo-and-acceptance.md): bằng chứng test, chẩn đoán, demo và các hạng mục cần nghiệm thu lại.
+- [Xác minh Dynamic RBAC và chạy benchmark](testing/dynamic-authorization-validation.md): stack hrbench, SQL/Redis integration tests, seed dữ liệu và k6 commands.
+- [Kết quả benchmark Dynamic RBAC/HR lookup](testing/dynamic-authorization-benchmark-results.md): Workforce paged-v2 mới nhất và các phép đo lịch sử được tách riêng.
+- [Báo cáo Redis](performance/redis-performance.md): cache-aside, TTL, invalidation, fallback và benchmark Catalog Redis ON/OFF.
+- [Bằng chứng thô](testing/evidence/): TRX, k6 JSON, log build và số liệu quan sát.
 
 ## 5. Hướng dẫn chạy hệ thống
 
 - [README dự án](../README.md): cấu hình môi trường, Docker Compose, tài khoản khởi tạo và lệnh test.
-- [Handover checklist](HANDOFF.md): trạng thái 9 hạng mục bàn giao và các việc cần chốt trước sign-off.
+- [Handover checklist](HANDOFF.md): trạng thái bàn giao, bằng chứng đã có và việc còn lại trước sign-off.
 
 ## Quy ước cập nhật
 
-- Tài liệu yêu cầu gốc được giữ nguyên trong `requirements/`; các thay đổi triển khai nên được ghi ở tài liệu theo chủ đề tương ứng.
-- Sơ đồ được sửa ở file Mermaid trong `architecture/diagrams/mermaid/`; xuất lại PNG/SVG cùng tên để bản đọc và source không lệch nhau.
-- Số liệu hiệu năng phải đi kèm workload, môi trường và thời điểm đo. Không ghi secret hoặc thông tin đăng nhập vào tài liệu.
-- Khi di chuyển tài liệu, cập nhật liên kết trong mục lục này và các tài liệu tham chiếu tới nó.
+- Tài liệu trong requirements/ là baseline yêu cầu gốc; không sửa để biến yêu cầu ban đầu thành implementation đã có.
+- Tài liệu kiến trúc/API/DB mô tả trạng thái as-built; khi code thay đổi phải cập nhật đồng thời.
+- Backlog chỉ liệt kê việc chưa triển khai hoặc cần xác minh lại. Không biến đề xuất thành tính năng đã hoàn thành.
+- Test phải ghi ngày chạy, revision và số skipped. TRX cũ không được xem là kết quả của HEAD mới.
+- Benchmark phải ghi workload, VU, duration, page size, data set, Git SHA và image ID. Không lấy trung bình p95 của các lượt làm p95 của một tập dữ liệu gộp.
+- Mermaid trong architecture/diagrams/mermaid/ là source chỉnh sửa. PNG/SVG cần xuất lại sau khi source đổi; nếu chưa xuất, phải ghi rõ ảnh là snapshot cũ.
+- Không ghi secrets, password, access token hoặc connection string thật vào Git.

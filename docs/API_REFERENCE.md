@@ -1,370 +1,179 @@
 # Tài liệu tham chiếu API
 
-## Base URL và OpenAPI
+## 1. Base URL, xác thực và quy ước chung
 
-Các endpoint khi chạy bằng Docker Compose trên máy local:
+Khi chạy Docker Compose local:
 
-- **HR Service:** `http://localhost:8081`
-- **Leave Service:** `http://localhost:8082`
-- **Thông qua Web/Nginx:** `/hr-api` và `/leave-api` trên `http://localhost:3000`
-
-Mỗi service cung cấp tài liệu OpenAPI tại `/openapi/v1.json` chỉ trong môi trường **Development**.
-
-Ví dụ:
-
-`http://localhost:8081/openapi/v1.json`
-
-Cấu hình triển khai mặc định sử dụng môi trường Development cho việc chạy local. Không nên vô tình công khai các endpoint OpenAPI của môi trường Development trong production.
-
-Trừ khi có ghi chú khác, các route yêu cầu:
-
-```http
-Authorization: Bearer <access-token>
-```
-
-Danh sách nhân viên yêu cầu cả hai query parameter `page` và `pageSize`; `page` bắt đầu từ 1 và `pageSize` nằm trong khoảng 1–100. API trả danh sách tại response body và tổng số bản ghi trong header `X-Total-Count`. Endpoint `overview` trả cùng danh sách, tổng số bản ghi và thống kê nhân viên trong một response; endpoint `summary` cũ vẫn được giữ để tương thích.
-
-Các vai trò trong hệ thống gồm:
-
-- `HR`
-- `Manager`
-- `Employee`
-
-HR chịu trách nhiệm quản lý tổ chức và danh mục cấu hình. Quyền truy cập hộp thư phê duyệt và thao tác quyết định được xác định bằng permission/scope trong JWT; với scope Team, Leave Service còn xác minh quan hệ quản lý hiện tại qua HR Service.
-
-Refresh token được thiết lập dưới dạng **HttpOnly Cookie** khi đăng nhập vào HR Service và không được trả về trong JSON.
-
----
-
-# HR Service
-
-| Phương thức và Route | Quyền truy cập | Mục đích |
+| Service | Base URL | Qua Web/Nginx |
 |---|---|---|
-| `POST /api/v1/auth/login` | Không cần đăng nhập | Xác thực người dùng; trả về access token và thiết lập refresh cookie |
-| `POST /api/v1/auth/refresh` | Refresh cookie | Làm mới refresh token và trả về access token mới |
-| `POST /api/v1/auth/logout` | Refresh cookie | Thu hồi refresh token và xóa cookie |
-| `GET /api/v1/me` | Mọi người dùng đã xác thực | Lấy thông tin hồ sơ HR của người dùng hiện tại |
-| `GET /api/v1/me/team` | Manager | Lấy danh sách nhân viên đang hoạt động được phân công trực tiếp cho Manager hiện tại; không cho phép tìm kiếm toàn bộ tổ chức hoặc chỉnh sửa dữ liệu |
-| `PUT /api/v1/me/password` | Người dùng đã xác thực | Thay đổi mật khẩu của chính mình |
-| `GET /api/v1/departments[/{id}]` | Đã xác thực | Xem phòng ban |
-| `POST /api/v1/departments` | HR | Tạo phòng ban |
-| `PUT /api/v1/departments/{id}` | HR | Cập nhật phòng ban |
-| `DELETE /api/v1/departments/{id}` | HR | Xóa phòng ban khi thỏa mãn các điều kiện nghiệp vụ |
-| `GET /api/v1/employees?page=1&pageSize=20` | `employees.read` với scope `Self`, `Team` hoặc `All` | Xem danh sách nhân viên trong phạm vi được cấp; hỗ trợ tìm kiếm, lọc và sắp xếp |
-| `GET /api/v1/employees/overview?page=1&pageSize=20` | `employees.read` với scope `Self`, `Team` hoặc `All` | Trả danh sách phân trang, `totalCount` và `summary` trong cùng response |
-| `GET /api/v1/employees/summary` | `employees.read` với scope `Self`, `Team` hoặc `All` | API summary tương thích cũ; lấy số nhân viên, số đang hoạt động và số Manager đang hoạt động trong phạm vi quyền |
-| `GET /api/v1/employees/{id}` | `employees.read` với scope phù hợp | Xem thông tin một nhân viên thuộc phạm vi được cấp |
-| `POST /api/v1/employees` | Permission tạo nhân viên | Tạo nhân viên; mã nhân viên được hệ thống tự động tạo |
-| `PUT /api/v1/employees/{id}` | HR | Cập nhật nhân viên |
-| `POST /api/v1/employees/{id}/deactivate` | HR | Vô hiệu hóa nhân viên và thu hồi refresh token |
-| `PUT /api/v1/employees/{id}/password` | HR | Đặt lại mật khẩu nhân viên |
-| `GET /api/v1/lookup/employees/{id}` | Service đã xác thực | Lấy snapshot thông tin nhân viên cho Leave Service |
-| `GET /api/v1/lookup/employees/{managerId}/team` | Service đã xác thực | Tra cứu danh sách nhân viên thuộc Manager |
-| `GET /api/v1/leave-catalog?year=2027` | Đã xác thực | Trả `leaveTypes` và `leavePolicies` theo năm trong một response; `includeInactive=true` yêu cầu `leave-types.update:All` |
-| `GET /api/v1/leave-types[/{id}]` | Đã xác thực | Xem danh mục loại nghỉ |
-| `POST /api/v1/leave-types` | HR | Khôi phục một loại nghỉ mặc định bị thiếu (`ANNUAL`, `SICK`, `UNPAID`); không cho phép tạo loại nghỉ tùy ý |
-| `PUT /api/v1/leave-types/{id}` | HR | Cập nhật loại nghỉ |
-| `GET /api/v1/leave-policies[/{id}]` | Đã xác thực | Xem chính sách nghỉ; hỗ trợ query parameter `year` và/hoặc `authoritative` |
-| `POST /api/v1/leave-policies` | HR | Thêm chính sách theo năm bị thiếu cho loại nghỉ mặc định đang hoạt động và có trừ số dư; chỉ cho phép năm tương lai; không cho phép tạo trùng hoặc tạo policy cho `UNPAID` |
-| `PUT /api/v1/leave-policies/{id}` | HR | Chỉ cập nhật policy khi cả năm của policy hiện tại và năm được yêu cầu đều là năm tương lai |
-| `GET /api/v1/holidays[/{id}]` | Đã xác thực | Xem ngày nghỉ lễ |
-| `POST /api/v1/holidays` | HR | Tạo ngày nghỉ lễ |
-| `PUT /api/v1/holidays/{id}` | HR | Cập nhật ngày nghỉ lễ |
-| `DELETE /api/v1/holidays/{id}` | HR | Xóa ngày nghỉ lễ |
+| HR Service | http://localhost:8081 | /hr-api tại http://localhost:3000 |
+| Leave Service | http://localhost:8082 | /leave-api tại http://localhost:3000 |
+| Web | http://localhost:3000 | — |
 
-`GET /api/v1/leave-types` hỗ trợ:
+OpenAPI JSON và Swagger UI chỉ được map khi service chạy ở Development: HR và Leave đều dùng /openapi/v1.json và /swagger.
 
-- `includeInactive` — chỉ HR được sử dụng.
-- `authoritative` — đọc dữ liệu trực tiếp từ nguồn chính.
+Các route bảo vệ nhận:
 
-Khi:
+    Authorization: Bearer <access-token>
 
-```text
-authoritative=true
-```
+HR Service phát access JWT và đặt refresh token trong HttpOnly cookie. Refresh token không được trả về JSON. JWT hiện có:
+- sub: EmployeeId
+- authz_v=1: phiên bản cấu trúc authorization claim
+- perm: mảng JSON permission và scope hiệu lực, ví dụ [{"p":"leaves.read","s":["Self","Team"]}]
+- Role claim legacy vẫn tồn tại để tương thích giao diện; các endpoint đã chuyển đổi authorize bằng permission/scope, không dựa vào Role claim.
 
-hệ thống sẽ bỏ qua Redis và đọc dữ liệu trực tiếp từ SQL.
+Scope đang thực thi: Self, Team, All. Department có trong schema/rule catalog nhưng chưa được triển khai thành bộ lọc nghiệp vụ. Quyền hiệu lực là hợp quyền từ các Role assignment còn hiệu lực; thiếu permission/scope hoặc claim không hợp lệ thì mặc định deny.
 
----
+Danh sách phân trang:
+- Phải truyền cả page và pageSize.
+- page >= 1; pageSize từ 1 đến 100.
+- Response trả item ở body và tổng số trong X-Total-Count.
+- List endpoint không có page/pageSize trả HTTP 400 theo contract hiện tại.
 
-# Leave Service
+## 2. HR Service
 
-| Phương thức và Route | Quyền truy cập | Mục đích |
+### 2.1. Authentication và hồ sơ hiện tại
+
+| Method / route | Authorization | Mô tả |
 |---|---|---|
-| `GET /api/v1/leave-requests?page=1&pageSize=20` | `leaves.read`: Self, Team hoặc All | Danh sách đơn trong phạm vi được cấp; Team được resolve từ HR theo quan hệ quản lý hiện tại |
-| `GET /api/v1/leave-requests/calendar?from=YYYY-MM-DD&to=YYYY-MM-DD` | `leaves.read`: Self, Team hoặc All | Lịch đơn nghỉ trong phạm vi được cấp; khoảng truy vấn tối đa 62 ngày |
-| `GET /api/v1/leave-requests/{id}` | `leaves.read`: Self, Team hoặc All | Xem chi tiết chỉ khi chủ đơn thuộc phạm vi của người gọi |
-| `GET /api/v1/leave-requests/mine?page=1&pageSize=20` | `leaves.read`: Self hoặc All | Chỉ lấy đơn có EmployeeId bằng người đang đăng nhập |
-| `POST /api/v1/leave-requests` | `leaves.create:Self` | Tạo đơn cho chính người đang đăng nhập |
-| `GET /api/v1/leave-requests/pending-approval?page=1&pageSize=20` | `leaves.decide`: Team hoặc All | Hộp chờ; Team chỉ gồm nhân viên thuộc Manager hiện tại |
-| `GET /api/v1/leave-requests/summary` | `leaves.decide`: Team/All | Trả số đơn Pending theo scope `decide`; Approved và Total theo scope `read`. Nếu không có `leaves.read`, hai trường này là `null` và UI ẩn bằng dấu gạch ngang |
-| `PATCH /api/v1/leave-requests/{id}/decision` | `leaves.decide`: Team hoặc All | Một endpoint cho quyết định approve/reject; body nhận `decision` (`approve` hoặc `reject`) và `note` |
-| `POST /api/v1/leave-requests/{id}/approve` | `leaves.decide`: Team hoặc All | Route tương thích cũ để duyệt; Team phải xác minh Manager hiện tại qua HR Service |
-| `POST /api/v1/leave-requests/{id}/reject` | `leaves.decide`: Team hoặc All | Route tương thích cũ để từ chối; Team phải xác minh Manager hiện tại qua HR Service |
-| `POST /api/v1/leave-requests/{id}/cancel` | `leaves.cancel:Self` | Chỉ chủ đơn được hủy khi đơn còn Pending |
-| `GET /api/v1/leave-balances/mine?year=2026` | `leaves.read`: Self hoặc All | Xem số dư phép của người dùng hiện tại theo từng loại nghỉ |
+| POST /api/v1/auth/login | Public | Xác thực email/password; phát access token và refresh HttpOnly cookie |
+| POST /api/v1/auth/refresh | Refresh cookie | Xoay vòng refresh token và phát access JWT mới với quyền tính lại |
+| POST /api/v1/auth/logout | Refresh cookie | Thu hồi refresh token và xóa cookie |
+| GET /api/v1/me | Authenticated | Đọc hồ sơ của caller |
+| GET /api/v1/me/team?page=1&pageSize=20 | employees.read:Team | Direct reports đang hoạt động của caller; pagination + X-Total-Count |
+| PUT /api/v1/me/password | Authenticated | Đổi mật khẩu của caller |
 
-Ví dụ request cho quyết định duyệt/từ chối:
+### 2.2. Employee và lookup
 
-```http
-PATCH /api/v1/leave-requests/{id}/decision
-Content-Type: application/json
-Authorization: Bearer <access-token>
+| Method / route | Permission/scope | Mô tả |
+|---|---|---|
+| GET /api/v1/employees?page=1&pageSize=20 | employees.read:Self/Team/All | Danh sách trong phạm vi quyền; hỗ trợ filter/search/sort |
+| GET /api/v1/employees/overview?page=1&pageSize=20 | employees.read:Self/Team/All | Trang dữ liệu, totalCount và summary |
+| GET /api/v1/employees/summary | employees.read:Self/Team/All | Summary trong phạm vi quyền |
+| GET /api/v1/employees/{id} | employees.read:Self/Team/All | Hồ sơ trong phạm vi được phép |
+| POST /api/v1/employees | employees.create:All | Tạo nhân viên; mã được backend sinh |
+| PUT /api/v1/employees/{id} | employees.update:All | Cập nhật hồ sơ |
+| POST /api/v1/employees/{id}/deactivate | employees.deactivate:All | Vô hiệu hóa nhân viên và thu hồi refresh token |
+| PUT /api/v1/employees/{id}/password | employees.password.reset:All | Đặt lại mật khẩu nhân viên |
+| POST /api/v1/lookup/employees/batch | employees.read:Self/Team/All | Lookup tối đa 100 ID; service kiểm tra scope từng record |
+| GET /api/v1/lookup/employees/{id} | employees.read:Self/Team/All | Snapshot nhân viên cho HR/Leave |
+| GET /api/v1/lookup/employees/{managerId}/team?page=1&pageSize=20 | employees.read:Team hoặc All | Direct reports active; Team chỉ gọi được cho manager ID của caller |
 
-{
-  "decision": "approve",
-  "note": "Đã sắp xếp nhân sự thay ca."
-}
-```
+Team lookup dùng Employees.ManagerId hiện tại. Manager có scope Team không thể tự chọn manager ID khác. Danh sách Team và lookup by ID cần giữ cùng quy tắc active/inactive.
 
-`decision` nhận `approve` hoặc `reject`. Các route POST `/approve` và `/reject` vẫn được giữ để tương thích client cũ.
+### 2.3. Quản lý Role assignment
 
-Summary trả về `pending` theo quyền `leaves.decide`. Hai trường `approved` và `total` là số nguyên khi có `leaves.read`, nếu không sẽ là `null`.
+Các route sau yêu cầu roles.manage:All:
 
-Hiện tại hệ thống **không có endpoint riêng cho báo cáo hoặc xuất dữ liệu**.
+| Method / route | Mô tả |
+|---|---|
+| GET /api/v1/roles | Danh sách Role active |
+| GET /api/v1/employees/{employeeId}/roles | Role assignments còn hiệu lực của nhân viên |
+| POST /api/v1/employees/{employeeId}/roles | Gán Role; body có roleCode và expiresAtUtc tùy chọn |
+| DELETE /api/v1/employees/{employeeId}/roles/{roleCode} | Thu hồi Role assignment |
 
-Các chỉ số trên Dashboard được tổng hợp từ các API hiện có về:
+Ví dụ body:
 
-- Nhân viên
-- Đơn nghỉ
-- Số dư phép
-- Lịch nghỉ
-
-Các chức năng Export và Notification hiển thị trên UI hiện chưa được triển khai.
-
----
-
-# Ví dụ Request và Response
-
-## Đăng nhập
-
-```http
-POST /api/v1/auth/login
-Content-Type: application/json
-```
-
-```json
-{
-  "email": "employee@example.test",
-  "password": "<configured-password>"
-}
-```
-
-Response:
-
-```json
-{
-  "accessToken": "<JWT>",
-  "expiresAtUtc": "2026-11-03T07:00:00Z",
-  "fullName": "Demo Employee",
-  "email": "employee@example.test",
-  "userId": "00000000-0000-0000-0000-000000000001",
-  "role": "Employee"
-}
-```
-
-Response đồng thời thiết lập HttpOnly Cookie:
-
-```text
-hr_leave_refresh
-```
-
-Không nên sao chép token thật vào:
-
-- Log
-- Ticket
-- Tài liệu
-- Screenshot công khai
-
----
-
-## Tạo đơn xin nghỉ
-
-```http
-POST /api/v1/leave-requests
-Authorization: Bearer <JWT>
-Content-Type: application/json
-```
-
-Ví dụ:
-
-```json
-{
-  "leaveTypeId": 1,
-  "startDate": "2026-11-09",
-  "endDate": "2026-11-09",
-  "reason": "Personal leave"
-}
-```
-
-Khi tạo thành công, API trả về:
-
-```http
-201 Created
-```
-
-với `LeaveRequestResponse`:
-
-```json
-{
-  "id": "00000000-0000-0000-0000-000000000002",
-  "employeeId": "00000000-0000-0000-0000-000000000001",
-  "approverId": "00000000-0000-0000-0000-000000000003",
-  "departmentId": 1,
-  "leaveTypeId": 1,
-  "startDate": "2026-11-09",
-  "endDate": "2026-11-09",
-  "totalDays": 1.0,
-  "reason": "Personal leave",
-  "status": 0,
-  "createdAtUtc": "2026-11-03T07:00:00Z",
-  "balances": [
     {
-      "leaveTypeId": 1,
-      "year": 2026,
-      "entitled": 12.0,
-      "used": 0.0,
-      "pending": 1.0,
-      "available": 11.0
+      "roleCode": "Manager",
+      "expiresAtUtc": null
     }
-  ]
-}
-```
 
-`status` sử dụng enum `LeaveRequestStatus`:
+Backend đọc lại quyền người cấp từ HR_DB trong transaction. Không được tự gán cho chính mình; nhân viên đích phải active khi gán; người cấp không thể cấp permission/scope vượt quyền của mình; Role có roles.manage:All không được đặt thời hạn; hệ thống bảo vệ quản trị viên cuối cùng. Thay đổi được ghi AuthzAuditLog cùng transaction.
 
-| Giá trị | Trạng thái |
-|---:|---|
-| `0` | Pending — Đang chờ xử lý |
-| `1` | Approved — Đã phê duyệt |
-| `2` | Rejected — Đã từ chối |
-| `3` | Cancelled — Đã hủy |
+Giới hạn: API hiện chỉ quản lý assignment cho danh mục Role được seed. Chưa có endpoint tạo Role mới hoặc sửa RolePermissions/RolePermissionScopes; chưa có React UI quản trị Role assignment.
 
-Các giá trị và số dư trả về có thể thay đổi tùy theo trạng thái thực tế của database và chính sách nghỉ của người dùng.
+### 2.4. Department và leave catalog
 
----
-
-## Phê duyệt hoặc từ chối đơn
-
-API phê duyệt và từ chối hỗ trợ ghi chú tùy chọn:
-
-```json
-{
-  "note": "Đã kiểm tra và xác nhận"
-}
-```
-
----
-
-# Quy ước lỗi
-
-Các lỗi của ứng dụng sử dụng định dạng:
-
-```text
-application/problem+json
-```
-
-Ví dụ:
-
-```json
-{
-  "type": "about:blank",
-  "title": "Validation failed",
-  "status": 422,
-  "detail": "Invalid request data",
-  "errors": {
-    "startDate": ["Start date must not be in the past."]
-  }
-}
-```
-
-Ý nghĩa các mã HTTP:
-
-| HTTP Status | Ý nghĩa |
-|---:|---|
-| `400` | Request không đúng định dạng hoặc lỗi validation khi binding dữ liệu |
-| `401` | Thiếu token, token hết hạn/không hợp lệ hoặc thông tin đăng nhập sai |
-| `403` | Người dùng đã đăng nhập nhưng không có quyền hoặc không thỏa mãn điều kiện nghiệp vụ |
-| `404` | Không tìm thấy dữ liệu hoặc người dùng không có quyền xem |
-| `409` | Dữ liệu bị trùng, trạng thái xung đột hoặc có thao tác nghiệp vụ chồng chéo |
-| `422` | Dữ liệu hoặc quy tắc nghiệp vụ không hợp lệ; response có thể chứa `errors` |
-| `503` | Leave Service không thể truy cập HR Service cần thiết |
-| `500` | Lỗi hệ thống không mong muốn; chi tiết được ghi trong server log |
-
-Các trường `title` và `detail` có thể khác nhau tùy endpoint và không nên được xem là mã định danh cố định cho client.
-
-Client nên xử lý dựa trên:
-
-- HTTP Status Code
-- Các field validation trong `errors`
-
----
-
-# Danh mục loại nghỉ
-
-Danh mục loại nghỉ được cố định gồm:
-
-- `ANNUAL` — Nghỉ phép năm
-- `SICK` — Nghỉ ốm
-- `UNPAID` — Nghỉ không lương
-
-Các API tạo dữ liệu của HR chỉ cho phép:
-
-- Khôi phục một loại nghỉ mặc định bị thiếu.
-- Thêm một policy bị thiếu cho loại nghỉ đang hoạt động và có trừ số dư.
-
-Hệ thống **không cho phép**:
-
-- Tạo loại nghỉ tùy ý.
-- Tạo thêm loại nghỉ ngoài ba loại mặc định.
-- Tạo policy số ngày phép cho `UNPAID`.
-
----
-
-# Quy tắc năm của Leave Policy
-
-Hệ thống sử dụng thời gian nghiệp vụ theo múi giờ Việt Nam:
-
-```text
-UTC+07:00
-```
-
-HR chỉ có thể **tạo hoặc chỉnh sửa Leave Policy cho năm tương lai**, tức là năm phải lớn hơn năm nghiệp vụ hiện tại.
-
-Policy của:
-
-- Năm hiện tại
-- Các năm trong quá khứ
-
-đều ở trạng thái **chỉ xem (read-only)**.
-
-Hệ thống cũng ngăn trường hợp cố gắng vượt qua quy tắc bằng cách sửa một policy cũ rồi đổi `year` trong request thành năm tương lai.
-
-Backend kiểm tra cả:
-
-1. Năm hiện tại đang được lưu của policy.
-2. Năm mới được gửi trong request.
-
-Policy hiện tại phải là policy của năm tương lai thì mới được phép cập nhật.
-
-Ví dụ, trong năm **2026**:
-
-| Năm Policy | Có thể tạo | Có thể sửa |
+| Method / route | Permission/scope | Mô tả |
 |---|---|---|
-| 2025 trở về trước | Không | Không |
-| 2026 | Không | Không |
-| 2027 trở đi | Có | Có |
+| GET /api/v1/departments[/{id}] | Authenticated | Đọc phòng ban |
+| POST /api/v1/departments | departments.create:All | Tạo phòng ban |
+| PUT /api/v1/departments/{id} | departments.update:All | Cập nhật phòng ban |
+| DELETE /api/v1/departments/{id} | departments.delete:All | Xóa theo điều kiện nghiệp vụ |
+| GET /api/v1/leave-catalog?year=2027 | Authenticated | Trả leaveTypes và leavePolicies trong một response |
+| GET /api/v1/leave-catalog?includeInactive=true | leave-types.update:All bổ sung | Bao gồm leave type inactive |
+| GET /api/v1/leave-types[/{id}] | Authenticated | Đọc loại nghỉ; includeInactive=true cần leave-types.update:All |
+| POST /api/v1/leave-types | leave-types.create:All | Tạo/khôi phục loại nghỉ chuẩn |
+| PUT /api/v1/leave-types/{id} | leave-types.update:All | Cập nhật trạng thái active của loại nghỉ chuẩn |
+| GET /api/v1/leave-policies[/{id}] | Authenticated | Đọc policy; hỗ trợ year và authoritative=true |
+| POST /api/v1/leave-policies | leave-policies.create:All | Tạo policy cho loại nghỉ chuẩn trừ balance |
+| PUT /api/v1/leave-policies/{id} | leave-policies.update:All | Cập nhật policy |
+| GET /api/v1/holidays[/{id}] | Authenticated | Đọc ngày lễ |
+| POST /api/v1/holidays | holidays.create:All | Thêm ngày lễ |
+| PUT /api/v1/holidays/{id} | holidays.update:All | Cập nhật ngày lễ |
+| DELETE /api/v1/holidays/{id} | holidays.delete:All | Xóa ngày lễ |
 
-Sau khi policy được tạo hoặc cập nhật thành công, hệ thống sẽ **vô hiệu hóa (invalidate) Redis cache của Leave Policy**.
+Ba loại nghỉ chuẩn là ANNUAL, SICK, UNPAID. Không cho phép loại nghỉ tùy ý; UNPAID không có quota policy. authoritative=true bypass Redis và đọc SQL trực tiếp. Leave Service dùng authoritative read khi tính nghiệp vụ.
 
-Redis chỉ đóng vai trò:
+Leave Policy chỉ được tạo/thay đổi với năm lớn hơn năm hiện tại theo UTC+07:00. Policy năm hiện tại/quá khứ chỉ đọc. Update kiểm tra cả năm đang lưu và năm yêu cầu để không thể chuyển policy cũ sang năm tương lai nhằm né khóa.
 
-> Cache tối ưu hiệu năng, không phải nguồn dữ liệu chính.
+## 3. Leave Service
 
-Nguồn dữ liệu chính vẫn là:
+| Method / route | Permission/scope | Mô tả |
+|---|---|---|
+| GET /api/v1/leave-requests?page=1&pageSize=20 | leaves.read:Self/Team/All | List phân trang, search, status, leaveTypeId |
+| GET /api/v1/leave-requests/calendar?from=YYYY-MM-DD&to=YYYY-MM-DD | leaves.read:Self/Team/All | Calendar; cần đủ from/to, tối đa 62 ngày |
+| GET /api/v1/leave-requests/{id} | leaves.read:Self/Team/All | Request trong scope; ngoài scope trả 404 |
+| GET /api/v1/leave-requests/mine?page=1&pageSize=20 | leaves.read:Self/All | Chỉ request của caller |
+| POST /api/v1/leave-requests | leaves.create:Self | Tạo request cho caller |
+| GET /api/v1/leave-requests/pending-approval?page=1&pageSize=20 | leaves.decide:Team/All | Inbox; Team lấy từ reporting line hiện tại ở HR |
+| GET /api/v1/leave-requests/summary | leaves.decide:Team/All | Pending theo decide scope; Approved/Total theo read scope, null nếu thiếu leaves.read |
+| PATCH /api/v1/leave-requests/{id}/decision | leaves.decide:Team/All | decision=approve/reject và note tùy chọn |
+| POST /api/v1/leave-requests/{id}/approve | leaves.decide:Team/All | Route tương thích duyệt |
+| POST /api/v1/leave-requests/{id}/reject | leaves.decide:Team/All | Route tương thích từ chối |
+| POST /api/v1/leave-requests/{id}/cancel | leaves.cancel:Self | Chủ đơn hủy khi Pending |
+| GET /api/v1/leave-balances/mine?year=2026 | leaves.read:Self/All | Đọc các balance rows hiện có của caller |
 
-```text
-SQL Server
-```
+Ví dụ quyết định:
 
-Khi Redis gặp sự cố, hệ thống vẫn phải tiếp tục hoạt động bằng cách đọc dữ liệu từ nguồn chính.
+    PATCH /api/v1/leave-requests/{id}/decision
+    Authorization: Bearer <access-token>
+    Content-Type: application/json
+
+    {
+      "decision": "approve",
+      "note": "Đã sắp xếp nhân sự thay ca."
+    }
+
+Trạng thái LeaveRequestStatus: 0 Pending, 1 Approved, 2 Rejected, 3 Cancelled.
+
+### 3.1. Quy tắc nghiệp vụ
+
+- Employee phải active; leave type phải active.
+- EndDate không trước StartDate; range tối đa 366 ngày; reason bắt buộc, tối đa 1.000 ký tự.
+- Backend tính ngày làm việc: thứ Hai–thứ Sáu, bỏ holidays từ HR; request không có ngày làm việc bị từ chối.
+- Request trừ balance được chia allocation theo từng năm; policy authoritative lấy từ HR.
+- Không cho request Pending/Approved chồng ngày của cùng nhân viên.
+- Create reserve Pending; Approve chuyển Pending sang Used; Reject/Cancel giải phóng Pending.
+- Create/decision/cancel và balance/history cùng transaction; RowVersion, unique index, Serializable transaction và retry bảo vệ cạnh tranh.
+- ApproverId trên request chỉ là snapshot lúc tạo, không phải nguồn authorization hiện tại.
+- Với Team scope, Leave gọi HR để lấy membership hiện tại; khi quyết định đơn, xác minh Employee còn active và ManagerId vẫn là actor. HR unavailable thì fail closed, trả 503.
+- Leave Service không truy cập HR_DB trực tiếp.
+
+Balance row được tạo lazy trong flow tạo request nếu loại nghỉ trừ quota và chưa có row. GET leave-balances/mine chỉ đọc rows đã tồn tại; không bulk initialize hoặc đồng bộ Entitled khi HR đổi policy.
+
+History ghi Created/Approved/Rejected/Cancelled nhưng hiện chưa có GET API riêng để đọc history.
+
+## 4. Lỗi HTTP
+
+| Status | Ý nghĩa thường gặp |
+|---:|---|
+| 400 | Binding, pagination hoặc request format không hợp lệ |
+| 401 | Thiếu/sai/hết hạn token hoặc credentials không hợp lệ |
+| 403 | Thiếu permission/scope hoặc không thỏa authorization |
+| 404 | Không tồn tại hoặc record ngoài data scope |
+| 409 | Conflict trạng thái/unique/concurrency/nghiệp vụ |
+| 422 | Validation nghiệp vụ thất bại |
+| 503 | HR Service dependency không khả dụng |
+| 500 | Lỗi không mong muốn; chi tiết chỉ có trong server log |
+
+Application errors dùng Problem Details (application/problem+json). Client nên xử lý theo HTTP status và validation fields, không phụ thuộc title/detail như error code.
+
+## 5. Chức năng chưa có
+
+- GET Leave Request History.
+- Export/report backend riêng; KPI hiện tổng hợp từ các API hiện có.
+- Notification API/backend delivery.
+- Role/Permission catalog CRUD và React UI quản trị grants; hiện chỉ có baseline seeds và UserRole assignment APIs.
+- API/worker đồng bộ tất cả LeaveBalance khi policy thay đổi.

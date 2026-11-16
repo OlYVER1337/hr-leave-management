@@ -1,13 +1,17 @@
 # Sơ đồ kiến trúc và dữ liệu
 
+
+> **Lưu ý cập nhật 16/11/2026:** Các file Mermaid đã được chỉnh lại theo code hiện tại (Dynamic RBAC, Team scope từ HR, Leave year allocations và ranh giới HR_DB/Leave_DB). Các PNG/SVG hiện là bản xuất cũ trước lần cập nhật source này; hãy đọc Mermaid source làm chuẩn cho tới khi render lại ảnh.
+
+
 Các sơ đồ được chia theo định dạng để tiện sửa và xem:
 
 - `mermaid/`: source chỉnh sửa được.
-- `png/`: ảnh tương thích với hầu hết trình xem Markdown.
-- `svg/`: ảnh vector khi cần phóng to.
+- `png/`: bản xuất hiện có là snapshot cũ, cần render lại từ Mermaid source mới.
+- `svg/`: bản vector hiện có cũng là snapshot cũ, cần render lại từ Mermaid source mới.
 - `legacy-png/`: các bản PNG cũ giữ lại để bảo toàn lịch sử; dùng bản trong `png/` làm bản hiển thị hiện hành.
 
-| Sơ đồ | PNG hiện hành | SVG | Mermaid |
+| Sơ đồ | PNG (snapshot cũ) | SVG (snapshot cũ) | Mermaid source (chuẩn hiện tại) |
 |---|---|---|---|
 | Kiến trúc API | [PNG](diagrams/png/api-architecture.png) | [SVG](diagrams/svg/api-architecture.svg) | [Source](diagrams/mermaid/api-architecture.mmd) |
 | ERD HR database | [PNG](diagrams/png/erd-hr-db.png) | [SVG](diagrams/svg/erd-hr-db.svg) | [Source](diagrams/mermaid/erd-hr-db.mmd) |

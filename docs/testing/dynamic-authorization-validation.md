@@ -335,3 +335,64 @@ dotnet test .\src\leave-service\LeaveService.slnx
 ```
 
 Để nghiệm thu cả integration với SQL Server/Redis, phải cấu hình `HR_TEST_SQL_CONNECTION_STRING` và `HR_TEST_REDIS_CONNECTION_STRING` như Mục 2. Điều kiện cuối cùng vẫn là `failed = 0`, `skipped = 0` ở cả hai solution. TestServer contract tests không thay thế SQL/Redis integration tests.
+
+
+## 9. Workforce paged-v2 mới nhất và cách gắn revision — 16/11/2026
+
+### 9.1. Kết quả đã có
+
+Sáu raw JSON được commit trong docs/testing/evidence/dynamic-authorization/:
+- 50 VU: workforce-50vu-paged-v2-run1/2/3.json
+- 100 VU: workforce-100vu-paged-v2-run1/2/3.json
+
+Tất cả dùng duration 5m, PAGE_SIZE=50, year=2026; các lượt kéo dài xấp xỉ 300 giây và error rate 0%. Trung bình:
+- 50 VU: 454,07 RPS; p50 trung bình 9,37 ms; p95 trung bình 17,85 ms.
+- 100 VU: 764,14 RPS; p50 trung bình 23,66 ms; p95 trung bình 73,28 ms.
+
+Xem từng lần và cách diễn giải tại dynamic-authorization-benchmark-results.md.
+
+**Giới hạn bằng chứng:** benchmark_metadata trong cả sáu raw JSON đang ghi git_sha=not-provided và image_tag=not-provided. Không gắn các kết quả này với một binary/revision chính xác; không xem đây là baseline bất biến cho nghiệm thu. Các số liệu ở các mục trước thuộc ngày 12–13/11 là lịch sử, không thay thế kết quả mới.
+
+### 9.2. Chạy lại và gắn Git SHA/image ID
+
+PowerShell ở thư mục repository:
+
+    $env:GIT_SHA = (git rev-parse HEAD).Trim()
+    $env:PAGE_SIZE = "50"
+
+Build stack benchmark từ revision hiện tại (đảm bảo .env đã có account và secret riêng cho benchmark):
+
+    docker compose -p hrbench -f docker-compose.yml -f docker-compose.loadtest.yml up -d --build
+    docker compose -p hrbench -f docker-compose.yml -f docker-compose.loadtest.yml ps
+
+Lấy image IDs sau build; kiểm tra tên image thực tế bằng lệnh images nếu Compose project đặt tên khác:
+
+    docker compose -p hrbench -f docker-compose.yml -f docker-compose.loadtest.yml images
+
+Ví dụ lấy ID image HR được Compose gắn cho service:
+
+    $env:IMAGE_TAG = (docker compose -p hrbench -f docker-compose.yml -f docker-compose.loadtest.yml images -q hr-service | Select-Object -First 1).Trim()
+
+Nếu muốn metadata phản ánh cả hai service image, đặt IMAGE_TAG thành chuỗi có cả HR và Leave image ID; không dùng nhãn mutable latest.
+
+Chờ hai API healthy:
+
+    Invoke-RestMethod http://localhost:18081/health
+    Invoke-RestMethod http://localhost:18082/health
+
+Chạy 50 VU; lưu raw JSON và không ghi đè các lượt trước:
+
+    docker compose -p hrbench -f docker-compose.yml -f docker-compose.loadtest.yml --profile loadtest run --rm -e VUS=50 -e DURATION=5m -e PAGE_SIZE=$env:PAGE_SIZE -e GIT_SHA=$env:GIT_SHA -e IMAGE_TAG=$env:IMAGE_TAG -e REPORT_JSON=/reports/workforce-50vu-paged-v3-run1.json k6 run /scripts/workforce.js
+
+Chạy ba lượt độc lập để đo biến động; đổi REPORT_JSON mỗi lượt. Sau đó chạy lại với VUS=100 và tên report 100vu tương ứng. Script đọc VUS/DURATION từ environment; không dựa vào k6 CLI --vus/--duration để ghi đè scenario.
+
+### 9.3. Điều kiện so sánh và giới hạn
+
+- Giữ cùng Git SHA, immutable image IDs, page size, seed data, token role mix, duration và resource limits.
+- Seed/load test chỉ thực hiện trong project hrbench riêng. Không xóa volume stack phát triển hr-leave.
+- Workforce là sustained load 5 phút; Approval script là per-vu-iterations burst, không ghép RPS hoặc percentile hai workload.
+- Custom HR metrics ghi request đo trong vòng VU, loại trừ login, pagination-contract checks và warm-up.
+- P95 trung bình giữa các lần chạy chỉ là descriptive average; muốn p95 của một phân phối gộp phải xử lý raw observations phù hợp, không lấy trung bình các p95.
+- Đo CPU, memory, SQL waits, query duration và connection pool trong cùng cửa sổ 5 phút trước khi kết luận bottleneck.
+- Không dùng số liệu local benchmark để cam kết production throughput.
+

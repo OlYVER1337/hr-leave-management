@@ -1,12 +1,15 @@
 flowchart TB
-  U["Trình duyệt<br/>Employee / Manager / HR"] -->|HTTP| W["Web React + Nginx :3000"]
-  W -->|"/hr-api/*"| HR["HR Service :8081<br/>auth, employees, departments,<br/>leave-types, policies, holidays"]
-  W -->|"/leave-api/*"| LV["Leave Service :8082<br/>leave-requests, balances,<br/>calendar, reports"]
-  LV -->|"REST + JWT, timeout/retry<br/>tra cứu nhân viên, loại phép,<br/>chính sách, ngày lễ"| HR
-  HR --> HRDB[("HR_DB")]
-  LV --> LVDB[("Leave_DB")]
-  HR -.->|"cache loại phép,<br/>chính sách, ngày lễ"| R[("Redis<br/>cache đọc, có fallback")]
-  subgraph SQL["SQL Server container (2 database riêng)"]
+  U["Trình duyệt<br/>Employee / Manager / HR"] -->|HTTPS hoặc HTTP local| W["Web React + TypeScript<br/>Nginx :3000"]
+  W -->|"/hr-api/*"| HR["HR Service :8081<br/>Auth, Employees, Departments,<br/>RBAC, Leave Catalog"]
+  W -->|"/leave-api/*"| LV["Leave Service :8082<br/>Leave Requests, Balances,<br/>Calendar, Approval"]
+  LV -->|"REST + Bearer JWT<br/>timeout 5 giây"| HR
+  HR --> HRDB[("HR_DB<br/>Employees, Roles, Permissions,<br/>UserRoles, Scopes, Audit,<br/>Leave Types/Policies, Holidays")]
+  LV --> LVDB[("Leave_DB<br/>Requests, Balances,<br/>Year Allocations, History")]
+  HR -.->|"Cache-aside catalog<br/>TTL mặc định 30 phút"| R[("Redis<br/>Leave types / Policies / Holidays")]
+  LV -.->|"authoritative=true<br/>bypass cache cho nghiệp vụ"| HR
+  subgraph SQL["SQL Server — hai database độc lập"]
     HRDB
     LVDB
   end
+  N["Không có API Gateway riêng<br/>Nginx chỉ proxy theo path"] -.-> W
+  X["Leave Service không truy cập HR_DB<br/>Không có cross-database FK"] -.-> LV

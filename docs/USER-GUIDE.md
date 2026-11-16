@@ -120,6 +120,17 @@ bằng tài khoản có quyền tương ứng.
 
 HR có thể xem và xử lý mọi đơn đang chờ; quản lý chỉ xử lý đơn được phân công.
 
+
+## Lưu ý về phân quyền hiện tại
+
+Backend sử dụng Dynamic RBAC: các thao tác API được kiểm tra theo permission và data scope trong JWT (Self, Team, All). HR là nguồn quản lý Role assignment và quan hệ quản lý hiện tại; Leave Service gọi HR để xác minh Team khi cần.
+
+Giao diện React hiện vẫn hiển thị menu và chặn route theo ba role legacy HR/Manager/Employee để giữ tương thích UI. Vì vậy:
+- Một API call trực tiếp vẫn phải thỏa permission/scope backend; việc thấy hoặc không thấy menu không cấp quyền.
+- API có thể hỗ trợ khả năng mà UI chưa cung cấp. Ví dụ Role assignment hiện có backend API nhưng chưa có trang quản trị.
+- Role catalog CRUD và cấu hình permission/scope cho Role chưa có UI/API quản trị tổng quát.
+- Access JWT đã phát vẫn có hiệu lực đến khi hết hạn; gán/thu hồi Role không cập nhật token đang tồn tại tại chỗ.
+
 ## 3. Kịch bản demo nhanh
 
 ### Demo giao diện (không cần backend)
