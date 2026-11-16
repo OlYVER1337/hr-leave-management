@@ -7,8 +7,8 @@
 Các sơ đồ được chia theo định dạng để tiện sửa và xem:
 
 - `mermaid/`: source chỉnh sửa được.
-- `png/`: ảnh tương thích với hầu hết trình xem Markdown.
-- `svg/`: ảnh vector khi cần phóng to.
+- `png/`: bản xuất hiện có là snapshot cũ, cần render lại từ Mermaid source mới.
+- `svg/`: bản vector hiện có cũng là snapshot cũ, cần render lại từ Mermaid source mới.
 - `legacy-png/`: các bản PNG cũ giữ lại để bảo toàn lịch sử; dùng bản trong `png/` làm bản hiển thị hiện hành.
 
 | Sơ đồ | PNG (snapshot cũ) | SVG (snapshot cũ) | Mermaid source (chuẩn hiện tại) |
