@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Department, Employee } from '../types';
@@ -155,12 +155,16 @@ describe('EmployeesPage filtering, sorting and pagination', () => {
     const rows = () => within(screen.getByRole('table')).getAllByRole('row');
 
     await user.click(sortByName);
-    expect(within(rows()[1]).getByText('Nhân viên 25')).toBeInTheDocument();
-    expect(rows()[0].querySelector('th')).toHaveAttribute('aria-sort', 'descending');
+    await waitFor(() => {
+      expect(within(rows()[1]).getByText('Nhân viên 25')).toBeInTheDocument();
+      expect(rows()[0].querySelector('th')).toHaveAttribute('aria-sort', 'descending');
+    });
 
     await user.click(sortByName);
-    expect(within(rows()[1]).getByText('Nhân viên 01')).toBeInTheDocument();
-    expect(rows()[0].querySelector('th')).toHaveAttribute('aria-sort', 'ascending');
+    await waitFor(() => {
+      expect(within(rows()[1]).getByText('Nhân viên 01')).toBeInTheDocument();
+      expect(rows()[0].querySelector('th')).toHaveAttribute('aria-sort', 'ascending');
+    });
   });
 
   it('filters employees by the selected department name', async () => {
