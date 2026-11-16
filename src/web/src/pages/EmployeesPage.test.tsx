@@ -160,7 +160,9 @@ describe('EmployeesPage filtering, sorting and pagination', () => {
       expect(rows()[0].querySelector('th')).toHaveAttribute('aria-sort', 'descending');
     });
 
-    await user.click(sortByName);
+    // Sorting triggers a reload that temporarily unmounts the table. Query the
+    // newly rendered button instead of reusing the detached first reference.
+    await user.click(screen.getByRole('button', { name: 'Sắp xếp theo họ tên' }));
     await waitFor(() => {
       expect(within(rows()[1]).getByText('Nhân viên 01')).toBeInTheDocument();
       expect(rows()[0].querySelector('th')).toHaveAttribute('aria-sort', 'ascending');
