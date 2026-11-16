@@ -346,8 +346,8 @@ Sáu raw JSON được commit trong docs/testing/evidence/dynamic-authorization/
 - 100 VU: workforce-100vu-paged-v2-run1/2/3.json
 
 Tất cả dùng duration 5m, PAGE_SIZE=50, year=2026; các lượt kéo dài xấp xỉ 300 giây và error rate 0%. Trung bình:
-- 50 VU: 453,56 RPS; p50 trung bình 9,37 ms; p95 trung bình 17,85 ms.
-- 100 VU: 763,29 RPS; p50 trung bình 23,66 ms; p95 trung bình 73,28 ms.
+- 50 VU: 454,07 RPS; p50 trung bình 9,37 ms; p95 trung bình 17,85 ms.
+- 100 VU: 764,14 RPS; p50 trung bình 23,66 ms; p95 trung bình 73,28 ms.
 
 Xem từng lần và cách diễn giải tại dynamic-authorization-benchmark-results.md.
 
