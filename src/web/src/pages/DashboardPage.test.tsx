@@ -159,6 +159,7 @@ describe('DashboardPage', () => {
     const { container } = renderDashboard();
 
     expect(await screen.findByText('Có 1 yêu cầu đang chờ bạn phê duyệt.')).toBeInTheDocument();
+    await screen.findByText('Tổng số đơn');
     const pendingCard = screen.getByText('Đơn chờ tôi phê duyệt').closest('.stat-card') as HTMLElement | null;
     expect(pendingCard).not.toBeNull();
     if (!pendingCard) throw new Error('Manager approval KPI card was not rendered.');
