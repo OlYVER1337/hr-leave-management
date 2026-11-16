@@ -20,7 +20,7 @@ public sealed class LeaveRequestService(
         CreateLeaveRequest request,
         CancellationToken cancellationToken = default)
     {
-        ValidateRequest(request, DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime));
+        ValidateRequest(request, BusinessToday());
         var employee = await hrClient.GetEmployeeAsync(
             employeeId,
             authorization,
@@ -490,6 +490,13 @@ public sealed class LeaveRequestService(
 
         return result;
     }
+
+    // Múi giờ nghiệp vụ (Việt Nam, UTC+7). Dùng offset cố định để không phụ thuộc
+    // TimeZoneInfo khác nhau giữa Windows và Linux container.
+    public static readonly TimeSpan BusinessOffset = TimeSpan.FromHours(7);
+
+    private DateOnly BusinessToday() =>
+        DateOnly.FromDateTime(timeProvider.GetUtcNow().ToOffset(BusinessOffset).DateTime);
 
     private void ValidateRequest(CreateLeaveRequest request, DateOnly today)
     {

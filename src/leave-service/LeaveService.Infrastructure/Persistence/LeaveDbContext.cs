@@ -17,6 +17,12 @@ public sealed class LeaveDbContext(DbContextOptions<LeaveDbContext> options) : D
             entity.HasIndex(item => new { item.EmployeeId, item.LeaveTypeId, item.Year })
                 .IsUnique();
             entity.Property(item => item.Entitled).HasPrecision(6, 1);
+            entity.ToTable(table =>
+            {
+                table.HasCheckConstraint("CK_LeaveBalances_Entitled_NonNegative", "[Entitled] >= 0");
+                table.HasCheckConstraint("CK_LeaveBalances_Used_NonNegative", "[Used] >= 0");
+                table.HasCheckConstraint("CK_LeaveBalances_Pending_NonNegative", "[Pending] >= 0");
+            });
             entity.Property(item => item.Used).HasPrecision(6, 1);
             entity.Property(item => item.Pending).HasPrecision(6, 1);
             entity.Property(item => item.RowVersion).IsRowVersion();
