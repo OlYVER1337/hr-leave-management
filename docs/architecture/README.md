@@ -1,5 +1,9 @@
 # Sơ đồ kiến trúc và dữ liệu
 
+
+> **Lưu ý cập nhật 16/11/2026:** Các file Mermaid đã được chỉnh lại theo code hiện tại (Dynamic RBAC, Team scope từ HR, Leave year allocations và ranh giới HR_DB/Leave_DB). Các PNG/SVG hiện là bản xuất cũ trước lần cập nhật source này; hãy đọc Mermaid source làm chuẩn cho tới khi render lại ảnh.
+
+
 Các sơ đồ được chia theo định dạng để tiện sửa và xem:
 
 - `mermaid/`: source chỉnh sửa được.
