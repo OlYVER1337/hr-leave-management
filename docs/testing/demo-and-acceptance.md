@@ -1,5 +1,9 @@
 # Kịch bản demo, kết quả kiểm thử và checklist nghiệm thu
 
+
+> **Cập nhật trạng thái 16/11/2026:** Các kết quả test và demo ghi trong các mục bên dưới là bằng chứng lịch sử tại ngày ghi trên từng mục, không phải kết quả tự động của HEAD hiện tại. Stored TRX trong branch hiện có ngày 05/11: HR 57 passed, 1 skipped; Leave 19 passed, 6 skipped. Integration tests đã skip vì chưa cấu hình SQL/Redis test dependencies ở lượt lưu TRX. Cần chạy lại trên exact HEAD và lưu TRX mới trước khi đánh dấu regression nghiệm thu.
+
+
 ## 1. Kết quả kiểm thử hồi quy và tích hợp
 
 Backend được chạy lại ngày **03/11/2026** sau khi cập nhật Microsoft.Data.SqlClient
@@ -292,3 +296,47 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
 - Không chạy `docker compose down -v` trên stack chính để dọn dữ liệu demo.
 - Không đưa `.env`, mật khẩu, JWT secret, access token hoặc connection string
   chứa bí mật vào báo cáo, log hoặc Git.
+
+
+## 7. Cập nhật trạng thái source và bằng chứng — 16/11/2026
+
+### 7.1. Dynamic Authorization hiện tại
+
+Backend HR/Leave đã chuyển sang authorization theo permission/scope claim:
+- JWT chứa authz_v=1 và perm JSON; login/refresh tính lại quyền từ HR database.
+- HR sở hữu Role, Permission, UserRole assignment, Scope rules và audit log.
+- Scope đang được thực thi là Self, Team, All. Department chưa có filter nghiệp vụ.
+- Leave Team reads/decisions xác minh current reporting line từ HR; không dùng ApproverId snapshot làm quyền hiện tại.
+- UserRole assignment APIs đã có; Role/Permission catalog CRUD và UI quản trị chưa có.
+- React vẫn dùng legacy HR/Manager/Employee roles cho navigation/route guard. Điều này không thay thế permission enforcement ở backend.
+
+### 7.2. Automated test evidence cần hiểu đúng
+
+TRX đang lưu tại docs/testing/evidence/dotnet/ là evidence cũ hơn HEAD:
+- HR: total 58, executed 57, passed 57, failed 0; một integration test skipped.
+- Leave: total 25, executed 19, passed 19, failed 0; sáu integration tests skipped.
+- Các skip gồm SQL/Redis persistence và concurrency integration. Vì vậy không ghi các TRX này thành bằng chứng đầy đủ rằng database integration/concurrency đã chạy trên HEAD.
+
+Điều kiện nghiệm thu backend mới: chạy cả hai solution với SQL Server và Redis test dependencies dành riêng, failed=0, skipped=0; đính kèm TRX mới cùng Git SHA. Frontend cũng cần chạy Vitest và production build từ cùng HEAD; các báo cáo cũ ở trên không đại diện tự động cho code mới.
+
+### 7.3. Workforce benchmark mới nhất
+
+Ba lượt paged-v2 mỗi mức VU ngày 16/11 ghi nhận:
+- 50 VU: trung bình 453,56 RPS; P95 trung bình 17,85 ms; HTTP error rate 0%.
+- 100 VU: trung bình 763,29 RPS; P95 trung bình 73,28 ms; HTTP error rate 0%.
+- Page size 50, duration 5 phút.
+- Các raw JSON chưa gắn Git SHA/image ID (giá trị not-provided); không xem đây là benchmark baseline bất biến cho revision cụ thể.
+
+Chi tiết: dynamic-authorization-benchmark-results.md. Muốn sign-off hiệu năng phải chạy lại với SHA/image ID cố định và metrics tài nguyên đồng bộ với workload.
+
+### 7.4. Các gap còn mở
+
+- Leave Balance chưa có bulk initialization/synchronization khi policy đổi.
+- Leave request date validation và default balance year dùng UTC, trong khi HR policy year dùng UTC+07.
+- Employee lookup cần thống nhất active-state behavior giữa lookup by ID/batch và Team listing.
+- Leave History có ghi nhưng chưa có GET endpoint.
+- Health endpoint chưa tách readiness/liveness và chưa kiểm tra database readiness.
+- HR HttpClient timeout 5 giây, chưa có circuit breaker/retry.
+- Annual demo policy không thống nhất: backend DemoDataSeeder đặt ANNUAL 12 ngày, frontend built-in fallback metadata khai báo 15 ngày.
+
+Thứ tự và tiêu chí hoàn thành được theo dõi ở planning/BACKLOG.md.
