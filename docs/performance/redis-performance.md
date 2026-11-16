@@ -257,3 +257,20 @@ của container trong cùng workload. Chỉ sau khi có số đo mới cân nh�
 index, connection pooling hoặc chiến lược cache. Các thao tác cập nhật số dư và
 quyết định phê duyệt phải tiếp tục dựa trên transaction SQL, không đánh đổi tính
 đúng đắn để tăng cache hit.
+
+
+## 6. Workforce paged-v2 bổ sung — 16/11/2026
+
+Workforce benchmark mới nhất được thực hiện với kịch bản paged-v2, page size 50, 5 phút/lượt, trên sáu lần chạy (50 và 100 VU, mỗi mức ba lần). Kết quả:
+
+| VU | RPS trung bình | P50 trung bình | P95 trung bình | HTTP errors |
+|---:|---:|---:|---:|---:|
+| 50 | 453,56 | 9,37 ms | 17,85 ms | 0 |
+| 100 | 763,29 | 23,66 ms | 73,28 ms | 0 |
+
+Đây là workload Workforce đọc dữ liệu có phân trang, **không phải phép đo Redis ON/OFF**. Sáu JSON mới có metadata page_size=50 và duration=5m nhưng git_sha/image_tag đều not-provided, nên chưa gắn được với một binary revision cố định.
+
+Các bảng Catalog Redis ON/OFF ở mục 4 vẫn là benchmark riêng cho ba catalog endpoints. Không dùng kết quả Catalog để kết luận Redis làm tăng/giảm throughput của Workforce paged-v2. Cũng không lấy Workforce paged-v2 làm phép so sánh với các Workforce request không phân trang ở lượt cũ, vì API contract hiện bắt buộc page/pageSize.
+
+Chi tiết từng lượt và phân tích p95 nằm trong [Dynamic Authorization benchmark report](../testing/dynamic-authorization-benchmark-results.md). Nếu cần đánh giá cache ảnh hưởng tới Workforce, phải chạy một cặp ON/OFF từ cùng Git SHA, cùng image, dataset, page size, VU, duration và resource limits.
+
