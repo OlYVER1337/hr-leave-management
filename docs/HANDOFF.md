@@ -7,7 +7,7 @@
 | Repository | OlYVER1337/hr-leave-management |
 | Branch được rà soát | feature/dynamic-authorization-v1 |
 | Baseline code đã đối chiếu | 2bac8327b0ec64b5d1a1cb5d4de81e00e2bd6c4c |
-| HEAD sau các cập nhật tài liệu | aa7ef027ad6371fab6690b4d1fa8f6ec31fdcc9c |
+| HEAD trước commit cập nhật handoff này | dbab2ee7ceddb95a0ba753b5961564a7d7c69b69 |
 | Ngày rà soát | 16/11/2026 |
 | Phạm vi | Đối chiếu tài liệu với source, migrations, scripts và evidence trong branch |
 
@@ -24,7 +24,7 @@
 | 5 | Database design | Được tài liệu hóa theo migrations hiện tại | HR migrations gồm Initial schema, RefreshTokens, Dynamic Authorization; Leave migrations gồm Initial schema và approval/year allocations. EF Model/Migrations là nguồn quyết định schema thật. |
 | 6 | API reference | Đã cập nhật theo controller hiện có | API permission/scope, pagination, current Team lookup, role assignment và giới hạn chưa có History/Export/Notification được ghi tại API_REFERENCE.md. |
 | 7 | Redis | Đã có và có evidence kiểm tra lịch sử | Redis cache-aside cho leave types/policies/holidays, TTL mặc định 30 phút, invalidation và SQL fallback. Báo cáo ON/OFF ở redis-performance.md là workload Catalog; không coi là Redis comparison cho Workforce paged-v2. |
-| 8 | Workforce benchmark paged-v2 | 3 lượt mỗi mức; 0 HTTP errors | 50 VU trung bình khoảng 453.56 RPS, p95 trung bình 17.85 ms; 100 VU trung bình khoảng 763.29 RPS, p95 trung bình 73.28 ms. Page size 50, duration 5m. Git SHA/image ID trong JSON là not-provided; chưa phải baseline gắn revision bất biến. |
+| 8 | Workforce benchmark paged-v2 | 3 lượt mỗi mức; 0 HTTP errors | 50 VU trung bình khoảng 454,07 RPS, p95 trung bình 17,85 ms; 100 VU trung bình khoảng 764,14 RPS, p95 trung bình 73,28 ms. Page size 50, duration 5m. Git SHA/image ID trong JSON là not-provided; chưa phải baseline gắn revision bất biến. |
 | 9 | Approval benchmark | Có evidence burst cũ | approval.js dùng per-vu-iterations, không phải sustained load 5 phút; xem riêng kết quả lịch sử ở benchmark report. |
 | 10 | Automated tests trên HEAD | Chưa xác nhận bằng evidence trong branch | TRX được lưu hiện tại có timestamp 05/11: HR run có 57 pass, 1 skipped; Leave 19 pass, 6 skipped. Không dùng chúng làm kết quả HEAD. Cần chạy lại full suite với SQL/Redis dependencies và skipped=0. |
 | 11 | Deployment package | Có local/demo Compose; chưa nghiệm thu production | Dockerfiles, Nginx, Compose và .env.example có sẵn. Chưa có bằng chứng clean-environment deployment, TLS, secrets manager, backup/restore hoặc production monitoring. |
@@ -39,7 +39,7 @@ Các file workforce-{50,100}vu-paged-v2-run{1,2,3}.json trong docs/testing/evide
 - git_sha = not-provided
 - image_tag = not-provided
 
-Các lần chạy đều kéo dài xấp xỉ 300 giây và có error rate 0. Mean RPS 50 VU khoảng 453.56; mean RPS 100 VU khoảng 763.29. P95 trung bình tăng từ khoảng 17.85 ms lên 73.28 ms. Không thể gắn chắc chắn các số liệu vào một source/image cụ thể khi metadata thiếu SHA/image ID. Xem dynamic-authorization-benchmark-results.md.
+Các lần chạy đều kéo dài xấp xỉ 300 giây và có error rate 0. RPS trung bình theo script (requests / 300 giây cấu hình): 50 VU khoảng 454,07; 100 VU khoảng 764,14. P95 trung bình tăng từ khoảng 17.85 ms lên 73.28 ms. Không thể gắn chắc chắn các số liệu vào một source/image cụ thể khi metadata thiếu SHA/image ID. Xem dynamic-authorization-benchmark-results.md.
 
 Một lỗi lịch sử ở workload Workforce cũ ghi nhận 21 HTTP 500 tại 100 VU ngày 03/11; hai lượt chạy xác nhận sau đó không tái hiện. Nguyên nhân lỗi ban đầu chưa được xác định. Không dùng sự kiện này để khẳng định code hiện tại còn lỗi hoặc đã được fix.
 
