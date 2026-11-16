@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   Bell, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, ClipboardCheck,
@@ -86,7 +86,11 @@ export function AppShell() {
             </div>
           </div>
         </header>
-        <main className="main-content"><Outlet /></main>
+        <main className="main-content">
+          <Suspense fallback={<div className="table-loading" role="status" aria-live="polite"><span aria-hidden="true" /> Đang tải trang...</div>}>
+            <Outlet />
+          </Suspense>
+        </main>
         <footer className="app-footer"><span>Bộ công cụ nhân sự Peopleflow</span><span>An toàn · Lấy con người làm trung tâm · Dành cho đội nhóm</span></footer>
       </div>
     </div>
