@@ -106,12 +106,30 @@ describe('ApprovalsPage', () => {
     expect(mocks.notify).toHaveBeenCalledWith('Đã phê duyệt đơn nghỉ.');
     expect(getApprovalsInboxPage).toHaveBeenCalledWith(manager, expect.objectContaining({ page: 1, pageSize: 20 }));
     expect(getApprovalsInboxPage).toHaveBeenCalled();
-    expect(getLeaveRequestSummary).toHaveBeenCalledTimes(1);
+    // One initial summary load and one refresh after the decision.
+    expect(getLeaveRequestSummary).toHaveBeenCalledTimes(2);
     expect(getLeaveRequestsPage).not.toHaveBeenCalledWith(
       manager,
       expect.objectContaining({ pageSize: 1 }),
     );
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('hides read metrics when the caller only has decision permission', async () => {
+    vi.mocked(getLeaveRequestSummary).mockResolvedValue({
+      pending: 2,
+      approved: null,
+      total: null,
+    });
+
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <ApprovalsPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findAllByText('—')).toHaveLength(2);
+    expect(screen.getByText('Chờ bạn xem xét')).toBeInTheDocument();
   });
 
   it('shows an error notification when the decision fails', async () => {

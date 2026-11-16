@@ -202,6 +202,48 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
     }
 
     [LeaveSqlFact]
+    public async Task GetSummaryAsync_AppliesReadAndDecisionScopesIndependently()
+    {
+        var actor = Guid.NewGuid();
+        var teamMember = Guid.NewGuid();
+        var outsider = Guid.NewGuid();
+
+        await CreateAsync(
+            actor, null, new DateOnly(2030, 9, 1), new DateOnly(2030, 9, 1));
+        var ownApproved = await CreateAsync(
+            actor, null, new DateOnly(2030, 9, 2), new DateOnly(2030, 9, 2));
+        await CreateAsync(
+            teamMember, actor, new DateOnly(2030, 9, 3), new DateOnly(2030, 9, 3));
+        var teamApproved = await CreateAsync(
+            teamMember, actor, new DateOnly(2030, 9, 4), new DateOnly(2030, 9, 4));
+        await CreateAsync(
+            outsider, actor, new DateOnly(2030, 9, 5), new DateOnly(2030, 9, 5));
+
+        await using (var context = _fixture.CreateContext())
+        {
+            var repository = new LeaveRequestRepository(context);
+            await repository.TransitionAsync(
+                ownApproved.Id, actor, GlobalAccess(), LeaveRequestStatus.Approved,
+                null, DateTime.UtcNow);
+            await repository.TransitionAsync(
+                teamApproved.Id, actor, GlobalAccess(), LeaveRequestStatus.Approved,
+                null, DateTime.UtcNow);
+        }
+
+        var readSelfButDecideTeam = new LeaveAccess([
+            new LeavePermissionGrant("leaves.read", ["Self"]),
+            new LeavePermissionGrant("leaves.decide", ["Team"])
+        ]);
+
+        await using var summaryContext = _fixture.CreateContext();
+        var summary = await new LeaveRequestRepository(summaryContext)
+            .GetSummaryAsync(actor, readSelfButDecideTeam, [teamMember]);
+
+        // Pending comes only from Team decision scope; Approved and Total come only from Self read scope.
+        Assert.Equal((Pending: 1, Approved: 1, Total: 2), summary);
+    }
+
+    [LeaveSqlFact]
     public async Task TeamDecision_RequiresLiveManagerVerificationAndNeverUsesApproverSnapshot()
     {
         var manager = Guid.NewGuid();

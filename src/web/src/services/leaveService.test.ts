@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthUser } from '../types';
-import { decideLeaveRequest, getLeaveRequestSummary, getLeaveRequests, getLeaveRequestsPage, getPolicies, restoreBuiltInLeaveType } from './leaveService';
+import { decideLeaveRequest, getBalances, getLeaveRequestSummary, getLeaveRequests, getLeaveRequestsPage, getPolicies, restoreBuiltInLeaveType } from './leaveService';
 
 const mocks = vi.hoisted(() => ({
   hrGet: vi.fn(),
@@ -82,16 +82,50 @@ describe('leave request summary and decisions', () => {
     expect(mocks.leaveGet).toHaveBeenCalledWith('/api/v1/leave-requests/summary');
   });
 
-  it('sends a decision through the shared decision endpoint', async () => {
-    mocks.leavePatch.mockResolvedValue({ data: {} });
+  it('loads balances and catalog with two requests instead of three', async () => {
+    const year = new Date().getFullYear();
+    mocks.leaveGet.mockResolvedValue({
+      data: [{
+        leaveTypeId: 1,
+        year,
+        entitled: 15,
+        used: 2,
+        pending: 1,
+        available: 12,
+      }],
+    });
+    mocks.hrGet.mockResolvedValue({
+      data: {
+        leaveTypes: [{
+          id: 1,
+          code: 'ANNUAL',
+          name: 'Annual leave',
+          isPaid: true,
+          deductsBalance: true,
+          isActive: true,
+        }],
+        leavePolicies: [{ id: 12, leaveTypeId: 1, year, daysPerYear: 15 }],
+      },
+    });
 
-    await decideLeaveRequest('request-123', 'approve', 'Đã bàn giao công việc.');
+    const result = await getBalances(employee);
 
-    expect(mocks.leavePatch).toHaveBeenCalledTimes(1);
-    expect(mocks.leavePatch).toHaveBeenCalledWith(
-      '/api/v1/leave-requests/request-123/decision',
-      { decision: 'approve', note: 'Đã bàn giao công việc.' },
-    );
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      code: 'ANNUAL',
+      entitled: 15,
+      used: 2,
+      pending: 1,
+      available: 12,
+    });
+    expect(mocks.leaveGet).toHaveBeenCalledTimes(1);
+    expect(mocks.leaveGet).toHaveBeenCalledWith('/api/v1/leave-balances/mine', {
+      params: { year },
+    });
+    expect(mocks.hrGet).toHaveBeenCalledTimes(1);
+    expect(mocks.hrGet).toHaveBeenCalledWith('/api/v1/leave-catalog', {
+      params: { year },
+    });
   });
 });
 

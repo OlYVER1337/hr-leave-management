@@ -60,9 +60,7 @@ public static class LeavePermissionAuthorizationExtensions
                     .AddRequirements(new LeavePermissionRequirement("leaves.read", "Self", "All")));
             options.AddPolicy(LeavePermissionPolicies.LeavesSummary, policy =>
                 policy.RequireAuthenticatedUser()
-                    .AddRequirements(
-                        new LeavePermissionRequirement("leaves.read", "Self", "Team", "All"),
-                        new LeavePermissionRequirement("leaves.decide", "Team", "All")));
+                    .AddRequirements(new LeavePermissionRequirement("leaves.decide", "Team", "All")));
             options.AddPolicy(LeavePermissionPolicies.LeavesCreate, policy =>
                 policy.RequireAuthenticatedUser()
                     .AddRequirements(new LeavePermissionRequirement("leaves.create", "Self")));

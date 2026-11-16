@@ -274,13 +274,11 @@ public sealed class LeaveRequestService(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(access);
-        if (!access.CanRead)
-            throw new LeaveForbiddenException("The caller does not have leaves.read permission.");
         if (!access.CanDecide)
             throw new LeaveForbiddenException("The caller does not have leaves.decide permission.");
 
-        // Read and decision scopes can differ. The same live team membership is used
-        // only as input; the repository applies each permission to its own counters.
+        // Read and decision scopes can differ. Read-only counters are hidden when
+        // the caller has no leaves.read grant; the approval inbox still works.
         var needsTeam = (access.CanReadTeam && !access.CanReadAll) ||
                         (access.CanDecideTeam && !access.CanDecideAll);
         var teamEmployeeIds = needsTeam
@@ -293,7 +291,10 @@ public sealed class LeaveRequestService(
             teamEmployeeIds,
             cancellationToken);
 
-        return new LeaveRequestSummaryResponse(counts.Pending, counts.Approved, counts.Total);
+        return new LeaveRequestSummaryResponse(
+            counts.Pending,
+            access.CanRead ? counts.Approved : null,
+            access.CanRead ? counts.Total : null);
     }
 
     public async Task<IReadOnlyList<LeaveRequestResponse>> GetVisibleAsync(

@@ -25,7 +25,11 @@ export function ApprovalsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(pageSizeOptions[0]);
   const [refreshToken, setRefreshToken] = useState(0);
-  const [summary, setSummary] = useState({ pending: 0, approved: 0, total: 0 });
+  const [summary, setSummary] = useState<{
+    pending: number;
+    approved: number | null;
+    total: number | null;
+  }>({ pending: 0, approved: null, total: null });
   const [summaryError, setSummaryError] = useState('');
   const [decisionRequest, setDecisionRequest] = useState<LeaveRequest | null>(null);
   const [decisionNote, setDecisionNote] = useState('');
@@ -114,8 +118,8 @@ export function ApprovalsPage() {
     {summaryError && <div className="inline-alert alert-warning">{summaryError}</div>}
     <div className="approval-summary-grid">
       <div className="approval-summary approval-summary-pending"><span className="approval-summary-icon"><Clock3 size={18} /></span><div><strong>{summary.pending}</strong><span>Chờ bạn xem xét</span></div></div>
-      <div className="approval-summary"><span className="approval-summary-icon green"><Check size={18} /></span><div><strong>{summary.approved}</strong><span>Đơn đã duyệt</span></div></div>
-      <div className="approval-summary"><span className="approval-summary-icon violet"><Filter size={18} /></span><div><strong>{summary.total}</strong><span>Tổng số đơn trong phạm vi</span></div></div>
+      <div className="approval-summary"><span className="approval-summary-icon green"><Check size={18} /></span><div><strong>{summary.approved ?? '—'}</strong><span>Đơn đã duyệt</span></div></div>
+      <div className="approval-summary"><span className="approval-summary-icon violet"><Filter size={18} /></span><div><strong>{summary.total ?? '—'}</strong><span>Tổng số đơn trong phạm vi</span></div></div>
     </div>
     <section className="panel approval-panel">
       <div className="table-toolbar">
