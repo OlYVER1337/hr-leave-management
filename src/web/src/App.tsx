@@ -1,20 +1,44 @@
+import { lazy } from 'react';
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { AppShell } from './components/AppShell';
 import { useAuth } from './contexts';
 import { ToastProvider } from './components/ToastProvider';
 import { LoginPage } from './pages/LoginPage';
-import { DashboardPage } from './pages/DashboardPage';
-import { LeaveRequestsPage } from './pages/LeaveRequestsPage';
-import { RequestLeavePage } from './pages/RequestLeavePage';
-import { ApprovalsPage } from './pages/ApprovalsPage';
-import { CalendarPage } from './pages/CalendarPage';
-import { EmployeesPage } from './pages/EmployeesPage';
-import { ManagerTeamPage } from './pages/ManagerTeamPage';
-import { DepartmentsPage } from './pages/DepartmentsPage';
-import { PoliciesPage } from './pages/PoliciesPage';
-import { ProfilePage } from './pages/ProfilePage';
 import type { UserRole } from './types';
+
+// Load authenticated pages only when their route is visited.
+// Named page exports are adapted to React.lazy's required default export.
+const DashboardPage = lazy(() =>
+  import('./pages/DashboardPage').then(({ DashboardPage }) => ({ default: DashboardPage })),
+);
+const LeaveRequestsPage = lazy(() =>
+  import('./pages/LeaveRequestsPage').then(({ LeaveRequestsPage }) => ({ default: LeaveRequestsPage })),
+);
+const RequestLeavePage = lazy(() =>
+  import('./pages/RequestLeavePage').then(({ RequestLeavePage }) => ({ default: RequestLeavePage })),
+);
+const ApprovalsPage = lazy(() =>
+  import('./pages/ApprovalsPage').then(({ ApprovalsPage }) => ({ default: ApprovalsPage })),
+);
+const CalendarPage = lazy(() =>
+  import('./pages/CalendarPage').then(({ CalendarPage }) => ({ default: CalendarPage })),
+);
+const EmployeesPage = lazy(() =>
+  import('./pages/EmployeesPage').then(({ EmployeesPage }) => ({ default: EmployeesPage })),
+);
+const ManagerTeamPage = lazy(() =>
+  import('./pages/ManagerTeamPage').then(({ ManagerTeamPage }) => ({ default: ManagerTeamPage })),
+);
+const DepartmentsPage = lazy(() =>
+  import('./pages/DepartmentsPage').then(({ DepartmentsPage }) => ({ default: DepartmentsPage })),
+);
+const PoliciesPage = lazy(() =>
+  import('./pages/PoliciesPage').then(({ PoliciesPage }) => ({ default: PoliciesPage })),
+);
+const ProfilePage = lazy(() =>
+  import('./pages/ProfilePage').then(({ ProfilePage }) => ({ default: ProfilePage })),
+);
 
 function RequireAuth() {
   const { user, busy } = useAuth();
