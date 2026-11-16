@@ -37,7 +37,7 @@ const tooltipStyle = {
 
 export function DashboardCharts({ chartData, statusData }: DashboardChartsProps) {
   return (
-    <section className="dashboard-grid">
+    <>
       <article className="panel chart-panel">
         <div className="panel-header">
           <div>
@@ -131,7 +131,7 @@ export function DashboardCharts({ chartData, statusData }: DashboardChartsProps)
           ))}
         </div>
       </article>
-    </section>
+    </>
   );
 }
 
