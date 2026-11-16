@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, CalendarDays, CheckCircle2, Clock3, Coffee, Download, FileCheck2, Plus, ShieldCheck, Sparkles, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Avatar, EmptyState, formatDate, PageHeader, StatCard, StatusBadge } from '../components/ui';
 import { useAuth } from '../contexts';
 import { getApprovalsInbox, getBalances, getLeaveRequests } from '../services/leaveService';
@@ -9,7 +8,12 @@ import { getDepartments, getEmployeePage } from '../services/hrService';
 import { getApiErrorMessage, getRejectedReason } from '../services/apiClient';
 import type { Department, LeaveBalance, LeaveRequest } from '../types';
 
-const tooltipStyle = { border: '1px solid #e5eaf2', borderRadius: 12, boxShadow: '0 8px 24px rgba(17, 34, 68, 0.08)', fontSize: 12 };
+const DashboardCharts = lazy(() =>
+  import('../components/DashboardCharts').then(({ DashboardCharts }) => ({
+    default: DashboardCharts,
+  })),
+);
+
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -114,18 +118,7 @@ export function DashboardPage() {
         </>}
       </section>
 
-      <section className="dashboard-grid">
-        <article className="panel chart-panel">
-          <div className="panel-header"><div><h2>Hoạt động nghỉ phép</h2><p>Số yêu cầu trong sáu tháng gần đây</p></div><span className="panel-select">6 tháng gần đây <ChevronDownIcon /></span></div>
-          <div className="chart-legend"><span><i className="legend-dot annual" /> Nghỉ phép năm</span><span><i className="legend-dot sick" /> Nghỉ ốm</span></div>
-          <div className="chart-wrap"><ResponsiveContainer width="100%" height="100%"><BarChart data={chartData} barGap={5} margin={{ top: 10, right: 8, left: -24, bottom: 0 }}><CartesianGrid stroke="#edf0f6" vertical={false} /><XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#7f8ba1', fontSize: 12 }} dy={8} /><YAxis axisLine={false} tickLine={false} tick={{ fill: '#7f8ba1', fontSize: 11 }} /><Tooltip contentStyle={tooltipStyle} cursor={{ fill: '#f6f8fc' }} /><Bar dataKey="annual" name="Nghỉ phép năm" fill="#5578e8" radius={[5, 5, 0, 0]} maxBarSize={22} /><Bar dataKey="sick" name="Nghỉ ốm" fill="#b9a6f7" radius={[5, 5, 0, 0]} maxBarSize={22} /></BarChart></ResponsiveContainer></div>
-        </article>
-        <article className="panel breakdown-panel">
-          <div className="panel-header"><div><h2>Trạng thái đơn nghỉ</h2><p>Tình hình xử lý hiện tại</p></div><span className="panel-more">•••</span></div>
-          <div className="donut-wrap"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={statusData} dataKey="value" nameKey="name" innerRadius={64} outerRadius={83} paddingAngle={4} stroke="none">{statusData.map((item) => <Cell key={item.name} fill={item.color} />)}</Pie><Tooltip contentStyle={tooltipStyle} /></PieChart></ResponsiveContainer><div className="donut-center"><strong>{statusData.reduce((sum, item) => sum + item.value, 0)}</strong><span>Tổng số đơn</span></div></div>
-          <div className="breakdown-legend">{statusData.map((item) => <div key={item.name}><span><i style={{ background: item.color }} />{item.name}</span><strong>{item.value}</strong></div>)}</div>
-        </article>
-      </section>
+      <DeferredDashboardCharts chartData={chartData} statusData={statusData} />
 
       <section className="dashboard-grid lower-grid">
         <article className="panel table-panel">
@@ -145,4 +138,65 @@ export function DashboardPage() {
   );
 }
 
-function ChevronDownIcon() { return <span aria-hidden="true">⌄</span>; }
+type ActivityPoint = { month: string; annual: number; sick: number };
+type StatusPoint = { name: string; value: number; color: string };
+
+function DeferredDashboardCharts({
+  chartData,
+  statusData,
+}: {
+  chartData: ActivityPoint[];
+  statusData: StatusPoint[];
+}) {
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const [shouldLoad, setShouldLoad] = useState(false);
+
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section || typeof IntersectionObserver === 'undefined') {
+      // Render immediately in browsers without IntersectionObserver (and in jsdom tests).
+      setShouldLoad(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setShouldLoad(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '200px 0px' },
+    );
+
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <section
+      ref={sectionRef}
+      className="dashboard-grid"
+      aria-label="Biểu đồ tổng quan"
+    >
+      {shouldLoad ? (
+        <Suspense fallback={
+          <div className="panel chart-panel" role="status" aria-live="polite">
+            Đang tải biểu đồ...
+          </div>
+        }>
+          <DashboardCharts chartData={chartData} statusData={statusData} />
+        </Suspense>
+      ) : (
+        <>
+          <div className="panel chart-panel" aria-label="Biểu đồ hoạt động nghỉ phép đang chờ tải">
+            <div className="loading-line"><span /> Biểu đồ hoạt động nghỉ phép sẽ tải khi cần...</div>
+          </div>
+          <div className="panel breakdown-panel" aria-label="Biểu đồ trạng thái đơn nghỉ đang chờ tải">
+            <div className="loading-line"><span /> Biểu đồ trạng thái đơn nghỉ sẽ tải khi cần...</div>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
