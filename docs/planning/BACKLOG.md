@@ -42,6 +42,7 @@ Backlog này ghi các gap còn tồn tại sau khi rà soát code branch feature
 | P2 | **Redis ON/OFF cho Workforce** | Catalog ON/OFF có phép đo; Workforce paged-v2 chưa phải A/B Redis | Chỉ chạy nếu cần đo cache impact cho workload này; giữ image/HEAD/dataset/seed/page-size đồng nhất; tách khỏi Catalog benchmark. |
 | P2 | **Điều tra 21 HTTP 500 lịch sử** | Workforce cũ ngày 03/11 có 21 HTTP 500 ở 100 VU; hai lượt chạy xác nhận sau đó 0 lỗi; nguyên nhân chưa rõ | Nếu tái hiện, lưu endpoint, response, exception/stack trace, SQL wait và timestamp; không đánh dấu resolved chỉ vì không tái hiện. |
 | P2 | **Approval sustained load** | Approval script dùng per-vu-iterations burst, không phải 5 phút sustained | Tạo scenario constant/ramping VU; chuẩn bị đủ pending rows hoặc seed luân phiên; đo duration và HR lookup dưới tải duy trì. |
+| P2 | **Render lại sơ đồ PNG/SVG** | Mermaid source đã cập nhật; ảnh hiện tại vẫn là snapshot trước thay đổi | Xuất lại đủ 6 sơ đồ từ Mermaid source, commit đồng thời PNG/SVG; kiểm tra nội dung và liên kết trong architecture/README.md. |
 
 ## 5. Thứ tự thực hiện đề xuất
 
