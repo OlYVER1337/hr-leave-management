@@ -322,8 +322,8 @@ TRX đang lưu tại docs/testing/evidence/dotnet/ là evidence cũ hơn HEAD:
 ### 7.3. Workforce benchmark mới nhất
 
 Ba lượt paged-v2 mỗi mức VU ngày 16/11 ghi nhận:
-- 50 VU: trung bình 453,56 RPS; P95 trung bình 17,85 ms; HTTP error rate 0%.
-- 100 VU: trung bình 763,29 RPS; P95 trung bình 73,28 ms; HTTP error rate 0%.
+- 50 VU: trung bình 454,07 RPS; P95 trung bình 17,85 ms; HTTP error rate 0%.
+- 100 VU: trung bình 764,14 RPS; P95 trung bình 73,28 ms; HTTP error rate 0%.
 - Page size 50, duration 5 phút.
 - Các raw JSON chưa gắn Git SHA/image ID (giá trị not-provided); không xem đây là benchmark baseline bất biến cho revision cụ thể.
 
