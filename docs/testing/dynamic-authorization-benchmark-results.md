@@ -235,7 +235,7 @@ Workforce script hiện chia đều request qua bốn route: HR employee list; L
 
 ### 10.2. Kết quả từng lần
 
-| VU | Lượt | Requests | RPS theo script | P50 (ms) | P95 (ms) | HTTP error rate |
+| VU | Lượt | Requests | RPS (requests / 300 giây cấu hình) | P50 (ms) | P95 (ms) | HTTP error rate |
 |---:|---:|---:|---:|---:|---:|---:|
 | 50 | 1 | 136.413 | 454,71 | 9,34 | 16,99 | 0% |
 | 50 | 2 | 136.054 | 453,51 | 9,41 | 18,34 | 0% |
@@ -249,7 +249,7 @@ Workforce script hiện chia đều request qua bốn route: HR employee list; L
 | Chỉ số | 50 VU | 100 VU |
 |---|---:|---:|
 | Requests trung bình | 136.222 | 229.243 |
-| RPS trung bình theo script | 453,56 | 763,29 |
+| RPS trung bình (requests / 300 giây cấu hình) | 454,07 | 764,14 |
 | P50 trung bình của từng lượt | 9,37 ms | 23,66 ms |
 | P95 trung bình của từng lượt | 17,85 ms | 73,28 ms |
 | HTTP errors | 0 | 0 |
