@@ -265,8 +265,8 @@ Workforce benchmark mới nhất được thực hiện với kịch bản paged
 
 | VU | RPS trung bình | P50 trung bình | P95 trung bình | HTTP errors |
 |---:|---:|---:|---:|---:|
-| 50 | 453,56 | 9,37 ms | 17,85 ms | 0 |
-| 100 | 763,29 | 23,66 ms | 73,28 ms | 0 |
+| 50 | 454,07 | 9,37 ms | 17,85 ms | 0 |
+| 100 | 764,14 | 23,66 ms | 73,28 ms | 0 |
 
 Đây là workload Workforce đọc dữ liệu có phân trang, **không phải phép đo Redis ON/OFF**. Sáu JSON mới có metadata page_size=50 và duration=5m nhưng git_sha/image_tag đều not-provided, nên chưa gắn được với một binary revision cố định.
 
