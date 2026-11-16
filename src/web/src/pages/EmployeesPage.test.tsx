@@ -81,7 +81,8 @@ describe('EmployeesPage filtering, sorting and pagination', () => {
     expect(getEmployeeOverviewPage).toHaveBeenCalledWith(
       expect.objectContaining({ page: 1, pageSize: 20 }),
     );
-    expect(screen.getByText('25')).toBeInTheDocument();
+    const totalMetric = screen.getByText('Tổng số nhân viên').closest('.summary-metric');
+    expect(totalMetric?.textContent).toContain('25');
   });
 
   it('paginates employee rows and returns to the first page when filtering', async () => {
@@ -128,22 +129,21 @@ describe('EmployeesPage filtering, sorting and pagination', () => {
     render(<EmployeesPage />);
     await screen.findByText('Nhân viên 01');
 
-    const callsAfterInitialBlock = vi.mocked(getEmployeePage).mock.calls.filter(([query]) =>
-      query.search === '' && query.pageSize === 20 && query.sortBy === 'fullName').length;
-    expect(callsAfterInitialBlock).toBe(1);
+    const matchingBlockCalls = () => vi.mocked(getEmployeeOverviewPage).mock.calls.filter(([query]) =>
+      query.pageSize === 20 && query.sortBy === 'fullName' &&
+      query.sortDirection === 'asc' && query.search === undefined).length;
+    expect(matchingBlockCalls()).toBe(1);
 
     await user.click(screen.getByRole('button', { name: 'Trang 2' }));
     expect(screen.getByText('Nhân viên 11')).toBeInTheDocument();
-    const callsAfterPageTwo = vi.mocked(getEmployeePage).mock.calls.filter(([query]) =>
-      query.search === '' && query.pageSize === 20 && query.sortBy === 'fullName').length;
-    expect(callsAfterPageTwo).toBe(1);
+    expect(matchingBlockCalls()).toBe(1);
 
     await user.click(screen.getByRole('button', { name: 'Trang 3' }));
     expect(await screen.findByText('Nhân viên 21')).toBeInTheDocument();
-    const callsAfterPageThree = vi.mocked(getEmployeePage).mock.calls.filter(([query]) =>
-      query.search === '' && query.pageSize === 20 && query.sortBy === 'fullName').length;
-    expect(callsAfterPageThree).toBe(2);
-    expect(getEmployeePage).toHaveBeenCalledWith(expect.objectContaining({ page: 2, pageSize: 20 }));
+    await waitFor(() => expect(matchingBlockCalls()).toBe(2));
+    expect(getEmployeeOverviewPage).toHaveBeenCalledWith(
+      expect.objectContaining({ page: 2, pageSize: 20 }),
+    );
   });
 
   it('sorts employees by name in ascending and descending order', async () => {
