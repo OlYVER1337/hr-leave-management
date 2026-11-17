@@ -1,4 +1,4 @@
-# Checklist bàn giao — cập nhật 16/11/2026
+# Checklist bàn giao — cập nhật 17/11/2026
 
 ## 1. Revision và phạm vi
 
@@ -7,7 +7,7 @@
 | Repository | OlYVER1337/hr-leave-management |
 | Branch được rà soát | feature/dynamic-authorization-v1 |
 | Baseline code đã đối chiếu | 2bac8327b0ec64b5d1a1cb5d4de81e00e2bd6c4c |
-| HEAD trước commit cập nhật handoff này | dbab2ee7ceddb95a0ba753b5961564a7d7c69b69 |
+| HEAD trước commit cập nhật handoff này | 6481064cbb245acef48b515691588070ade58a93 |
 | Ngày rà soát | 17/11/2026 |
 | Phạm vi | Đối chiếu tài liệu với source, migrations, scripts và evidence trong branch |
 
@@ -21,12 +21,12 @@
 | 2 | Web UI và workflow | Đã có; cần nghiệm thu lại trên HEAD hiện tại | Có Login, Dashboard, Leave Requests, Request Leave, Approvals, Calendar, Manager Team, HR Employees/Departments/Policies và Profile. Người dùng đã xác nhận UI đạt ngày 03/11/2026; đó là sign-off thủ công tại thời điểm đó, không tự động chứng minh mọi UI behavior của HEAD mới. |
 | 3 | Dynamic Authorization V1 | Đã triển khai backend | HR migration, Roles/Permissions/UserRoles/Scope rules/Audit, JWT claims và permission/scope policies ở HR/Leave. React vẫn dùng role legacy cho menu/route; không có Role assignment UI hoặc Role/Permission catalog CRUD. |
 | 4 | Kiến trúc và ownership | Được tài liệu hóa theo source | HR owns HR_DB; Leave owns Leave_DB; Leave chỉ gọi HR qua HTTP; không có API Gateway riêng. |
-| 5 | Database design | Được tài liệu hóa theo migrations hiện tại | HR migrations gồm Initial schema, RefreshTokens, Dynamic Authorization; Leave migrations gồm Initial schema và approval/year allocations. EF Model/Migrations là nguồn quyết định schema thật. |
+| 5 | Database design | Được tài liệu hóa theo migrations hiện tại | HR migrations gồm Initial schema, RefreshTokens, Dynamic Authorization; Leave migrations gồm Initial schema, approval/year allocations và CHECK constraint ngăn Entitled/Used/Pending âm. EF Model/Migrations là nguồn quyết định schema thật. |
 | 6 | API reference | Đã cập nhật theo controller hiện có | API permission/scope, pagination, current Team lookup, role assignment và giới hạn chưa có History/Export/Notification được ghi tại API_REFERENCE.md. |
 | 7 | Redis | Đã có và có evidence kiểm tra lịch sử | Redis cache-aside cho leave types/policies/holidays, TTL mặc định 30 phút, invalidation và SQL fallback. Báo cáo ON/OFF ở redis-performance.md là workload Catalog; không coi là Redis comparison cho Workforce paged-v2. |
 | 8 | Workforce benchmark paged-v2 | 3 lượt mỗi mức; 0 HTTP errors | 50 VU trung bình khoảng 454,07 RPS, p95 trung bình 17,85 ms; 100 VU trung bình khoảng 764,14 RPS, p95 trung bình 73,28 ms. Page size 50, duration 5m. Git SHA/image ID trong JSON là not-provided; chưa phải baseline gắn revision bất biến. |
 | 9 | Approval benchmark | Có evidence burst cũ | approval.js dùng per-vu-iterations, không phải sustained load 5 phút; xem riêng kết quả lịch sử ở benchmark report. |
-| 10 | Automated tests trên HEAD | Chưa xác nhận bằng evidence trong branch | TRX được lưu hiện tại có timestamp 05/11: HR run có 57 pass, 1 skipped; Leave 19 pass, 6 skipped. Không dùng chúng làm kết quả HEAD. Cần chạy lại full suite với SQL/Redis dependencies và skipped=0. |
+| 10 | Automated tests trên HEAD | Chưa chạy lại sau balance-sync changes | Người dùng đã chạy trên revision trước khi thêm balance sync vào 17/11: HR 131/131 pass; Leave 100/100 pass; 0 skipped. Các kết quả đó không xác nhận commit hiện tại. Cần chạy lại full HR/Leave + Web trên exact HEAD; bật SQL integration bằng `HR_TEST_SQL_CONNECTION_STRING` và xác nhận skipped=0. |
 | 11 | Deployment package | Có local/demo Compose; chưa nghiệm thu production | Dockerfiles, Nginx, Compose và .env.example có sẵn. Chưa có bằng chứng clean-environment deployment, TLS, secrets manager, backup/restore hoặc production monitoring. |
 
 ## 3. Bằng chứng benchmark hiện tại
