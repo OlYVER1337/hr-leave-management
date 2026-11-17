@@ -33,7 +33,7 @@ public sealed class LeaveBalancesController(LeaveRequestService leaveRequestServ
     }
 
     [HttpPost("mine/synchronize")]
-    [Authorize(Policy = LeavePermissionPolicies.LeavesCreate)]
+    [Authorize(Policy = LeavePermissionPolicies.LeavesReadSelfOrAll)]
     public async Task<ActionResult<IReadOnlyList<LeaveBalanceResponse>>> SynchronizeMine(
         [FromQuery] int? year,
         CancellationToken cancellationToken)
