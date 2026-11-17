@@ -57,7 +57,8 @@ jobs:
               --input "$source" \
               --output "docs/architecture/diagrams/svg/$name.svg" \
               --theme neutral \
-              --backgroundColor white
+              --backgroundColor white \
+              --puppeteerConfigFile .github/workflows/puppeteer-config.json
 
             mmdc \
               --input "$source" \
