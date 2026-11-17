@@ -292,6 +292,113 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
     }
 
     [LeaveSqlFact]
+    public async Task CreateAsync_RefreshesExistingEntitlementAndPreservesHistoricalUsage()
+    {
+        var employeeId = Guid.NewGuid();
+        await using (var seedContext = _fixture.CreateContext())
+        {
+            seedContext.LeaveBalances.Add(new LeaveBalance
+            {
+                EmployeeId = employeeId,
+                LeaveTypeId = 2,
+                Year = 2027,
+                Entitled = 12m,
+                Used = 3m,
+                Pending = 2m
+            });
+            await seedContext.SaveChangesAsync();
+        }
+
+        var request = new LeaveRequest
+        {
+            EmployeeId = employeeId,
+            DepartmentId = 3,
+            LeaveTypeId = 2,
+            StartDate = new DateOnly(2027, 11, 10),
+            EndDate = new DateOnly(2027, 11, 10),
+            TotalDays = 1m,
+            Reason = "Policy refresh on create",
+            CreatedAtUtc = DateTime.UtcNow
+        };
+
+        await using (var context = _fixture.CreateContext())
+        {
+            var result = await new LeaveRequestRepository(context).CreateAsync(
+                request,
+                [new AnnualLeaveAllocation(2027, 1m, 18m)],
+                new LeaveRequestHistory
+                {
+                    LeaveRequestId = request.Id,
+                    ActorId = employeeId,
+                    Action = "Created",
+                    ToStatus = LeaveRequestStatus.Pending,
+                    CreatedAtUtc = request.CreatedAtUtc
+                });
+
+            var balance = Assert.Single(result.Balances);
+            Assert.Equal(18m, balance.Entitled);
+            Assert.Equal(3m, balance.Used);
+            Assert.Equal(3m, balance.Pending);
+        }
+    }
+
+    [LeaveSqlFact]
+    public async Task CreateAsync_RejectsPolicyBelowUsedAndPendingWithoutPersistingRequest()
+    {
+        var employeeId = Guid.NewGuid();
+        await using (var seedContext = _fixture.CreateContext())
+        {
+            seedContext.LeaveBalances.Add(new LeaveBalance
+            {
+                EmployeeId = employeeId,
+                LeaveTypeId = 2,
+                Year = 2027,
+                Entitled = 12m,
+                Used = 5m,
+                Pending = 3m
+            });
+            await seedContext.SaveChangesAsync();
+        }
+
+        var request = new LeaveRequest
+        {
+            EmployeeId = employeeId,
+            DepartmentId = 3,
+            LeaveTypeId = 2,
+            StartDate = new DateOnly(2027, 11, 11),
+            EndDate = new DateOnly(2027, 11, 11),
+            TotalDays = 1m,
+            Reason = "Policy reduction conflict",
+            CreatedAtUtc = DateTime.UtcNow
+        };
+
+        await using (var context = _fixture.CreateContext())
+        {
+            await Assert.ThrowsAsync<LeaveConflictException>(() =>
+                new LeaveRequestRepository(context).CreateAsync(
+                    request,
+                    [new AnnualLeaveAllocation(2027, 1m, 7m)],
+                    new LeaveRequestHistory
+                    {
+                        LeaveRequestId = request.Id,
+                        ActorId = employeeId,
+                        Action = "Created",
+                        ToStatus = LeaveRequestStatus.Pending,
+                        CreatedAtUtc = request.CreatedAtUtc
+                    }));
+        }
+
+        await using var verifyContext = _fixture.CreateContext();
+        var balance = await verifyContext.LeaveBalances.SingleAsync(
+            item => item.EmployeeId == employeeId && item.LeaveTypeId == 2 && item.Year == 2027);
+        Assert.Equal(12m, balance.Entitled);
+        Assert.Equal(5m, balance.Used);
+        Assert.Equal(3m, balance.Pending);
+        Assert.False(await verifyContext.LeaveRequests.AnyAsync(item => item.Id == request.Id));
+        Assert.False(await verifyContext.LeaveRequestHistories.AnyAsync(item => item.LeaveRequestId == request.Id));
+    }
+
+    [LeaveSqlFact]
     public async Task TransitionAsync_UpdatesBalancesAndHistoryForApprovalRejectionAndCancellation()
     {
         async Task<LeaveRequest> CreateRequestAsync(Guid employeeId, Guid approverId, int day)
