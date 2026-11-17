@@ -237,22 +237,6 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
         return await DecideAsync(id, new LeaveDecisionRequest(request.Note), approve.Value, cancellationToken);
     }
 
-    [Authorize(Policy = LeavePermissionPolicies.LeavesDecide)]
-    [HttpPost("{id:guid}/approve")]
-    public Task<ActionResult<LeaveRequestResponse>> Approve(
-        Guid id,
-        [FromBody] LeaveDecisionRequest request,
-        CancellationToken cancellationToken) =>
-        DecideAsync(id, request, approve: true, cancellationToken);
-
-    [Authorize(Policy = LeavePermissionPolicies.LeavesDecide)]
-    [HttpPost("{id:guid}/reject")]
-    public Task<ActionResult<LeaveRequestResponse>> Reject(
-        Guid id,
-        [FromBody] LeaveDecisionRequest request,
-        CancellationToken cancellationToken) =>
-        DecideAsync(id, request, approve: false, cancellationToken);
-
     [HttpPost("{id:guid}/cancel")]
     [Authorize(Policy = LeavePermissionPolicies.LeavesCancel)]
     public async Task<ActionResult<LeaveRequestResponse>> Cancel(
