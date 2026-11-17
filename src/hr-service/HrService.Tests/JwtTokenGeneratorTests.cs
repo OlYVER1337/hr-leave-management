@@ -9,6 +9,7 @@ namespace HrService.Tests;
 
 public sealed class JwtTokenGeneratorTests
 {
+    // JWT phải chứa phiên bản authz và permission claim có cấu trúc để Leave/HR đọc thống nhất.
     [Fact]
     public void GenerateToken_WithAuthorization_WritesVersionedStructuredPermissions()
     {
@@ -40,6 +41,7 @@ public sealed class JwtTokenGeneratorTests
         Assert.Contains("\"s\":[\"Self\",\"Team\"]", permissionClaim, StringComparison.Ordinal);
     }
 
+    // Không có effective authorization thì không phát permission claim giả hoặc mặc định quyền.
     [Fact]
     public void GenerateToken_WithoutAuthorization_DoesNotWritePermissionClaim()
     {
