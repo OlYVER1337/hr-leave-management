@@ -18,16 +18,16 @@ sequenceDiagram
     LV->>HR: GET /api/v1/leave-policies?year={year}&authoritative=true
     HR-->>LV: Policy quota authoritative cho từng năm
   end
-  Note over LV,HR: HR authoritative reads bypass Redis; HTTP timeout 5 giây.
+  Note over LV,HR: HR authoritative reads bypass Redis, HTTP timeout 5 giây.
   opt HR lỗi hoặc timeout
-    LV-->>W: 503 Dependency unavailable; không ghi Leave DB
+    LV-->>W: 503 Dependency unavailable, không ghi Leave DB
   end
   LV->>LV: Tính weekdays trừ holidays và yearly allocations
   LV->>DB: BEGIN SERIALIZABLE transaction
   LV->>DB: Kiểm tra overlap Pending/Approved
   LV->>DB: Đọc hoặc tạo LeaveBalance theo Employee/LeaveType/Year
   LV->>DB: Refresh Entitled từ policy HR authoritative
-  LV->>DB: Giữ nguyên Used/Pending; kiểm tra quota mới >= Used + Pending
+  LV->>DB: Giữ nguyên Used/Pending, kiểm tra quota mới >= Used + Pending
   LV->>DB: Kiểm tra Entitled - Used - Pending
   alt Overlap, thiếu quota hoặc concurrent conflict
     LV->>DB: ROLLBACK
