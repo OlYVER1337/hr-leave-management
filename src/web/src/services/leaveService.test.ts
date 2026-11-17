@@ -68,6 +68,7 @@ describe('leave request summary and decisions', () => {
     vi.clearAllMocks();
   });
 
+  // Khi Manager approve, frontend gửi đúng request body đến route PATCH decision mới.
   it('sends an approval decision through the PATCH endpoint', async () => {
     mocks.leavePatch.mockResolvedValue({ data: {} });
 
@@ -80,6 +81,7 @@ describe('leave request summary and decisions', () => {
     );
   });
 
+  // Khi reject, frontend vẫn dùng chung route PATCH decision và truyền note rỗng nếu không nhập.
   it('sends a rejection decision through the PATCH endpoint', async () => {
     mocks.leavePatch.mockResolvedValue({ data: {} });
 
@@ -92,6 +94,7 @@ describe('leave request summary and decisions', () => {
     );
   });
 
+  // Summary được lấy từ Leave Service theo scope quyền trong một request, không tự tính từ dữ liệu hiển thị.
   it('loads the permission-scoped leave summary in one request', async () => {
     const manager: AuthUser = {
       id: 'manager-1',
@@ -180,12 +183,14 @@ describe('getLeaveRequests', () => {
     mocks.leaveGet.mockResolvedValue({ data: [requestRecord] });
   });
 
+  // Tên người duyệt được đối chiếu với Manager hiện tại lấy từ HR, không dùng tên giả định.
   it('resolves the signed-in employee’s manager as the actual approver', async () => {
     const [request] = await getLeaveRequests(employee);
 
     expect(request.approverName).toBe('Trần Minh Anh');
   });
 
+  // Nếu approver không nằm trong directory caller được phép xem, UI không tiết lộ thêm thông tin cá nhân.
   it('uses a neutral label when the approver is outside the visible directory', async () => {
     mocks.leaveGet.mockResolvedValue({ data: [{ ...requestRecord, approverId: 'former-manager' }] });
 
@@ -235,6 +240,7 @@ describe('paged leave display lookups', () => {
     mocks.leaveGet.mockResolvedValue({ data: [requestRecord], headers: { 'x-total-count': '2' } });
   });
 
+  // Chuyển trang liên tiếp phải tái sử dụng cache lookup trong TTL, tránh gọi HR lặp lại.
   it('reuses employee directory and leave-type lookups across pages for the same HR user', async () => {
     const hrUser: AuthUser = {
       id: 'hr-pagination-cache',
@@ -264,6 +270,7 @@ describe('built-in leave policies', () => {
     vi.clearAllMocks();
   });
 
+  // Màn hình policy chỉ hiển thị ba loại nghỉ chuẩn; loại đã xóa được biểu diễn ở trạng thái có thể khôi phục.
   it('returns only the fixed three types and represents a deleted type as restorable', async () => {
     const year = getVietnamBusinessYear() + 1;
     mocks.hrGet.mockImplementation(async (path: string) => {
@@ -300,6 +307,7 @@ describe('built-in leave policies', () => {
     });
   });
 
+  // Khôi phục leave type chuẩn phải tạo loại nghỉ trước rồi mới tạo policy mặc định cho năm tương lai.
   it('restores a missing built-in type and creates its default annual policy', async () => {
     const year = getVietnamBusinessYear() + 1;
     mocks.hrGet.mockImplementation(async (path: string) => {
