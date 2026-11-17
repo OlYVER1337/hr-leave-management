@@ -26,6 +26,7 @@ builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks();
 builder.Services.AddScoped<LeaveRequestService>();
+builder.Services.AddScoped<LeaveBalanceService>();
 builder.Services.AddLeaveInfrastructure(builder.Configuration);
 
 builder.Services
