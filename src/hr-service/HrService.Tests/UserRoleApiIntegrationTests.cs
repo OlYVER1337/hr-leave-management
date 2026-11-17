@@ -22,6 +22,7 @@ namespace HrService.Tests;
 
 public sealed class UserRoleApiIntegrationTests
 {
+    // Role HR legacy không được tự truy cập API quản lý role khi thiếu permission claim.
     [Fact]
     public async Task RolesEndpoint_RejectsLegacyHrRoleWithoutPermissionClaim()
     {
@@ -36,6 +37,7 @@ public sealed class UserRoleApiIntegrationTests
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    // Sau khi JWT policy pass, API vẫn phải kiểm tra permission hiện tại trong database để quyền bị thu hồi có hiệu lực.
     [Fact]
     public async Task RolesEndpoint_RechecksCurrentDatabasePermissionAfterJwtPolicyPasses()
     {
@@ -63,6 +65,7 @@ public sealed class UserRoleApiIntegrationTests
             Times.Never);
     }
 
+    // Caller đủ quyền chỉ nhận danh sách role đang hoạt động theo contract API.
     [Fact]
     public async Task RolesEndpoint_ReturnsActiveRolesForAuthorizedCaller()
     {
