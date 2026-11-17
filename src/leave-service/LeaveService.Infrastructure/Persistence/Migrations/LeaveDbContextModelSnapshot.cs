@@ -60,7 +60,14 @@ namespace LeaveService.Infrastructure.Persistence.Migrations
                     b.HasIndex("EmployeeId", "LeaveTypeId", "Year")
                         .IsUnique();
 
-                    b.ToTable("LeaveBalances");
+                    b.ToTable("LeaveBalances", t =>
+                        {
+                            t.HasCheckConstraint("CK_LeaveBalances_Entitled_NonNegative", "[Entitled] >= 0");
+
+                            t.HasCheckConstraint("CK_LeaveBalances_Pending_NonNegative", "[Pending] >= 0");
+
+                            t.HasCheckConstraint("CK_LeaveBalances_Used_NonNegative", "[Used] >= 0");
+                        });
                 });
 
             modelBuilder.Entity("LeaveService.Domain.Entities.LeaveRequest", b =>
