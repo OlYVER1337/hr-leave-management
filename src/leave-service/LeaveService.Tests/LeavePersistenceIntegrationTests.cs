@@ -23,6 +23,7 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
         _fixture = fixture;
     }
 
+    // Chạy trên SQL Server thật: gọi hai lần vẫn chỉ có một row cho mỗi leave type/năm.
     [LeaveSqlFact]
     public async Task SynchronizeBalancesAsync_CreatesRowsAndIsIdempotent()
     {
@@ -57,6 +58,7 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
             item => item.EmployeeId == employeeId && item.Year == 2027));
     }
 
+    // Khi quota tăng từ 12 lên 18, chỉ Entitled đổi; Used và Pending phải được giữ nguyên.
     [LeaveSqlFact]
     public async Task SynchronizeBalancesAsync_UpdatesEntitlementAndPreservesUsedAndPending()
     {
@@ -89,6 +91,7 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
         }
     }
 
+    // Quota mới thấp hơn Used + Pending: phải conflict và dữ liệu cũ trong SQL không được thay đổi.
     [LeaveSqlFact]
     public async Task SynchronizeBalancesAsync_RejectsQuotaBelowUsedAndPendingWithoutChangingRow()
     {
@@ -116,6 +119,7 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
                     [new LeaveBalanceEntitlement(2, 7m)]));
         }
 
+        // Đọc lại bằng context mới sau khi transaction kết thúc để xác nhận dữ liệu thực trong SQL.
         await using var verifyContext = _fixture.CreateContext();
         var saved = await verifyContext.LeaveBalances.SingleAsync(
             item => item.EmployeeId == employeeId && item.LeaveTypeId == 2 && item.Year == 2027);
@@ -124,12 +128,14 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
         Assert.Equal(3m, saved.Pending);
     }
 
+    // Tám tác vụ với DbContext riêng chạy đồng thời; database chỉ được phép có một balance row.
     [LeaveSqlFact]
     public async Task SynchronizeBalancesAsync_ConcurrentCallsCreateOneRowPerLeaveType()
     {
         var employeeId = Guid.NewGuid();
         const int attempts = 8;
 
+        // Mỗi tác vụ tạo DbContext riêng để mô phỏng nhiều request đồng thời, không chia sẻ ChangeTracker.
         async Task SynchronizeAsync()
         {
             await using var context = _fixture.CreateContext();
@@ -291,6 +297,7 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
         Assert.Equal(1, await verifyContext.LeaveRequests.CountAsync(item => item.EmployeeId == employeeId));
     }
 
+    // Khi tạo đơn với policy mới, cập nhật Entitled trước rồi mới cộng số ngày của đơn vào Pending.
     [LeaveSqlFact]
     public async Task CreateAsync_RefreshesExistingEntitlementAndPreservesHistoricalUsage()
     {
@@ -342,6 +349,7 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
         }
     }
 
+    // Quota mới không đủ: balance, leave request và history phải cùng rollback.
     [LeaveSqlFact]
     public async Task CreateAsync_RejectsPolicyBelowUsedAndPendingWithoutPersistingRequest()
     {
@@ -388,6 +396,7 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
                     }));
         }
 
+        // Dùng context mới để xác nhận quota và bộ đếm không đổi sau rollback.
         await using var verifyContext = _fixture.CreateContext();
         var balance = await verifyContext.LeaveBalances.SingleAsync(
             item => item.EmployeeId == employeeId && item.LeaveTypeId == 2 && item.Year == 2027);
