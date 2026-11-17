@@ -25,6 +25,7 @@ public sealed class LeavePaginationApiTests
     private const string Permissions =
         """[{"p":"leaves.read","s":["All"]},{"p":"leaves.decide","s":["All"]}]""";
 
+    // Các list endpoint bắt buộc page/pageSize hợp lệ; dữ liệu sai phải bị từ chối trước khi truy vấn.
     [Theory]
     [InlineData("/api/v1/leave-requests", "")]
     [InlineData("/api/v1/leave-requests", "?page=1")]
@@ -59,6 +60,7 @@ public sealed class LeavePaginationApiTests
         hrClient.VerifyNoOtherCalls();
     }
 
+    // Xác nhận hai route approve/reject cũ trả 404; route PATCH decision là contract duy nhất.
     [Theory]
     [InlineData("/api/v1/leave-requests/00000000-0000-0000-0000-000000000001/approve")]
     [InlineData("/api/v1/leave-requests/00000000-0000-0000-0000-000000000001/reject")]
