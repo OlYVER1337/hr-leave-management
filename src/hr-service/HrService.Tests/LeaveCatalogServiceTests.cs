@@ -604,6 +604,55 @@ public sealed class LeaveCatalogServiceTests
     }
 
     [Fact]
+    public async Task GetAuthoritativeLeaveCatalogAsync_ReadsTypesAndPoliciesDirectlyFromSql()
+    {
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var cache = new Mock<ILeaveCatalogCache>();
+        repository
+            .Setup(item => item.ListLeaveTypesAsync(false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+            [
+                new LeaveType { Id = 3, Code = "ANNUAL", Name = "Annual", IsActive = true, DeductsBalance = true },
+                new LeaveType { Id = 4, Code = "SICK", Name = "Sick", IsActive = true, DeductsBalance = true }
+            ]);
+        repository
+            .Setup(item => item.ListLeavePoliciesAsync(2027, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+            [
+                new LeavePolicy
+                {
+                    Id = 42,
+                    LeaveTypeId = 3,
+                    LeaveType = new LeaveType { Id = 3, Code = "ANNUAL", Name = "Annual", IsActive = true },
+                    Year = 2027,
+                    DaysPerYear = 18m
+                }
+            ]);
+        var service = CreateService(repository, cache.Object);
+
+        var catalog = await service.GetAuthoritativeLeaveCatalogAsync(2027, includeInactive: false);
+
+        Assert.Equal(2, catalog.LeaveTypes.Count);
+        Assert.Equal(18m, Assert.Single(catalog.LeavePolicies).DaysPerYear);
+        repository.Verify(
+            item => item.ListLeaveTypesAsync(false, It.IsAny<CancellationToken>()),
+            Times.Once);
+        repository.Verify(
+            item => item.ListLeavePoliciesAsync(2027, It.IsAny<CancellationToken>()),
+            Times.Once);
+        cache.Verify(
+            item => item.GetAsync<LeaveTypeResponse[]>(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+        cache.Verify(
+            item => item.GetAsync<LeavePolicyResponse[]>(
+                It.IsAny<string>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    [Fact]
     public async Task GetAuthoritativeLeavePoliciesAsync_UsesSqlInsteadOfCachedPolicy()
     {
         var repository = new Mock<ILeaveCatalogRepository>();
