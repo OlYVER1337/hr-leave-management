@@ -13,6 +13,7 @@ Sơ đồ source:
 - Login sequence: diagrams/mermaid/seq-login.mmd
 - Create leave sequence: diagrams/mermaid/seq-create-leave.mmd
 - Approve/reject sequence: diagrams/mermaid/seq-approve-leave.mmd
+- Balance self-sync sequence: diagrams/mermaid/seq-balance-sync.mmd
 
 Mermaid là source chỉnh sửa. PNG/SVG chỉ được coi là bản xuất đồng bộ khi đã render lại từ source mới nhất.
 

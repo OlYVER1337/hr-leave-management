@@ -26,6 +26,8 @@ sequenceDiagram
   LV->>DB: BEGIN SERIALIZABLE transaction
   LV->>DB: Kiểm tra overlap Pending/Approved
   LV->>DB: Đọc hoặc tạo LeaveBalance theo Employee/LeaveType/Year
+  LV->>DB: Refresh Entitled từ policy HR authoritative
+  LV->>DB: Giữ nguyên Used/Pending; kiểm tra quota mới >= Used + Pending
   LV->>DB: Kiểm tra Entitled - Used - Pending
   alt Overlap, thiếu quota hoặc concurrent conflict
     LV->>DB: ROLLBACK

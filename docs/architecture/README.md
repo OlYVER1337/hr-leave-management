@@ -1,7 +1,7 @@
 # Sơ đồ kiến trúc và dữ liệu
 
 
-> **Lưu ý cập nhật 16/11/2026:** Các file Mermaid đã được chỉnh lại theo code hiện tại (Dynamic RBAC, Team scope từ HR, Leave year allocations và ranh giới HR_DB/Leave_DB). Các PNG/SVG hiện là bản xuất cũ trước lần cập nhật source này; hãy đọc Mermaid source làm chuẩn cho tới khi render lại ảnh.
+> **Lưu ý cập nhật 17/11/2026:** Mermaid source được đối chiếu với code hiện tại, gồm Dynamic RBAC, Team scope từ HR, Leave year allocations, balance self-sync và ranh giới HR_DB/Leave_DB. Các PNG/SVG hiện có vẫn là snapshot cũ; riêng sequence balance self-sync mới chỉ có Mermaid source, chưa có bản PNG/SVG xuất. Đọc Mermaid source làm chuẩn cho đến khi render lại ảnh.
 
 
 Các sơ đồ được chia theo định dạng để tiện sửa và xem:
@@ -19,6 +19,6 @@ Các sơ đồ được chia theo định dạng để tiện sửa và xem:
 | Đăng nhập | [PNG](diagrams/png/seq-login.png) | [SVG](diagrams/svg/seq-login.svg) | [Source](diagrams/mermaid/seq-login.mmd) |
 | Tạo đơn nghỉ | [PNG](diagrams/png/seq-create-leave.png) | [SVG](diagrams/svg/seq-create-leave.svg) | [Source](diagrams/mermaid/seq-create-leave.mmd) |
 | Duyệt đơn nghỉ | [PNG](diagrams/png/seq-approve-leave.png) | [SVG](diagrams/svg/seq-approve-leave.svg) | [Source](diagrams/mermaid/seq-approve-leave.mmd) |
+| Đồng bộ số dư cá nhân | Chưa xuất | Chưa xuất | [Source](diagrams/mermaid/seq-balance-sync.mmd) |
 
-Khi cập nhật sơ đồ, sửa Mermaid trước, sau đó xuất lại PNG và SVG cùng tên. Không
-đặt bản mới ở thư mục gốc `docs/`; dùng đúng các thư mục định dạng ở trên.
+Khi cập nhật sơ đồ, sửa Mermaid trước, sau đó xuất lại PNG và SVG cùng tên. Với sơ đồ balance self-sync mới, hiện chỉ có Mermaid source; chưa tạo PNG/SVG. Không đặt bản mới ở thư mục gốc `docs/`; dùng đúng các thư mục định dạng ở trên.

@@ -203,8 +203,10 @@ docker compose @compose run --rm -e VUS=100 -e ITERATIONS_PER_VU=10 -e DURATION=
 
 Cả hai script in JSON summary có số HR call, tổng thời gian, trung bình và p95.
 Khi ghi báo cáo 50/100 VU, giữ kết quả workforce và approval thành hai workload
-riêng: workload đầu đo lookup hộp chờ (GetTeam), workload sau đo lookup khi quyết
-định (GetEmployee). Không cộng hai tập số liệu thành một RPS chung vì số operation
+riêng: workload đầu đo HR team-scope lookup cho hộp chờ qua
+`GET /api/v1/leave-scope/managers/{managerId}/employee-ids`, workload sau đo lookup
+nhân viên khi quyết định (`GET /api/v1/lookup/employees/{employeeId}`). Không cộng
+hai tập số liệu thành một RPS chung vì số operation
 và hành vi DB khác nhau.
 
 Sau khi đổi `CACHE_ENABLED`, cần đợi `hr-service` healthy. Khôi phục cache ON cho
