@@ -120,7 +120,7 @@ Leave Policy chỉ được tạo/thay đổi với năm lớn hơn năm hiện 
 | PATCH /api/v1/leave-requests/{id}/decision | leaves.decide:Team/All | decision=approve/reject và note tùy chọn |
 | POST /api/v1/leave-requests/{id}/cancel | leaves.cancel:Self | Chủ đơn hủy khi Pending |
 | GET /api/v1/leave-balances/mine?year=2026 | leaves.read:Self/All | Đọc các balance rows hiện có của caller |
-| POST /api/v1/leave-balances/mine/synchronize?year=2026 | leaves.create:Self | Tạo/đồng bộ balance của caller theo HR catalog authoritative; giữ Used/Pending; conflict nếu quota thấp hơn Used + Pending |
+| POST /api/v1/leave-balances/mine/synchronize?year=2026 | leaves.read:Self/All | Khởi tạo/đồng bộ balance của caller; vẫn chỉ tác động dữ liệu của chính caller |
 
 Ví dụ quyết định:
 
