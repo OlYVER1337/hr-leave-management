@@ -120,6 +120,7 @@ Leave Policy chỉ được tạo/thay đổi với năm lớn hơn năm hiện 
 | PATCH /api/v1/leave-requests/{id}/decision | leaves.decide:Team/All | decision=approve/reject và note tùy chọn |
 | POST /api/v1/leave-requests/{id}/cancel | leaves.cancel:Self | Chủ đơn hủy khi Pending |
 | GET /api/v1/leave-balances/mine?year=2026 | leaves.read:Self/All | Đọc các balance rows hiện có của caller |
+| POST /api/v1/leave-balances/mine/synchronize?year=2026 | leaves.create:Self | Tạo/đồng bộ balance của caller theo HR catalog authoritative; giữ Used/Pending; conflict nếu quota thấp hơn Used + Pending |
 
 Ví dụ quyết định:
 
@@ -137,6 +138,9 @@ Trạng thái LeaveRequestStatus: 0 Pending, 1 Approved, 2 Rejected, 3 Cancelled
 ### 3.1. Quy tắc nghiệp vụ
 
 - Employee phải active; leave type phải active.
+- Balance GET chỉ đọc dữ liệu hiện có. Nhân viên tự khởi tạo/đồng bộ balance năm của mình qua POST `/api/v1/leave-balances/mine/synchronize`; Leave Service lấy catalog authoritative từ HR qua HTTP, không truy cập HR_DB trực tiếp.
+- Đồng bộ balance chỉ tạo row cho leave type đang active và `DeductsBalance = true`; cập nhật `Entitled` nhưng giữ nguyên `Used`/`Pending`. Nếu quota mới thấp hơn `Used + Pending`, thao tác trả conflict và rollback.
+- Luồng tạo đơn cũng cập nhật `Entitled` từ policy authoritative trong cùng transaction trước khi cộng `Pending`, kể cả khi nhân viên chưa mở màn hình số dư.
 - EndDate không trước StartDate; range tối đa 366 ngày; reason bắt buộc, tối đa 1.000 ký tự.
 - Backend tính ngày làm việc: thứ Hai–thứ Sáu, bỏ holidays từ HR; request không có ngày làm việc bị từ chối.
 - Request trừ balance được chia allocation theo từng năm; policy authoritative lấy từ HR.
