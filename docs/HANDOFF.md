@@ -58,7 +58,7 @@ Một lỗi lịch sử ở workload Workforce cũ ghi nhận 21 HTTP 500 tại 
 - Dynamic RBAC backend chưa đi cùng permission-driven React UI.
 - Role/Permission catalog CRUD chưa có; chỉ có seed baseline và UserRole assignment API.
 - Leave Balance đã có self-sync theo employee/năm qua `POST /api/v1/leave-balances/mine/synchronize`; GET vẫn read-only. Đồng bộ lấy HR catalog authoritative, tạo row thiếu, giữ `Used`/`Pending`, cập nhật `Entitled` trong transaction `SERIALIZABLE`; khi quota mới < `Used + Pending` thì rollback và trả conflict. `CreateAsync` cũng refresh quota từ policy authoritative trong transaction trước khi cộng `Pending`. Chưa có HR bulk reconciliation cho toàn bộ nhân viên; thay đổi mới cần chạy lại full tests SQL/Web trên exact HEAD.
-- Leave request date validation và default balance year dùng UTC, trong khi HR policy year dùng UTC+07.
+- Backend HR policy year, Leave request validation và balance default year dùng UTC+07; frontend `leaveService.ts` đã chuẩn hóa ngày hiện tại/default year theo `Asia/Ho_Chi_Minh`. Cần rà soát tiếp các màn hình frontend khác để xác nhận không còn dùng browser-local date cho nghiệp vụ.
 - Inactive direct report có thể cần chuẩn hóa giữa lookup by-ID/batch và Team listing.
 - Không có Leave History GET endpoint; History chỉ được ghi.
 - /health chưa phải readiness check có dependency status; HR client chưa có circuit breaker.
