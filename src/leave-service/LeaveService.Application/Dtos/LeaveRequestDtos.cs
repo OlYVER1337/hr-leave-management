@@ -63,6 +63,12 @@ public sealed record HrLeavePolicy(
     int Year,
     decimal DaysPerYear);
 
+public sealed record HrLeaveCatalog(
+    IReadOnlyList<HrLeaveType> LeaveTypes,
+    IReadOnlyList<HrLeavePolicy> LeavePolicies);
+
+public sealed record LeaveBalanceEntitlement(int LeaveTypeId, decimal Entitled);
+
 public sealed record HrHoliday(int Id, DateOnly HolidayDate, string Name);
 
 public sealed record AnnualLeaveAllocation(int Year, decimal Days, decimal Entitled);
