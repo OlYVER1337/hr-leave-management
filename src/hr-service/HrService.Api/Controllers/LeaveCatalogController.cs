@@ -15,6 +15,7 @@ public sealed class LeaveCatalogController(LeaveCatalogService catalogService) :
     public async Task<ActionResult<LeaveCatalogResponse>> Get(
         [FromQuery] int? year,
         [FromQuery] bool includeInactive,
+        [FromQuery] bool authoritative,
         CancellationToken cancellationToken)
     {
         if (includeInactive &&
@@ -23,10 +24,9 @@ public sealed class LeaveCatalogController(LeaveCatalogService catalogService) :
             return Forbid();
         }
 
-        var catalog = await catalogService.GetLeaveCatalogAsync(
-            year,
-            includeInactive,
-            cancellationToken);
+        var catalog = authoritative
+            ? await catalogService.GetAuthoritativeLeaveCatalogAsync(year, includeInactive, cancellationToken)
+            : await catalogService.GetLeaveCatalogAsync(year, includeInactive, cancellationToken);
         return Ok(catalog);
     }
 }
