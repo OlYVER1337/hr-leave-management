@@ -56,6 +56,16 @@ public sealed class LeaveCatalogService(
         return new LeaveCatalogResponse(leaveTypes, leavePolicies);
     }
 
+    public async Task<LeaveCatalogResponse> GetAuthoritativeLeaveCatalogAsync(
+        int? year,
+        bool includeInactive,
+        CancellationToken cancellationToken = default)
+    {
+        var leaveTypes = await GetAuthoritativeLeaveTypesAsync(includeInactive, cancellationToken);
+        var leavePolicies = await GetAuthoritativeLeavePoliciesAsync(year, cancellationToken);
+        return new LeaveCatalogResponse(leaveTypes, leavePolicies);
+    }
+
     public async Task<IReadOnlyList<LeaveTypeResponse>> GetAuthoritativeLeaveTypesAsync(
         bool includeInactive,
         CancellationToken cancellationToken = default)
