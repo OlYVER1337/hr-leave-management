@@ -65,6 +65,21 @@ const employeeDisplayInFlight = new Map<string, Promise<void>>();
 const leaveTypeCache = new Map<boolean, { value: LeaveTypeRecord[]; expiresAt: number }>();
 const leaveTypeInFlight = new Map<boolean, Promise<LeaveTypeRecord[]>>();
 
+function getBusinessDate(value = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(value);
+  const values = new Map(parts.map((part) => [part.type, part.value]));
+  return `${values.get('year')}-${values.get('month')}-${values.get('day')}`;
+}
+
+function getBusinessYear(value = new Date()): number {
+  return Number(getBusinessDate(value).slice(0, 4));
+}
+
 function employeeDisplayCacheKey(userId: string, employeeId: string): string {
   return `${userId}:${employeeId}`;
 }
@@ -474,7 +489,7 @@ export async function getBalances(user: AuthUser): Promise<LeaveBalance[]> {
     ];
   }
   try {
-    const year = new Date().getFullYear();
+    const year = getBusinessYear();
     const [{ data: response }, { data: catalog }] = await Promise.all([
       leaveApi.post<LeaveBalanceRecord[]>('/api/v1/leave-balances/mine/synchronize', null, { params: { year } }),
       hrApi.get<LeaveCatalogRecord>('/api/v1/leave-catalog', { params: { year } }),
@@ -502,7 +517,7 @@ export async function getBalances(user: AuthUser): Promise<LeaveBalance[]> {
 
 export async function createLeaveRequest(user: AuthUser, input: CreateLeaveInput): Promise<void> {
   const today = new Date();
-  const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const todayDate = getBusinessDate(today);
   if (input.startDate < todayDate) throw new Error('Ngày bắt đầu nghỉ phải từ hôm nay trở đi.');
   if (input.endDate < input.startDate) throw new Error('Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.');
   if (!input.reason.trim()) throw new Error('Vui lòng nhập lý do nghỉ phép.');
@@ -521,7 +536,7 @@ export async function createLeaveRequest(user: AuthUser, input: CreateLeaveInput
         if (taken + days > policy.daysPerYear) throw new Error(`Không đủ số dư ${policy.typeName.toLowerCase()}.`);
       }
       const approver = employee.managerName || 'HR Team';
-      const request: LeaveRequest = { id: `LR-${new Date().getFullYear()}-${String(state.requests.length + 15).padStart(3, '0')}`, employeeId: user.id, employeeName: employee.fullName, employeeCode: employee.code, departmentName: employee.departmentName, typeCode: input.typeCode, typeName: getLocalizedLeaveTypeName(policy.typeCode, policy.typeName), startDate: input.startDate, endDate: input.endDate, days, reason: input.reason.trim(), status: 'Pending', approverName: approver, createdAt: new Date().toISOString() };
+      const request: LeaveRequest = { id: `LR-${getBusinessYear()}-${String(state.requests.length + 15).padStart(3, '0')}`, employeeId: user.id, employeeName: employee.fullName, employeeCode: employee.code, departmentName: employee.departmentName, typeCode: input.typeCode, typeName: getLocalizedLeaveTypeName(policy.typeCode, policy.typeName), startDate: input.startDate, endDate: input.endDate, days, reason: input.reason.trim(), status: 'Pending', approverName: approver, createdAt: new Date().toISOString() };
       return { ...state, requests: [request, ...state.requests] };
     });
     return;
@@ -566,7 +581,7 @@ export async function decideLeaveRequest(id: string, decision: 'approve' | 'reje
   } catch (error) { throw new Error(getApiErrorMessage(error)); }
 }
 
-export async function getPolicies(year = new Date().getFullYear() + 1): Promise<LeavePolicy[]> {
+export async function getPolicies(year = getBusinessYear() + 1): Promise<LeavePolicy[]> {
   if (DEMO_MODE) {
     const savedPolicies = new Map(
       loadDemoState().policies.map((policy) => [policy.typeCode.toUpperCase(), policy]),
@@ -623,7 +638,7 @@ export async function getPolicies(year = new Date().getFullYear() + 1): Promise<
 export async function restoreBuiltInLeaveType(policy: LeavePolicy): Promise<void> {
   const definition = builtInLeaveTypes.find((type) => type.code === policy.typeCode);
   if (!definition) throw new Error(`Unsupported built-in leave type: ${policy.typeCode}.`);
-  const year = policy.year ?? new Date().getFullYear() + 1;
+  const year = policy.year ?? getBusinessYear() + 1;
   if (DEMO_MODE) {
     updateDemoState((state) => {
       const existing = state.policies.find((item) => item.typeCode === policy.typeCode);
@@ -707,7 +722,7 @@ export async function savePolicies(policies: LeavePolicy[]): Promise<void> {
     return;
   }
   try {
-    const defaultYear = new Date().getFullYear() + 1;
+    const defaultYear = getBusinessYear() + 1;
     await Promise.all(policies.map(async (policy) => {
       if (!policy.leaveTypeId) throw new Error(`Missing leaveTypeId for ${policy.typeName}.`);
       const definition = builtInLeaveTypes.find((type) => type.code === policy.typeCode);
@@ -728,7 +743,7 @@ export async function savePolicies(policies: LeavePolicy[]): Promise<void> {
 }
 
 export async function getHolidays(from?: string, to?: string): Promise<Holiday[]> {
-  const currentYear = new Date().getFullYear();
+  const currentYear = getBusinessYear();
   const start = from ?? `${currentYear}-01-01`;
   const end = to ?? `${currentYear + 1}-12-31`;
   if (DEMO_MODE) {
