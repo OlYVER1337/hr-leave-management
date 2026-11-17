@@ -9,15 +9,15 @@ Tất cả endpoint đều yêu cầu bearer token do HR Service cấp:
 
 - `POST /api/v1/leave-requests`: tạo đơn nghỉ cho nhân viên đang đăng nhập.
 - `GET /api/v1/leave-requests/mine`: liệt kê các đơn nghỉ của nhân viên đang
-  đăng nhập.
+  đăng nhập (route hiện tại; dự kiến hợp nhất vào danh sách có `mineOnly`).
 - `GET /api/v1/leave-requests/{id}`: xem chi tiết một đơn nghỉ của nhân viên đó.
 - `POST /api/v1/leave-requests/{id}/cancel`: hủy đơn đang chờ duyệt của nhân viên.
 - `GET /api/v1/leave-requests/pending-approval`: liệt kê các đơn được giao cho
   quản lý đang đăng nhập; HR có thể xem tất cả đơn đang chờ duyệt.
-- `POST /api/v1/leave-requests/{id}/approve` và
-  `POST /api/v1/leave-requests/{id}/reject`: nhận `{"note":"..."}` để duyệt hoặc
-  từ chối đơn đang chờ. Quản lý chỉ được xử lý đơn được giao cho mình; HR có thể
-  xử lý mọi đơn đang chờ duyệt.
+- `PATCH /api/v1/leave-requests/{id}/decision`: nhận
+  `{"decision":"approve"|"reject","note":"..."}` để duyệt hoặc từ chối đơn đang
+  chờ. Quản lý chỉ được xử lý đơn thuộc team hiện tại; HR có thể xử lý đơn trong
+  phạm vi All. Đây là route duy nhất để ra quyết định.
 - `POST /api/v1/leave-requests/{id}/cancel`: nhận `{"note":"..."}`; chỉ chủ đơn
   mới được hủy đơn đang chờ duyệt của mình.
 - `GET /api/v1/leave-balances/mine?year=2026`: trả về số dư phép của nhân viên
