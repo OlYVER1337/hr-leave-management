@@ -16,6 +16,7 @@ public sealed class AuthorizationRepositorySqlTests : IClassFixture<Authorizatio
         _fixture = fixture;
     }
 
+    // SQL chỉ tổng hợp permission từ role assignment đang hiệu lực và grant chưa hết hạn.
     [HrSqlFact]
     public async Task GetEffectivePermissionScopesAsync_UsesOnlyActiveUnexpiredAssignmentsAndGrants()
     {
