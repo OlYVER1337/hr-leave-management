@@ -54,7 +54,7 @@ public sealed class LeaveBalanceService(
             }
 
             var days = policies[0].DaysPerYear;
-            if (days < 0m || days > 365m || decimal.Round(days, 1) != days)
+            if (days < 0m || days > 366m || decimal.Round(days, 1) != days)
             {
                 throw new LeaveConflictException(
                     $"The leave policy for '{leaveType.Code}' in {year} has an invalid entitlement.");
