@@ -6,10 +6,10 @@
 |---|---|
 | Repository | OlYVER1337/hr-leave-management |
 | Branch được rà soát | feature/dynamic-authorization-v1 |
-| Baseline code đã đối chiếu | 2bac8327b0ec64b5d1a1cb5d4de81e00e2bd6c4c |
-| HEAD trước commit cập nhật handoff này | 6b3640089a2ea39a0953b63f09d7a22db0b9806f |
+| Source revision đã đối chiếu | ddfd8e613770e12274808a63e72916733d4253b4 |
+| Branch HEAD tại thời điểm rà soát | ddfd8e613770e12274808a63e72916733d4253b4 |
 | Ngày rà soát | 17/11/2026 |
-| Phạm vi | Đối chiếu tài liệu/source và bổ sung chú thích tiếng Việt giải thích mục đích, dữ liệu đầu vào, hành vi và assertion trong toàn bộ test HR, Leave và frontend |
+| Phạm vi | Đối chiếu code và đồng bộ tài liệu với API, Dynamic RBAC, balance self-sync, timezone, test suite và giới hạn hiện tại |
 
 Đây là trạng thái feature branch. Không đồng nghĩa branch đã merge/release lên master hoặc production.
 
@@ -26,7 +26,7 @@
 | 7 | Redis | Đã có và có evidence kiểm tra lịch sử | Redis cache-aside cho leave types/policies/holidays, TTL mặc định 30 phút, invalidation và SQL fallback. Báo cáo ON/OFF ở redis-performance.md là workload Catalog; không coi là Redis comparison cho Workforce paged-v2. |
 | 8 | Workforce benchmark paged-v2 | 3 lượt mỗi mức; 0 HTTP errors | 50 VU trung bình khoảng 454,07 RPS, p95 trung bình 17,85 ms; 100 VU trung bình khoảng 764,14 RPS, p95 trung bình 73,28 ms. Page size 50, duration 5m. Git SHA/image ID trong JSON là not-provided; chưa phải baseline gắn revision bất biến. |
 | 9 | Approval benchmark | Có evidence burst cũ | approval.js dùng per-vu-iterations, không phải sustained load 5 phút; xem riêng kết quả lịch sử ở benchmark report. |
-| 10 | Automated tests trên HEAD | Chưa chạy lại sau balance-sync changes | Người dùng đã chạy trên revision trước khi thêm balance sync vào 17/11: HR 131/131 pass; Leave 100/100 pass; 0 skipped. Các kết quả đó không xác nhận commit hiện tại. Cần chạy lại full HR/Leave + Web trên exact HEAD; bật SQL integration bằng `HR_TEST_SQL_CONNECTION_STRING` và xác nhận skipped=0. |
+| 10 | Automated tests backend | Đã có kết quả chạy local mới nhất do người dùng cung cấp | Ngày 17/11: Leave 118/118 pass, HR 132/132 pass; cả hai có 0 failed và 0 skipped. Output không kèm `git rev-parse HEAD`, nên chưa gắn được kết quả với một SHA bất biến; chưa có kết quả Web test/build mới sau thay đổi balance-sync. TRX đã commit trong repository vẫn là evidence cũ. |
 | 11 | Deployment package | Có local/demo Compose; chưa nghiệm thu production | Dockerfiles, Nginx, Compose và .env.example có sẵn. Chưa có bằng chứng clean-environment deployment, TLS, secrets manager, backup/restore hoặc production monitoring. |
 
 ## 3. Bằng chứng benchmark hiện tại
@@ -45,11 +45,11 @@ Một lỗi lịch sử ở workload Workforce cũ ghi nhận 21 HTTP 500 tại 
 
 ## 4. Việc cần làm trước sign-off
 
-1. Chạy lại HR/Leave automated tests trên exact HEAD với SQL Server/Redis dành riêng cho test; lưu TRX mới, failed=0, skipped=0.
-2. Chạy frontend tests và production build trên exact HEAD; lưu log hoặc CI run link.
-3. Lặp lại Workforce 50/100 VU từ cùng HEAD và image; truyền GIT_SHA + immutable IMAGE_TAG/ID vào k6 metadata.
-4. Thu thập CPU/Memory/SQL metrics đồng bộ trong workload nếu cần kết luận bottleneck; không suy luận từ snapshot lấy mẫu lệch thời gian.
-5. Hoàn thiện P1 backlog: Balance initialization/sync, timezone, employee lookup active-state consistency.
+1. Chạy Web Vitest và production build trên revision được chốt; lưu log và Git SHA cùng kết quả.
+2. Lưu TRX mới cho lượt HR/Leave 17/11 nếu cần evidence trong repository; kết quả terminal hiện có chưa gắn SHA.
+3. Lặp lại Workforce 50/100 VU từ cùng Git SHA và immutable image ID; truyền metadata vào k6.
+4. Thu thập CPU/Memory/SQL metrics đồng bộ với workload nếu cần kết luận bottleneck.
+5. Tiếp tục xử lý P1 còn mở: kiểm tra timezone ở các màn hình khác và thống nhất active-state của employee lookup.
 6. Rà soát clean clone, secrets, TLS, backup/restore và migration/rollback trước deployment.
 7. Review feature branch và xác nhận merge/release qua quy trình nhóm.
 
@@ -57,13 +57,13 @@ Một lỗi lịch sử ở workload Workforce cũ ghi nhận 21 HTTP 500 tại 
 
 - Dynamic RBAC backend chưa đi cùng permission-driven React UI.
 - Role/Permission catalog CRUD chưa có; chỉ có seed baseline và UserRole assignment API.
-- Leave Balance đã có self-sync theo employee/năm qua `POST /api/v1/leave-balances/mine/synchronize`; GET vẫn read-only. Đồng bộ lấy HR catalog authoritative, tạo row thiếu, giữ `Used`/`Pending`, cập nhật `Entitled` trong transaction `SERIALIZABLE`; khi quota mới < `Used + Pending` thì rollback và trả conflict. `CreateAsync` cũng refresh quota từ policy authoritative trong transaction trước khi cộng `Pending`. Chưa có HR bulk reconciliation cho toàn bộ nhân viên; thay đổi mới cần chạy lại full tests SQL/Web trên exact HEAD.
+- Leave Balance self-sync theo employee/năm đã triển khai qua `POST /api/v1/leave-balances/mine/synchronize`; GET vẫn read-only. Self-sync lấy HR catalog authoritative, tạo row thiếu, giữ `Used`/`Pending`, cập nhật `Entitled` trong transaction `SERIALIZABLE`; khi quota mới < `Used + Pending` thì rollback và trả conflict. `CreateAsync` cũng refresh quota trước khi cộng `Pending`. Chưa có HR bulk reconciliation cho toàn bộ nhân viên. Người dùng đã báo cáo Leave 118/118 tests pass trong lượt chạy 17/11; output chưa ghi local Git SHA.
 - Backend HR policy year, Leave request validation và balance default year dùng UTC+07; frontend `leaveService.ts` đã chuẩn hóa ngày hiện tại/default year theo `Asia/Ho_Chi_Minh`. Cần rà soát tiếp các màn hình frontend khác để xác nhận không còn dùng browser-local date cho nghiệp vụ.
 - Inactive direct report có thể cần chuẩn hóa giữa lookup by-ID/batch và Team listing.
 - Không có Leave History GET endpoint; History chỉ được ghi.
 - /health chưa phải readiness check có dependency status; HR client chưa có circuit breaker.
 - Access JWT đã phát không bị thu hồi tức thời khi user bị deactivate hoặc grant/revoke.
-- Stored TRX có skipped integration tests và cũ hơn code HEAD; cần test mới.
+- Stored TRX trong repository vẫn có skipped integration tests và cũ hơn code revision đang rà soát. Kết quả terminal 17/11 do người dùng cung cấp có 0 skipped nhưng chưa được lưu thành TRX mới hoặc gắn với local Git SHA.
 
 ## 6. Tài liệu liên quan
 

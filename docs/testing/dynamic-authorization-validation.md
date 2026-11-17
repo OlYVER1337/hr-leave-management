@@ -44,6 +44,8 @@ dotnet test .\src\leave-service\LeaveService.slnx
 
 Điều kiện nghiệm thu: HR Service và Leave Service đều có `failed = 0`, `skipped = 0`. Nếu chưa cấu hình các biến môi trường, một số integration test sẽ bị `Skipped`; không xem đó là đã xác minh tích hợp. Lưu lại toàn bộ log Test summary để làm bằng chứng.
 
+Leave test suite hiện có coverage cho balance self-sync và policy refresh: chỉ chọn leave type active/deducting, yêu cầu policy duy nhất cho từng loại nghỉ/năm, kiểm tra quota không hợp lệ, business year UTC+07, HR outage fail-closed, khởi tạo row idempotent, cập nhật Entitled nhưng giữ Used/Pending, rollback khi quota thấp hơn Used + Pending, đồng thời nhiều lần synchronize và refresh policy ngay trong CreateAsync. Các kiểm thử persistence này cần chạy với SQL Server test database; xác nhận `skipped = 0` mới chứng minh chúng đã thực thi.
+
 ## 3. Seed dữ liệu tải
 
 Seed tạo/cập nhật bộ dữ liệu 1.000 nhân viên load-test và 5.000 đơn nghỉ, trong đó 1.250 Pending (25%). Nó chỉ xóa đơn và số dư thuộc nhóm nhân viên mã `LT*` / lý do `LOADTEST:*` đã được chuẩn bị cho benchmark.

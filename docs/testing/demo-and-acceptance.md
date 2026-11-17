@@ -1,7 +1,7 @@
 # Kịch bản demo, kết quả kiểm thử và checklist nghiệm thu
 
 
-> **Cập nhật trạng thái 16/11/2026:** Các kết quả test và demo ghi trong các mục bên dưới là bằng chứng lịch sử tại ngày ghi trên từng mục, không phải kết quả tự động của HEAD hiện tại. Stored TRX trong branch hiện có ngày 05/11: HR 57 passed, 1 skipped; Leave 19 passed, 6 skipped. Integration tests đã skip vì chưa cấu hình SQL/Redis test dependencies ở lượt lưu TRX. Cần chạy lại trên exact HEAD và lưu TRX mới trước khi đánh dấu regression nghiệm thu.
+> **Cập nhật trạng thái 17/11/2026:** Các kết quả test/demo ghi theo ngày bên dưới vẫn là bằng chứng lịch sử. Lượt chạy local mới nhất do người dùng cung cấp ngày 17/11 ghi nhận Leave 118/118 và HR 132/132 tests pass, 0 failed, 0 skipped. Output không kèm `git rev-parse HEAD` và chưa được lưu thành TRX mới; vì vậy chưa gắn kết quả với SHA bất biến. Stored TRX trong repository vẫn là evidence cũ ngày 05/11 (HR 57 passed/1 skipped; Leave 19 passed/6 skipped). Chưa có kết quả Web test/build mới sau thay đổi balance-sync.
 
 
 ## 1. Kết quả kiểm thử hồi quy và tích hợp
@@ -224,7 +224,7 @@ khi có API tương ứng. HR không được tạo đơn nghỉ; xác nhận ro
 |---|---|---|
 | Hai microservice, database tách biệt, giao tiếp REST | Đạt | HR Service sở hữu `HR_DB`; Leave Service sở hữu `Leave_DB`; Leave gọi HR API |
 | ASP.NET Core, React/TypeScript, EF Core, migrations, OpenAPI | Đạt | Hai solution .NET 10, Vite/React, EF migrations và OpenAPI ở Development |
-| JWT, phân quyền và vòng đời token | Đạt một phần | Có role authorization, refresh rotation/revocation và test; JWT access đã cấp vẫn hợp lệ tới khi hết hạn (mặc định 1 phút) |
+| JWT, phân quyền và vòng đời token | Đạt một phần | Backend đã triển khai Dynamic RBAC V1 với permission/scope trong JWT và refresh rotation/revocation; Role claim legacy còn phục vụ UI compatibility, không là nguồn authorize cho các API đã migrate. Access JWT đã phát vẫn hợp lệ tới expiry (mặc định 1 phút). |
 | Nghiệp vụ HR | Đạt | CRUD nhân viên/phòng ban, quản lý trực tiếp, danh mục nghỉ/ngày lễ và kiểm tra dữ liệu |
 | Nghiệp vụ nghỉ phép | Đạt | Tạo/xem/hủy/duyệt/từ chối, số dư, phân bổ năm, ngày làm việc và history |
 | Tính đồng thời | Đạt | SQL integration test cho tạo đơn cạnh tranh, trùng ngày và quyết định cạnh tranh |
@@ -264,10 +264,10 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
 | Xong | Hạng mục | Kỳ vọng khi nghiệm thu | Bằng chứng/tham chiếu |
 |---|---|---|---|
 | [x] | Dựng môi trường | Compose chạy Web, HR, Leave, SQL Server, Redis; healthcheck đạt | [README chạy hệ thống](../README.md), kiểm tra `hrbench` 03/11 |
-| [x] | Tài khoản và phân quyền theo role | API/UI chặn đúng vai trò/phạm vi; refresh token bị thu hồi khi deactivate | HR API tests, `App.tsx`, `EmployeeServiceTests`; access JWT còn hiệu lực đến expiry |
+| [x] | Dynamic RBAC và data scope | HR/Leave API kiểm tra permission + Self/Team/All; React vẫn dùng Role legacy cho menu/route guard; refresh token bị thu hồi khi deactivate | HR/Leave authorization tests, `PermissionAuthorization`, `LeavePermissionAuthorization`, `App.tsx`; access JWT còn hiệu lực đến expiry |
 | [x] | Quản trị nhân sự | HR tạo/sửa nhân viên, phòng ban và quản lý trực tiếp | `/employees`, `/departments`; HR tests |
 | [x] | Chính sách nghỉ | HR quản lý loại chuẩn, hạn mức năm và ngày lễ | `/policies`; [Redis report](../performance/redis-performance.md) |
-| [x] | Số dư cá nhân | Employee thấy hạn mức, đã dùng, đang chờ và khả dụng | Leave tests; đọc lại số dư sau demo API |
+| [x] | Số dư cá nhân | GET đọc số dư hiện có; POST self-synchronize tạo/cập nhật balance theo HR authoritative catalog và giữ Used/Pending | `LeaveBalanceServiceTests`, `LeavePersistenceIntegrationTests`, `LeaveBalancesController`; test command output ngày 17/11 |
 | [x] | Tạo đơn hợp lệ | Ngày kết thúc không trước ngày bắt đầu; chỉ tính ngày làm việc; tạo trạng thái Pending | `RequestLeavePage`; Leave tests; demo API |
 | [x] | Đơn không hợp lệ | Đơn trùng ngày, ngày không hợp lệ, số dư thiếu và tổng ngày bằng 0 bị từ chối | Leave service tests |
 | [x] | Hủy đơn | Employee chỉ hủy đơn Pending của mình; số dư và lịch sử cập nhật cùng giao dịch | Leave persistence integration tests |
@@ -298,7 +298,7 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
   chứa bí mật vào báo cáo, log hoặc Git.
 
 
-## 7. Cập nhật trạng thái source và bằng chứng — 16/11/2026
+## 7. Cập nhật trạng thái source và bằng chứng — 17/11/2026
 
 ### 7.1. Dynamic Authorization hiện tại
 
@@ -312,12 +312,14 @@ Backend HR/Leave đã chuyển sang authorization theo permission/scope claim:
 
 ### 7.2. Automated test evidence cần hiểu đúng
 
-TRX đang lưu tại docs/testing/evidence/dotnet/ là evidence cũ hơn HEAD:
-- HR: total 58, executed 57, passed 57, failed 0; một integration test skipped.
-- Leave: total 25, executed 19, passed 19, failed 0; sáu integration tests skipped.
-- Các skip gồm SQL/Redis persistence và concurrency integration. Vì vậy không ghi các TRX này thành bằng chứng đầy đủ rằng database integration/concurrency đã chạy trên HEAD.
+**Kết quả local mới nhất do người dùng cung cấp ngày 17/11/2026:**
+- Leave Service: 118/118 passed, 0 failed, 0 skipped.
+- HR Service: 132/132 passed, 0 failed, 0 skipped.
+- Cả hai solution build thành công trong lượt chạy được báo cáo.
 
-Điều kiện nghiệm thu backend mới: chạy cả hai solution với SQL Server và Redis test dependencies dành riêng, failed=0, skipped=0; đính kèm TRX mới cùng Git SHA. Frontend cũng cần chạy Vitest và production build từ cùng HEAD; các báo cáo cũ ở trên không đại diện tự động cho code mới.
+Các lệnh đã chạy là `dotnet test src\leave-service\LeaveService.slnx --no-restore` và `dotnet test src\hr-service\HrService.slnx --no-restore`. Output không có `git rev-parse HEAD`, do đó kết quả được ghi nhận là user-reported local run, chưa thể gắn chắc chắn với SHA của branch. Chưa có kết quả mới cho `npm test -- --run` và `npm run build` sau balance-sync.
+
+TRX đã commit tại `docs/testing/evidence/dotnet/` vẫn là evidence cũ hơn: HR total 58 / 57 executed / 57 passed / 1 skipped; Leave total 25 / 19 executed / 19 passed / 6 skipped. Không dùng các TRX này để phủ nhận lượt chạy 17/11, nhưng cũng không thay chúng bằng kết quả mới khi chưa có file TRX tương ứng.
 
 ### 7.3. Workforce benchmark mới nhất
 
@@ -331,8 +333,8 @@ Chi tiết: dynamic-authorization-benchmark-results.md. Muốn sign-off hiệu n
 
 ### 7.4. Các gap còn mở
 
-- Leave Balance chưa có bulk initialization/synchronization khi policy đổi.
-- Leave request date validation và default balance year dùng UTC, trong khi HR policy year dùng UTC+07.
+- Leave Balance đã có self-sync theo employee/năm qua `POST /api/v1/leave-balances/mine/synchronize`; GET vẫn read-only. Chưa có API/worker bulk reconciliation cho tất cả nhân viên sau khi HR đổi policy.
+- Leave request date validation, balance default year và HR policy year đều dùng business timezone UTC+07; frontend `leaveService.ts` dùng `Asia/Ho_Chi_Minh`. Cần rà soát các màn hình frontend còn lại ở ranh giới ngày/năm.
 - Employee lookup cần thống nhất active-state behavior giữa lookup by ID/batch và Team listing.
 - Leave History có ghi nhưng chưa có GET endpoint.
 - Health endpoint chưa tách readiness/liveness và chưa kiểm tra database readiness.

@@ -66,7 +66,7 @@ HR Employees endpoints kiểm tra permission + scope theo từng thao tác. HR w
 Leave Service xây dựng LeaveAccess từ claim perm:
 - leaves.read: Self/Team/All cho list/calendar/detail.
 - leaves.create:Self cho tạo đơn.
-- leaves.decide:Team/All cho inbox và approve/reject.
+- leaves.decide:Team/All cho inbox và approve/reject. Endpoint summary cũng dùng decide scope (policy `LeavesSummary` ánh xạ tới `leaves.decide:Team/All`).
 - leaves.cancel:Self cho hủy request của mình.
 
 Team được xác định theo quan hệ quản lý hiện tại, không dựa vào ApproverId snapshot trên đơn:
@@ -105,7 +105,7 @@ Request có range tối đa 366 ngày; reason bắt buộc, tối đa 1.000 ký 
 
 Balance key duy nhất là EmployeeId + LeaveTypeId + Year; entitlement/used/pending dùng decimal(6,1), có RowVersion và CHECK constraint ngăn các bộ đếm âm. Balance row được tạo lazy trong flow tạo request cho leave type trừ quota hoặc qua self-sync API theo employee/năm.
 
-GET `/api/v1/leave-balances/mine` chỉ đọc các rows tồn tại. POST `/api/v1/leave-balances/mine/synchronize` tạo row cho leave type active có `DeductsBalance=true`, lấy quota từ HR authoritative catalog và cập nhật Entitled nhưng giữ Used/Pending. Nếu quota mới thấp hơn Used + Pending, transaction rollback và trả conflict. Luồng tạo request cũng refresh Entitled từ policy authoritative trong transaction. Self-sync hiện chỉ xử lý caller; chưa có HR bulk reconciliation/worker cho toàn bộ nhân viên.
+GET `/api/v1/leave-balances/mine` chỉ đọc các rows tồn tại. POST `/api/v1/leave-balances/mine/synchronize` tạo row cho leave type active có `DeductsBalance=true`, yêu cầu đúng một policy cho mỗi loại nghỉ/năm, lấy quota từ HR authoritative catalog và cập nhật Entitled nhưng giữ Used/Pending. Nếu quota mới thấp hơn Used + Pending, transaction `SERIALIZABLE` rollback và trả conflict. Nếu không truyền year, Leave Service lấy business year UTC+07. Luồng tạo request cũng refresh Entitled từ policy authoritative trong transaction trước khi cộng Pending. Self-sync chỉ xử lý caller; chưa có HR bulk reconciliation/worker cho toàn bộ nhân viên.
 
 ### History hiện tại
 

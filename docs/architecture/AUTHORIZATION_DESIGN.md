@@ -225,7 +225,7 @@ Outbox, asynchronous read model, backfill/reconciliation giữa hai service khô
 - Không tin cậy role/scope do client gửi trong query hoặc body.
 
 
-## As-built boundary và phần chưa triển khai (16/11/2026)
+## As-built boundary và phần chưa triển khai (17/11/2026)
 
 ### Đã có trong backend
 - HR migration AddDynamicAuthorizationSchema và các bảng Roles, Permissions, UserRoles, RolePermissions, PermissionScopeRules, RolePermissionScopes, AuthzAuditLog.

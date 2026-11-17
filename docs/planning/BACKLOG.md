@@ -1,4 +1,4 @@
-# Backlog và thứ tự hoàn thiện — cập nhật 16/11/2026
+# Backlog và thứ tự hoàn thiện — cập nhật 17/11/2026
 
 Backlog này ghi các gap còn tồn tại sau khi rà soát code branch feature/dynamic-authorization-v1. Đây là kế hoạch, không phải mô tả tính năng đã triển khai.
 
@@ -6,10 +6,10 @@ Backlog này ghi các gap còn tồn tại sau khi rà soát code branch feature
 
 | Ưu tiên | Hạng mục | Trạng thái hiện tại | Tiêu chí hoàn thành |
 |---|---|---|---|
-| P1 | **Leave Balance initialization & synchronization** | Đã có self-sync theo employee/năm qua `POST /api/v1/leave-balances/mine/synchronize`; GET vẫn read-only; tạo row thiếu và cập nhật Entitled bằng HR catalog authoritative trong SQL transaction `SERIALIZABLE`; CreateAsync cũng refresh quota trước khi cộng Pending. Chưa có HR bulk reconciliation cho toàn bộ nhân viên. | Hoàn tất kiểm thử trên exact HEAD với SQL Server: employee mới, lặp idempotent, policy tăng/giảm, bảo toàn Used/Pending, race concurrent, HR outage; xác minh skipped=0. Khi quota mới < Used + Pending, rollback và trả conflict; không truy cập HR_DB trực tiếp. |
+| P2 | **HR bulk Leave Balance reconciliation** | Self-sync theo employee/năm đã có qua `POST /api/v1/leave-balances/mine/synchronize`; GET chỉ đọc. `CreateAsync` cũng refresh Entitled từ policy authoritative trong transaction. Chưa có endpoint/worker để reconcile toàn bộ nhân viên sau khi HR đổi policy. | Chỉ triển khai khi nghiệp vụ cần cập nhật chủ động cho mọi nhân viên thay vì lazy refresh khi họ synchronize/tạo đơn. Thiết kế batch idempotent, xử lý quota mới thấp hơn `Used + Pending`, không ghi vào HR_DB và không làm mất `Used`/`Pending`. |
 | P1 | **Chuẩn hóa business timezone** | Backend HR policy, Leave request validation, balance default year dùng UTC+07; frontend leaveService dùng `Intl` với `Asia/Ho_Chi_Minh` cho ngày hiện tại và default year. Cần xác nhận thêm các luồng UI khác có đang dựa browser-local time hay không. | Duy trì một business clock/timezone cho today, default year, policy year và boundary 31/12–01/01; test UTC time sát midnight, browser timezone khác VN và local-date conversion. |
 | P1 | **Employee Lookup active-state consistency** | Có nguy cơ khác biệt giữa lookup by-ID/batch và Team list | Quy định Manager có được xem inactive direct report không; áp dụng cùng rule ở GetLookup, batch lookup và Team listing; test inactive, reassignment và out-of-team. |
-| P1 | **Regression test exact HEAD** | TRX đang lưu trong branch cũ hơn HEAD và có skipped | HR + Leave chạy với SQL Server/Redis dependencies, failed=0, skipped=0; Web Vitest và production build pass; lưu TRX/log mới gắn Git SHA. |
+| P1 | **Regression evidence gắn exact revision** | Người dùng báo cáo ngày 17/11: HR 132/132 và Leave 118/118 pass, 0 failed/0 skipped. Output chưa kèm local Git SHA; TRX commit sẵn vẫn cũ và Web chưa có kết quả mới sau balance-sync. | Chạy/ghi nhận HR, Leave và Web trên cùng revision; lưu `git rev-parse HEAD`, TRX/log, Vitest và production build; không gắn kết quả vào SHA khi chưa có bằng chứng. |
 | P2 | **Leave request history read API** | History đang được ghi, chưa có GET endpoint | Thêm GET /api/v1/leave-requests/{id}/history; áp dụng cùng visibility scope của request; sort ổn định theo CreatedAtUtc + Id; không lộ history của request ngoài scope. |
 | P2 | **Readiness/liveness và dependency health** | Chỉ map generic /health | Tách liveness khỏi readiness; readiness kiểm tra SQL của chính service; Redis là optional dependency nên Redis down không làm HR unready nếu SQL fallback vẫn hoạt động; ghi rõ HR dependency của Leave và behavior khi outage. |
 | P2 | **HR client resilience** | Timeout 5 giây; chưa có circuit breaker/retry policy | Đánh giá retry chỉ cho idempotent lookup; giữ cancellation/deadline; circuit breaker/bulkhead chỉ thêm khi benchmark chứng minh hữu ích; fail closed cho Team authorization; không retry mutation thiếu idempotency. |
@@ -46,11 +46,11 @@ Backlog này ghi các gap còn tồn tại sau khi rà soát code branch feature
 
 ## 5. Thứ tự thực hiện đề xuất
 
-1. Leave Balance initialization/synchronization.
-2. Business timezone thống nhất ở Leave Service.
-3. Employee lookup active-state consistency.
-4. Regression tests và benchmark exact HEAD có SHA/image ID.
-5. History API, readiness và HR client resilience.
+1. Kiểm tra business timezone UTC+07 ở các màn hình còn lại.
+2. Thống nhất active-state behavior giữa employee lookup theo ID/batch và Team listing.
+3. Lưu regression test evidence cùng Git SHA và chạy Web test/build trên cùng revision.
+4. Gắn revision/image ID cho Workforce benchmark và đo tài nguyên đồng bộ.
+5. Cân nhắc bulk balance reconciliation, History API, readiness và HR client resilience theo nhu cầu.
 6. Permission-driven UI và Role assignment UI.
 7. Role/Permission catalog CRUD, Department scope và các phần mở rộng.
 

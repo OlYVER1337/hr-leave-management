@@ -1,7 +1,7 @@
 
 # Wireframe — Peopleflow HR Leave Management
 
-> Đặc tả wireframe được rà soát theo source branch feature/dynamic-authorization-v1 ngày 16/11/2026. Mô tả bên dưới phân biệt UI thực tế, backend permission/scope và các chức năng chưa triển khai.
+> Đặc tả wireframe được rà soát theo source branch feature/dynamic-authorization-v1 ngày 17/11/2026. Mô tả bên dưới phân biệt UI thực tế, backend permission/scope và các chức năng chưa triển khai.
 
 ## 1. Phạm vi và cách đọc
 
@@ -516,6 +516,7 @@ Employee mở My Leaves → action chỉ hiển thị với request Pending củ
 | My requests | Leave LeaveRequestsController | GET /api/v1/leave-requests/mine |
 | Calendar | Leave LeaveRequestsController | GET /api/v1/leave-requests/calendar?from=&to= |
 | Approval inbox | Leave LeaveRequestsController | GET /api/v1/leave-requests/pending-approval |
+| Approval summary | Leave LeaveRequestsController | GET /api/v1/leave-requests/summary |
 | Approve/reject | Leave LeaveRequestsController | PATCH /{id}/decision |
 | My balance | Leave LeaveBalancesController | POST /api/v1/leave-balances/mine/synchronize?year= để khởi tạo/đồng bộ; GET /api/v1/leave-balances/mine?year= để chỉ đọc |
 
