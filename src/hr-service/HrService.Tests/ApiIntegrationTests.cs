@@ -21,6 +21,7 @@ namespace HrService.Tests;
 
 public sealed class ApiIntegrationTests
 {
+    // Endpoint danh sách nhân viên phải từ chối request không có bearer token.
     [Fact]
     public async Task EmployeeList_RequiresAuthentication()
     {
@@ -32,6 +33,7 @@ public sealed class ApiIntegrationTests
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    // Kiểm tra page/pageSize thiếu, bằng 0 hoặc vượt giới hạn đều bị từ chối trước khi truy vấn.
     [Theory]
     [InlineData("")]
     [InlineData("?page=1")]
@@ -61,6 +63,7 @@ public sealed class ApiIntegrationTests
             Times.Never);
     }
 
+    // Danh sách direct reports cũng phải xác thực tham số phân trang như API danh sách nhân viên.
     [Theory]
     [InlineData("")]
     [InlineData("?page=1")]
@@ -87,6 +90,7 @@ public sealed class ApiIntegrationTests
             Times.Never);
     }
 
+    // Xác nhận route lookup team cũ đã bị gỡ, tránh khôi phục API không còn caller.
     [Fact]
     public async Task EmployeeLookupTeamRoute_IsRemoved()
     {
@@ -110,6 +114,7 @@ public sealed class ApiIntegrationTests
             Times.Never);
     }
 
+    // Role HR cũ không tự cấp quyền; request phải có permission claim hợp lệ.
     [Fact]
     public async Task EmployeeList_RejectsLegacyHrRoleWithoutPermissionClaim()
     {
@@ -122,6 +127,7 @@ public sealed class ApiIntegrationTests
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    // Scope All quyết định phạm vi truy cập, không phụ thuộc role claim legacy.
     [Fact]
     public async Task EmployeeList_ReturnsAllEmployeesForAllScopeWithoutRoleClaim()
     {
@@ -151,6 +157,7 @@ public sealed class ApiIntegrationTests
             Times.Once);
     }
 
+    // Xác nhận endpoint summary độc lập đã được gỡ vì overview trả summary cùng danh sách.
     [Fact]
     public async Task EmployeeSummaryRoute_IsRemoved()
     {
@@ -166,6 +173,7 @@ public sealed class ApiIntegrationTests
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    // Kết hợp quyền Self và Team chỉ trả nhân viên thuộc hai phạm vi được cấp.
     [Fact]
     public async Task EmployeeList_CombinesSelfAndTeamScopes()
     {
@@ -194,6 +202,7 @@ public sealed class ApiIntegrationTests
             Times.Once);
     }
 
+    // Department scope chưa hỗ trợ trong V1 nên không được mở rộng quyền đọc.
     [Fact]
     public async Task EmployeeList_RejectsUnsupportedDepartmentScope()
     {
@@ -209,6 +218,7 @@ public sealed class ApiIntegrationTests
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    // Email không tồn tại phải trả Problem Details 401 mà không tiết lộ tài khoản.
     [Fact]
     public async Task Login_WithUnknownEmail_ReturnsProblemDetailsUnauthorized()
     {
@@ -234,6 +244,7 @@ public sealed class ApiIntegrationTests
             StringComparison.OrdinalIgnoreCase);
     }
 
+    // Refresh token phải nằm trong HttpOnly cookie; response body chỉ trả access token.
     [Fact]
     public async Task Login_SetsHttpOnlyRefreshCookieAndReturnsOnlyAccessToken()
     {
