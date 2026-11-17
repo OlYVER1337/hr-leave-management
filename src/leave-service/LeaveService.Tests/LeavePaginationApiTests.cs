@@ -76,6 +76,40 @@ public sealed class LeavePaginationApiTests
         hrClient.VerifyNoOtherCalls();
     }
 
+    [Fact]
+    public async Task BalanceSynchronization_UsesExistingSelfReadPermission()
+    {
+        var employeeId = Guid.NewGuid();
+        var repository = new Mock<ILeaveRequestRepository>();
+        repository.Setup(item => item.SynchronizeBalancesAsync(
+                employeeId,
+                2027,
+                It.Is<IReadOnlyList<LeaveBalanceEntitlement>>(values => values.Count == 0),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<LeaveBalance>)[]);
+        var hrClient = new Mock<ILeaveHrClient>();
+        hrClient.Setup(item => item.GetLeaveCatalogAsync(
+                2027, "Bearer test-token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new HrLeaveCatalog([], []));
+
+        using var host = await CreateHostAsync(repository, hrClient);
+        using var client = host.GetTestClient();
+        AddPermissionHeaders(client, employeeId);
+
+        var response = await client.PostAsync(
+            "/api/v1/leave-balances/mine/synchronize?year=2027",
+            content: null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        hrClient.Verify(item => item.GetLeaveCatalogAsync(
+            2027, "Bearer test-token", It.IsAny<CancellationToken>()), Times.Once);
+        repository.Verify(item => item.SynchronizeBalancesAsync(
+            employeeId,
+            2027,
+            It.IsAny<IReadOnlyList<LeaveBalanceEntitlement>>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     private static void AddPermissionHeaders(HttpClient client, Guid employeeId)
     {
         client.DefaultRequestHeaders.Add("X-Test-Employee-Id", employeeId.ToString());
@@ -110,6 +144,7 @@ public sealed class LeavePaginationApiTests
                             _ => { });
                     services.AddLeavePermissionAuthorization();
                     services.AddScoped<LeaveRequestService>();
+                    services.AddScoped<LeaveBalanceService>();
                     services.AddSingleton<ILeaveRequestRepository>(repository.Object);
                     services.AddSingleton<ILeaveHrClient>(hrClient.Object);
                     services.AddSingleton(TimeProvider.System);
