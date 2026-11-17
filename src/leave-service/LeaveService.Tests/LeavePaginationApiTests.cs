@@ -57,6 +57,25 @@ public sealed class LeavePaginationApiTests
         hrClient.VerifyNoOtherCalls();
     }
 
+    [Theory]
+    [InlineData("/api/v1/leave-requests/00000000-0000-0000-0000-000000000001/approve")]
+    [InlineData("/api/v1/leave-requests/00000000-0000-0000-0000-000000000001/reject")]
+    public async Task LegacyDecisionRoutes_AreNotMapped(string path)
+    {
+        var repository = new Mock<ILeaveRequestRepository>();
+        var hrClient = new Mock<ILeaveHrClient>();
+
+        using var host = await CreateHostAsync(repository, hrClient);
+        using var client = host.GetTestClient();
+        AddPermissionHeaders(client, Guid.NewGuid());
+
+        var response = await client.PostAsync(path, new StringContent("{}"));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        repository.VerifyNoOtherCalls();
+        hrClient.VerifyNoOtherCalls();
+    }
+
     private static void AddPermissionHeaders(HttpClient client, Guid employeeId)
     {
         client.DefaultRequestHeaders.Add("X-Test-Employee-Id", employeeId.ToString());
