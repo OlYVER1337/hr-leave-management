@@ -15,11 +15,9 @@ Tất cả endpoint đều yêu cầu bearer token do HR Service cấp:
 - `GET /api/v1/leave-requests/pending-approval`: liệt kê các đơn được giao cho
   quản lý đang đăng nhập; HR có thể xem tất cả đơn đang chờ duyệt.
 - `PATCH /api/v1/leave-requests/{id}/decision`: nhận
-  `{"decision":"approve"|"reject","note":"..."}` để duyệt hoặc từ chối đơn đang
+  `{"decision":"approve","note":"..."}` hoặc `{"decision":"reject","note":"..."}` để duyệt hoặc từ chối đơn đang
   chờ. Quản lý chỉ được xử lý đơn thuộc team hiện tại; HR có thể xử lý đơn trong
   phạm vi All. Đây là route duy nhất để ra quyết định.
-- `POST /api/v1/leave-requests/{id}/cancel`: nhận `{"note":"..."}`; chỉ chủ đơn
-  mới được hủy đơn đang chờ duyệt của mình.
 - `GET /api/v1/leave-balances/mine?year=2026`: trả về số dư phép của nhân viên
   đang đăng nhập trong năm được yêu cầu.
 
