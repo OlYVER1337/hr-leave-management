@@ -11,6 +11,7 @@ namespace LeaveService.Tests;
 
 public sealed class HrServiceOutageTests
 {
+    // Không kết nối được HR phải được chuẩn hóa thành lỗi dependency unavailable để API trả 503.
     [Fact]
     public async Task HrServiceClient_MapsConnectionFailureToDependencyUnavailable()
     {
@@ -27,6 +28,7 @@ public sealed class HrServiceOutageTests
         Assert.IsType<HttpRequestException>(exception.InnerException);
     }
 
+    // HTTP 503 từ HR cũng phải ánh xạ về cùng loại dependency failure.
     [Fact]
     public async Task HrServiceClient_MapsHttpServiceUnavailableToDependencyUnavailable()
     {
@@ -44,6 +46,7 @@ public sealed class HrServiceOutageTests
         Assert.IsType<HttpRequestException>(exception.InnerException);
     }
 
+    // Kiểm tra middleware chuyển dependency outage thành Problem Details với HTTP 503.
     [Fact]
     public async Task ExceptionHandlingMiddleware_ReturnsProblemDetails503ForDependencyOutage()
     {
