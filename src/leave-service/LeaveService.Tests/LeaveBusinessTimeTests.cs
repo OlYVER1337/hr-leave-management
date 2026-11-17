@@ -42,6 +42,7 @@ public sealed class LeaveBusinessTimeTests
     [InlineData("2026-10-27T23:59:00+00:00", "2026-10-27", false)]
     [InlineData("2026-10-27T23:59:00+00:00", "2026-10-28", true)]
     // 28/10 07:00 VN (00:00 UTC 28/10): ranh giới ngày mới theo VN
+    // Ngày bắt đầu được so với ngày nghiệp vụ UTC+07, không lấy trực tiếp ngày UTC.
     [InlineData("2026-10-28T00:00:00+00:00", "2026-10-27", false)]
     [InlineData("2026-10-28T00:00:00+00:00", "2026-10-28", true)]
     public async Task StartDate_UsesBusinessDay_NotUtcDay(string utcNow, string startDate, bool accepted)
