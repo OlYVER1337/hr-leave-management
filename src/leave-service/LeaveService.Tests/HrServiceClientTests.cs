@@ -32,6 +32,7 @@ public sealed class HrServiceClientTests
             handler.RequestedUris);
     }
 
+    // Kiểm tra Leave gọi đúng API catalog gộp của HR và yêu cầu authoritative để bỏ qua Redis cache.
     [Fact]
     public async Task GetLeaveCatalog_UsesAuthoritativeCatalogEndpoint()
     {
@@ -42,10 +43,12 @@ public sealed class HrServiceClientTests
         };
         var client = new HrServiceClient(httpClient);
 
+        // Handler giả trả JSON catalog; test tập trung vào URL và khả năng deserialize response.
         var catalog = await client.GetLeaveCatalogAsync(2027, "Bearer test-token");
 
         Assert.Equal("ANNUAL", Assert.Single(catalog.LeaveTypes).Code);
         Assert.Equal(15m, Assert.Single(catalog.LeavePolicies).DaysPerYear);
+        // Xác nhận request có đúng year và authoritative=true, tránh gọi nhầm endpoint dùng cache.
         Assert.Equal(
             "/api/v1/leave-catalog?year=2027&authoritative=true",
             Assert.Single(handler.RequestedUris));
