@@ -120,8 +120,6 @@ Leave Policy chỉ được tạo/thay đổi với năm lớn hơn năm hiện 
 | GET /api/v1/leave-requests/pending-approval?page=1&pageSize=20 | leaves.decide:Team/All | Inbox; Team lấy từ reporting line hiện tại ở HR |
 | GET /api/v1/leave-requests/summary | leaves.decide:Team/All | Pending theo decide scope; Approved/Total theo read scope, null nếu thiếu leaves.read |
 | PATCH /api/v1/leave-requests/{id}/decision | leaves.decide:Team/All | decision=approve/reject và note tùy chọn |
-| POST /api/v1/leave-requests/{id}/approve | leaves.decide:Team/All | Route tương thích duyệt |
-| POST /api/v1/leave-requests/{id}/reject | leaves.decide:Team/All | Route tương thích từ chối |
 | POST /api/v1/leave-requests/{id}/cancel | leaves.cancel:Self | Chủ đơn hủy khi Pending |
 | GET /api/v1/leave-balances/mine?year=2026 | leaves.read:Self/All | Đọc các balance rows hiện có của caller |
 
