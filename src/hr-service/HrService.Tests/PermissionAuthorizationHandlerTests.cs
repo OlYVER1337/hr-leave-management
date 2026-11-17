@@ -7,6 +7,7 @@ namespace HrService.Tests;
 
 public sealed class PermissionAuthorizationHandlerTests
 {
+    // Role HR legacy không đủ để vượt qua authorization handler khi thiếu permission claim.
     [Fact]
     public async Task LegacyHrRoleWithoutPermissionClaim_IsDenied()
     {
@@ -18,6 +19,7 @@ public sealed class PermissionAuthorizationHandlerTests
         Assert.False(succeeded);
     }
 
+    // Permission claim có scope phù hợp được đánh giá độc lập với role claim legacy.
     [Fact]
     public async Task PermissionClaimWithoutRole_IsAllowedForMatchingScope()
     {
@@ -30,6 +32,7 @@ public sealed class PermissionAuthorizationHandlerTests
         Assert.True(succeeded);
     }
 
+    // Claim sai version, permission hoặc scope đều phải bị từ chối.
     [Theory]
     [InlineData("0", """[{"p":"employees.create","s":["All"]}]""")]
     [InlineData("1", """[{"p":"employees.create","s":["Team"]}]""")]
