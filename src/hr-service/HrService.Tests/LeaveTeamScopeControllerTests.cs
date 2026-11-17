@@ -12,6 +12,7 @@ namespace HrService.Tests;
 
 public sealed class LeaveTeamScopeControllerTests
 {
+    // Manager chỉ được truy vấn danh sách ID của chính team mình khi có leaves permission scope Team phù hợp.
     [Theory]
     [InlineData("leaves.read")]
     [InlineData("leaves.decide")]
@@ -32,6 +33,7 @@ public sealed class LeaveTeamScopeControllerTests
         VerifyTeamQuery(employeeRepository, managerId);
     }
 
+    // HR có scope All trên permission leave tương ứng được truy vấn team của Manager khác.
     [Theory]
     [InlineData("leaves.read")]
     [InlineData("leaves.decide")]
@@ -53,6 +55,7 @@ public sealed class LeaveTeamScopeControllerTests
         VerifyTeamQuery(employeeRepository, managerId);
     }
 
+    // Scope All hợp lệ cũng dùng được khi truy vấn team của chính caller.
     [Fact]
     public async Task GetTeamEmployeeIds_AllowsAllScopeForOwnTeam()
     {
@@ -71,6 +74,7 @@ public sealed class LeaveTeamScopeControllerTests
         VerifyTeamQuery(employeeRepository, managerId);
     }
 
+    // Team scope không được dùng để xem team của một Manager khác.
     [Fact]
     public async Task GetTeamEmployeeIds_DeniesTeamPermissionForAnotherManager()
     {
@@ -89,6 +93,7 @@ public sealed class LeaveTeamScopeControllerTests
         employeeRepository.VerifyNoOtherCalls();
     }
 
+    // Permission All ở nghiệp vụ khác không được thay thế leaves.read/decide All.
     [Fact]
     public async Task GetTeamEmployeeIds_DeniesAllWhenCallerHasNoLeaveAllPermission()
     {
@@ -107,6 +112,7 @@ public sealed class LeaveTeamScopeControllerTests
         employeeRepository.VerifyNoOtherCalls();
     }
 
+    // Scope All trên permission không liên quan không được cấp quyền truy vấn team.
     [Fact]
     public async Task GetTeamEmployeeIds_DeniesWhenManagerHasOnlyAllPermissionForDifferentPermission()
     {
