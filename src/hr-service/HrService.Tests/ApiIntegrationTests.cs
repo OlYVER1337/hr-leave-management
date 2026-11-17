@@ -87,13 +87,8 @@ public sealed class ApiIntegrationTests
             Times.Never);
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("?page=1")]
-    [InlineData("?pageSize=10")]
-    [InlineData("?page=0&pageSize=10")]
-    [InlineData("?page=1&pageSize=101")]
-    public async Task EmployeeLookupTeamList_RequiresValidPageAndPageSize(string query)
+    [Fact]
+    public async Task EmployeeLookupTeamRoute_IsRemoved()
     {
         var employeeRepository = new Mock<IEmployeeRepository>();
         using var host = await CreateHostAsync(employeeRepository);
@@ -103,10 +98,11 @@ public sealed class ApiIntegrationTests
             client,
             managerId,
             """[{"p":"employees.read","s":["Team"]}]""");
-        var response = await client.GetAsync(
-            $"/api/v1/lookup/employees/{managerId}/team{query}");
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var response = await client.GetAsync(
+            $"/api/v1/lookup/employees/{managerId}/team?page=1&pageSize=10");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         employeeRepository.Verify(
             repository => repository.ListDirectReportsPageAsync(
                 It.IsAny<Guid>(), It.IsAny<string?>(), It.IsAny<int>(),
@@ -156,30 +152,18 @@ public sealed class ApiIntegrationTests
     }
 
     [Fact]
-    public async Task EmployeeSummary_ReturnsCountsForAuthorizedScope()
+    public async Task EmployeeSummaryRoute_IsRemoved()
     {
-        var actorId = Guid.NewGuid();
-        var employeeRepository = new Mock<IEmployeeRepository>();
-        employeeRepository
-            .Setup(repository => repository.GetVisibleSummaryAsync(
-                actorId, false, false, true, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((12, 9, 2));
-
-        using var host = await CreateHostAsync(employeeRepository);
+        using var host = await CreateHostAsync();
         using var client = host.GetTestClient();
-        AddPermissionHeaders(client, actorId, """[{"p":"employees.read","s":["All"]}]""");
+        AddPermissionHeaders(
+            client,
+            Guid.NewGuid(),
+            """[{"p":"employees.read","s":["All"]}]""");
 
         var response = await client.GetAsync("/api/v1/employees/summary");
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
-        Assert.Contains("\"total\":12", body, StringComparison.Ordinal);
-        Assert.Contains("\"active\":9", body, StringComparison.Ordinal);
-        Assert.Contains("\"managers\":2", body, StringComparison.Ordinal);
-        employeeRepository.Verify(
-            repository => repository.GetVisibleSummaryAsync(
-                actorId, false, false, true, It.IsAny<CancellationToken>()),
-            Times.Once);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
