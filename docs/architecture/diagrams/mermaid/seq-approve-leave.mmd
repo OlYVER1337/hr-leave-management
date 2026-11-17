@@ -24,12 +24,12 @@ sequenceDiagram
   alt Team scope
     LV->>HR: GET /api/v1/lookup/employees/{employeeId}
     HR-->>LV: Employee active + ManagerId hiện tại
-    LV->>LV: Xác minh ManagerId = caller; chặn tự duyệt
+    LV->>LV: Xác minh ManagerId = caller và không cho tự duyệt
   else All scope
     LV->>LV: Xác minh quyền All và chặn tự duyệt
   end
   opt HR lookup lỗi với thao tác Team
-    LV-->>W: 503 Dependency unavailable; không đổi trạng thái
+    LV-->>W: 503 Dependency unavailable, không đổi trạng thái
   end
   LV->>DB: BEGIN SERIALIZABLE transaction
   LV->>DB: Đọc request + LeaveBalance/YearAllocations
@@ -38,7 +38,7 @@ sequenceDiagram
     LV-->>W: 409 Conflict
   else Approve
     LV->>DB: Status = Approved
-    LV->>DB: Balance Pending -= days; Used += days
+    LV->>DB: Balance Pending -= days, Used += days
     LV->>DB: INSERT LeaveRequestHistory
     LV->>DB: COMMIT
     LV-->>W: 200 OK
