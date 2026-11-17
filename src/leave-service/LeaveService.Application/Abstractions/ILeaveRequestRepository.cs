@@ -107,6 +107,12 @@ public interface ILeaveRequestRepository
         Guid employeeId,
         int year,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<LeaveBalance>> SynchronizeBalancesAsync(
+        Guid employeeId,
+        int year,
+        IReadOnlyList<LeaveBalanceEntitlement> entitlements,
+        CancellationToken cancellationToken = default);
 }
 
 public interface ILeaveHrClient
@@ -123,6 +129,11 @@ public interface ILeaveHrClient
 
     Task<HrLeaveType> GetLeaveTypeAsync(
         int leaveTypeId,
+        string authorization,
+        CancellationToken cancellationToken = default);
+
+    Task<HrLeaveCatalog> GetLeaveCatalogAsync(
+        int year,
         string authorization,
         CancellationToken cancellationToken = default);
 
