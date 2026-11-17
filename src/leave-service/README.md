@@ -20,6 +20,7 @@ Tất cả endpoint đều yêu cầu bearer token do HR Service cấp:
   phạm vi All. Đây là route duy nhất để ra quyết định.
 - `GET /api/v1/leave-balances/mine?year=2026`: trả về số dư phép của nhân viên
   đang đăng nhập trong năm được yêu cầu.
+- `POST /api/v1/leave-balances/mine/synchronize?year=2026`: khởi tạo/đồng bộ số dư của nhân viên đang đăng nhập theo HR catalog authoritative; giữ nguyên `Used`/`Pending`; trả `409 Conflict` nếu quota mới thấp hơn tổng đã dùng và đang chờ.
 
 Ví dụ tạo đơn:
 
@@ -34,9 +35,12 @@ Ví dụ tạo đơn:
 
 Dịch vụ tính các ngày trong tuần, loại trừ ngày lễ do HR cấu hình và hỗ trợ đơn
 nghỉ kéo dài qua nhiều năm dương lịch bằng cách phân bổ số ngày vào chính sách
-của từng năm. Với loại nghỉ trừ vào số dư, nếu nhân viên chưa có số dư thì dịch
-vụ khởi tạo số dư từ chính sách HR. Sau đó, dịch vụ tạo đơn chờ duyệt, tăng số
-dư đang chờ và ghi lịch sử tạo đơn trong cùng một giao dịch. Đơn bị trùng ngày
+của từng năm. Với loại nghỉ trừ vào số dư, luồng tạo đơn khởi tạo số dư nếu
+chưa có và refresh `Entitled` từ policy authoritative của HR trước khi cộng số
+ngày đang chờ. Nhân viên cũng có thể gọi API synchronize để tạo các balance row
+còn thiếu cho loại nghỉ active có `DeductsBalance=true` trong năm đó. Thao tác
+giữ nguyên `Used`/`Pending` và dùng giao dịch `SERIALIZABLE`. Sau đó, dịch vụ
+tạo đơn chờ duyệt, tăng số dư đang chờ và ghi lịch sử tạo đơn trong cùng giao dịch. Đơn bị trùng ngày
 hoặc không đủ số dư trả về `409 Conflict`. Khoảng thời gian chỉ có ngày không
 làm việc và dữ liệu đầu vào không hợp lệ trả về `422 Unprocessable Entity`.
 
