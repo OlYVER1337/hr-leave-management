@@ -72,8 +72,16 @@ function getBusinessDate(value = new Date()): string {
     month: '2-digit',
     day: '2-digit',
   }).formatToParts(value);
-  const values = new Map(parts.map((part) => [part.type, part.value]));
-  return `${values.get('year')}-${values.get('month')}-${values.get('day')}`;
+  const values = new Map<string, string>(
+    parts.map((part) => [part.type, part.value] as [string, string]),
+  );
+  const year = values.get('year');
+  const month = values.get('month');
+  const day = values.get('day');
+  if (!year || !month || !day) {
+    throw new Error('Could not resolve the Vietnam business date.');
+  }
+  return `${year}-${month}-${day}`;
 }
 
 function getBusinessYear(value = new Date()): number {
