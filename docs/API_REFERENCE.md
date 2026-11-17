@@ -49,17 +49,15 @@ Danh sách phân trang:
 |---|---|---|
 | GET /api/v1/employees?page=1&pageSize=20 | employees.read:Self/Team/All | Danh sách trong phạm vi quyền; hỗ trợ filter/search/sort |
 | GET /api/v1/employees/overview?page=1&pageSize=20 | employees.read:Self/Team/All | Trang dữ liệu, totalCount và summary |
-| GET /api/v1/employees/summary | employees.read:Self/Team/All | Summary trong phạm vi quyền |
 | GET /api/v1/employees/{id} | employees.read:Self/Team/All | Hồ sơ trong phạm vi được phép |
 | POST /api/v1/employees | employees.create:All | Tạo nhân viên; mã được backend sinh |
 | PUT /api/v1/employees/{id} | employees.update:All | Cập nhật hồ sơ |
 | POST /api/v1/employees/{id}/deactivate | employees.deactivate:All | Vô hiệu hóa nhân viên và thu hồi refresh token |
 | PUT /api/v1/employees/{id}/password | employees.password.reset:All | Đặt lại mật khẩu nhân viên |
 | POST /api/v1/lookup/employees/batch | employees.read:Self/Team/All | Lookup tối đa 100 ID; service kiểm tra scope từng record |
-| GET /api/v1/lookup/employees/{id} | employees.read:Self/Team/All | Snapshot nhân viên cho HR/Leave |
-| GET /api/v1/lookup/employees/{managerId}/team?page=1&pageSize=20 | employees.read:Team hoặc All | Direct reports active; Team chỉ gọi được cho manager ID của caller |
+| GET /api/v1/lookup/employees/{id} | employees.read:Self/Team/All | Snapshot nhân viên đơn lẻ cho HR/Leave |
 
-Team lookup dùng Employees.ManagerId hiện tại. Manager có scope Team không thể tự chọn manager ID khác. Danh sách Team và lookup by ID cần giữ cùng quy tắc active/inactive.
+Danh sách direct reports của Manager chỉ truy cập qua `GET /api/v1/me/team`; endpoint tự lấy manager ID từ caller, yêu cầu `employees.read:Team` và hỗ trợ pagination.
 
 ### 2.3. Quản lý Role assignment
 
