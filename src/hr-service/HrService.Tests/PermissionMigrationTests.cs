@@ -9,6 +9,7 @@ namespace HrService.Tests;
 
 public sealed class PermissionMigrationTests
 {
+    // Các endpoint ghi HR phải gắn policy permission/scope thay vì phụ thuộc role HR cũ.
     [Theory]
     [InlineData(nameof(EmployeesController), nameof(EmployeesController.Create), "employees.create")]
     [InlineData(nameof(EmployeesController), nameof(EmployeesController.Update), "employees.update")]
@@ -45,6 +46,7 @@ public sealed class PermissionMigrationTests
         Assert.DoesNotContain(authorization, attribute => !string.IsNullOrWhiteSpace(attribute.Roles));
     }
 
+    // Service lookup nhận effective authorization; không truyền cờ IsHr để quyết định quyền.
     [Fact]
     public void EmployeeLookupService_UsesEffectiveAuthorizationInsteadOfHrBoolean()
     {
@@ -56,6 +58,7 @@ public sealed class PermissionMigrationTests
         Assert.Contains(parameters, parameter => parameter.ParameterType == typeof(EffectiveAuthorization));
     }
 
+    // Các route lookup nhân viên phải khai báo permission đọc tương ứng.
     [Fact]
     public void EmployeeLookupEndpoints_UseEmployeeReadPermissionPolicies()
     {
@@ -67,6 +70,7 @@ public sealed class PermissionMigrationTests
         Assert.Null(lookup.GetMethod("GetTeam"));
     }
 
+    // Rà soát controller để ngăn việc quay lại cơ chế [Authorize(Roles = HR)] cũ.
     [Fact]
     public void HrControllers_DoNotDeclareLegacyHrRoleAuthorization()
     {
