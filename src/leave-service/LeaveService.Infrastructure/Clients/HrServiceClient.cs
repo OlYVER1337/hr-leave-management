@@ -40,6 +40,16 @@ public sealed class HrServiceClient(HttpClient httpClient, HrCallMetrics? metric
             "leave type",
             cancellationToken);
 
+    public Task<HrLeaveCatalog> GetLeaveCatalogAsync(
+        int year,
+        string authorization,
+        CancellationToken cancellationToken = default) =>
+        GetRequiredAsync<HrLeaveCatalog>(
+            $"/api/v1/leave-catalog?year={year}&authoritative=true",
+            authorization,
+            "leave catalog",
+            cancellationToken);
+
     public async Task<IReadOnlyList<HrLeavePolicy>> GetLeavePoliciesAsync(
         int year,
         string authorization,
