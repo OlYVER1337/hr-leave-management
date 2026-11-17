@@ -79,7 +79,7 @@ public sealed class LeaveBalanceServiceTests
     }
 
     [Fact]
-    public async Task SynchronizeMineAsync_RejectsMissingOrDuplicatePolicyBeforeWriting()
+    public async Task SynchronizeMineAsync_RejectsDuplicatePoliciesBeforeWriting()
     {
         var employeeId = Guid.NewGuid();
         var repository = new Mock<ILeaveRequestRepository>();
@@ -91,6 +91,28 @@ public sealed class LeaveBalanceServiceTests
                     new HrLeavePolicy(1, 1, "ANNUAL", "Annual", 2027, 15m),
                     new HrLeavePolicy(2, 1, "ANNUAL", "Annual", 2027, 16m)
                 ]));
+        var service = new LeaveBalanceService(repository.Object, hrClient.Object, TimeProvider.System);
+
+        await Assert.ThrowsAsync<LeaveConflictException>(() =>
+            service.SynchronizeMineAsync(employeeId, 2027, "Bearer token"));
+
+        repository.Verify(item => item.SynchronizeBalancesAsync(
+            It.IsAny<Guid>(),
+            It.IsAny<int>(),
+            It.IsAny<IReadOnlyList<LeaveBalanceEntitlement>>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SynchronizeMineAsync_RejectsMissingPolicyBeforeWriting()
+    {
+        var employeeId = Guid.NewGuid();
+        var repository = new Mock<ILeaveRequestRepository>();
+        var hrClient = new Mock<ILeaveHrClient>();
+        hrClient.Setup(item => item.GetLeaveCatalogAsync(2027, "Bearer token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new HrLeaveCatalog(
+                [new HrLeaveType(1, "ANNUAL", "Annual", true, true, true)],
+                []));
         var service = new LeaveBalanceService(repository.Object, hrClient.Object, TimeProvider.System);
 
         await Assert.ThrowsAsync<LeaveConflictException>(() =>
