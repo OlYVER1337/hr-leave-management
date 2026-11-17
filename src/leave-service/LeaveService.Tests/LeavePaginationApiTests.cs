@@ -78,6 +78,7 @@ public sealed class LeavePaginationApiTests
         hrClient.VerifyNoOtherCalls();
     }
 
+    // Gửi HTTP qua TestServer với claim leaves.read:All để xác nhận endpoint không yêu cầu permission mới.
     [Fact]
     public async Task BalanceSynchronization_UsesExistingSelfReadPermission()
     {
@@ -96,12 +97,15 @@ public sealed class LeavePaginationApiTests
 
         using var host = await CreateHostAsync(repository, hrClient);
         using var client = host.GetTestClient();
+        // Gắn employee ID, authz version, permission và bearer token cho request kiểm thử.
         AddPermissionHeaders(client, employeeId);
 
+        // Gọi route POST thật qua pipeline ASP.NET để kiểm tra routing, authorization và DI.
         var response = await client.PostAsync(
             "/api/v1/leave-balances/mine/synchronize?year=2027",
             content: null);
 
+        // API trả 200 và phải gọi HR/repository đúng một lần.
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         hrClient.Verify(item => item.GetLeaveCatalogAsync(
             2027, "Bearer test-token", It.IsAny<CancellationToken>()), Times.Once);
