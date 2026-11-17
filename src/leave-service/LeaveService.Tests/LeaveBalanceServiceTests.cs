@@ -104,6 +104,27 @@ public sealed class LeaveBalanceServiceTests
     }
 
     [Fact]
+    public async Task SynchronizeMineAsync_DoesNotWriteWhenHrCatalogIsUnavailable()
+    {
+        var employeeId = Guid.NewGuid();
+        var repository = new Mock<ILeaveRequestRepository>();
+        var hrClient = new Mock<ILeaveHrClient>();
+        hrClient.Setup(item => item.GetLeaveCatalogAsync(
+                2027, "Bearer token", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new DependencyUnavailableException("HR service"));
+        var service = new LeaveBalanceService(repository.Object, hrClient.Object, TimeProvider.System);
+
+        await Assert.ThrowsAsync<DependencyUnavailableException>(() =>
+            service.SynchronizeMineAsync(employeeId, 2027, "Bearer token"));
+
+        repository.Verify(item => item.SynchronizeBalancesAsync(
+            It.IsAny<Guid>(),
+            It.IsAny<int>(),
+            It.IsAny<IReadOnlyList<LeaveBalanceEntitlement>>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task SynchronizeMineAsync_RejectsInvalidEmployeeOrYear()
     {
         var repository = new Mock<ILeaveRequestRepository>();
