@@ -10,6 +10,7 @@ namespace HrService.Tests;
 
 public sealed class LeaveCatalogServiceTests
 {
+    // Danh sách thường chỉ trả loại nghỉ chuẩn đang active; includeInactive=true cho phép HR xem cả loại đã ngừng.
     [Fact]
     public async Task GetLeaveTypesAsync_ReturnsOnlyBuiltInTypesAndFiltersInactiveForRegularList()
     {
@@ -37,6 +38,7 @@ public sealed class LeaveCatalogServiceTests
             Times.Once);
     }
 
+    // Catalog thông thường ghép leave types và policies theo năm, sử dụng cache để giảm truy vấn lặp.
     [Fact]
     public async Task GetLeaveCatalogAsync_ReturnsTypesAndYearPoliciesUsingCachedReads()
     {
@@ -87,6 +89,7 @@ public sealed class LeaveCatalogServiceTests
             Times.Once);
     }
 
+    // Tạo/khôi phục mã loại nghỉ chuẩn phải dùng định nghĩa cố định và chỉ xóa cache sau khi lưu thành công.
     [Fact]
     public async Task CreateLeaveTypeAsync_UsesBuiltInDefinitionAndInvalidatesCacheAfterSave()
     {
@@ -128,6 +131,7 @@ public sealed class LeaveCatalogServiceTests
             events);
     }
 
+    // UNPAID phải luôn không hưởng lương và không trừ balance; không chấp nhận định nghĩa ngược.
     [Fact]
     public async Task CreateLeaveTypeAsync_RejectsPaidUnpaidType()
     {
@@ -146,6 +150,7 @@ public sealed class LeaveCatalogServiceTests
             Times.Never);
     }
 
+    // Không cho tạo mã leave type ngoài ba loại chuẩn ANNUAL, SICK và UNPAID.
     [Fact]
     public async Task CreateLeaveTypeAsync_RejectsCustomTypes()
     {
@@ -164,6 +169,7 @@ public sealed class LeaveCatalogServiceTests
             Times.Never);
     }
 
+    // Cập nhật loại nghỉ không được thay đổi thuộc tính nghiệp vụ cố định; cache liên quan chỉ invalidation sau SaveChanges.
     [Fact]
     public async Task UpdateLeaveTypeAsync_PreservesBuiltInDefinitionAndInvalidatesRelatedCachesAfterSave()
     {
@@ -209,6 +215,7 @@ public sealed class LeaveCatalogServiceTests
             events);
     }
 
+    // UNPAID vẫn giữ IsPaid=false và DeductsBalance=false dù request cố gửi giá trị khác.
     [Fact]
     public async Task UpdateLeaveTypeAsync_PreservesBuiltInPropertiesWhenDeletingUnpaidType()
     {
@@ -242,6 +249,7 @@ public sealed class LeaveCatalogServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    // Policy chỉ nhận số ngày trong giới hạn HR và tối đa một chữ số thập phân.
     [Theory]
     [InlineData(366.2)]
     [InlineData(1.25)]
@@ -264,6 +272,7 @@ public sealed class LeaveCatalogServiceTests
             Times.Never);
     }
 
+    // Không cho tạo policy cho năm hiện tại hoặc quá khứ; chỉ mở policy tương lai.
     [Theory]
     [InlineData(2024)]
     [InlineData(2025)]
@@ -288,6 +297,7 @@ public sealed class LeaveCatalogServiceTests
             Times.Never);
     }
 
+    // Không cho chuyển policy sang năm đã bắt đầu hoặc đã qua.
     [Fact]
     public async Task UpdateLeavePolicyAsync_RejectsChangingPolicyToCurrentOrPastYear()
     {
@@ -315,6 +325,7 @@ public sealed class LeaveCatalogServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // Không thể né khóa policy bằng cách chuyển một policy năm hiện tại sang năm tương lai.
     [Fact]
     public async Task UpdateLeavePolicyAsync_RejectsMovingCurrentYearPolicyIntoFuture()
     {
@@ -342,6 +353,7 @@ public sealed class LeaveCatalogServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // Policy mới chỉ được tạo cho leave type active và cache phải bị invalidation sau khi lưu.
     [Fact]
     public async Task CreateLeavePolicyAsync_AddsPolicyForActiveTypeAndInvalidatesCache()
     {
@@ -392,6 +404,7 @@ public sealed class LeaveCatalogServiceTests
             events);
     }
 
+    // Leave type inactive không được nhận policy mới.
     [Fact]
     public async Task CreateLeavePolicyAsync_RejectsInactiveLeaveTypeWithoutSaving()
     {
@@ -413,6 +426,7 @@ public sealed class LeaveCatalogServiceTests
             Times.Never);
     }
 
+    // UNPAID không có quota nên không được tạo leave policy.
     [Fact]
     public async Task CreateLeavePolicyAsync_RejectsUnpaidLeaveTypeWithoutSaving()
     {
@@ -437,6 +451,7 @@ public sealed class LeaveCatalogServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // Policy chỉ được gắn với ba leave type chuẩn, không gắn custom type.
     [Fact]
     public async Task CreateLeavePolicyAsync_RejectsPolicyForCustomLeaveType()
     {
@@ -455,6 +470,7 @@ public sealed class LeaveCatalogServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // Policy tương lai được cập nhật thành công; invalidation chỉ xảy ra sau SaveChanges.
     [Fact]
     public async Task UpdateLeavePolicyAsync_UpdatesFuturePolicyAndInvalidatesCacheAfterSave()
     {
@@ -516,6 +532,7 @@ public sealed class LeaveCatalogServiceTests
             events);
     }
 
+    // Không cho sửa policy trỏ đến UNPAID vì loại nghỉ này không có balance quota.
     [Fact]
     public async Task UpdateLeavePolicyAsync_RejectsUnpaidLeaveTypeWithoutSaving()
     {
@@ -549,6 +566,7 @@ public sealed class LeaveCatalogServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // Không cho cập nhật policy của leave type ngoài danh mục chuẩn.
     [Fact]
     public async Task UpdateLeavePolicyAsync_RejectsCustomPolicy()
     {
@@ -575,6 +593,7 @@ public sealed class LeaveCatalogServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // Dữ liệu holiday lấy từ cache vẫn phải lọc lại theo from/to mà caller yêu cầu.
     [Fact]
     public async Task GetHolidaysAsync_FiltersCachedResultsByRequestedRange()
     {
@@ -655,6 +674,7 @@ public sealed class LeaveCatalogServiceTests
             Times.Never);
     }
 
+    // Đọc policy authoritative phải query SQL, không dùng policy có thể stale trong Redis.
     [Fact]
     public async Task GetAuthoritativeLeavePoliciesAsync_UsesSqlInsteadOfCachedPolicy()
     {
@@ -688,6 +708,7 @@ public sealed class LeaveCatalogServiceTests
             Times.Never);
     }
 
+    // Holiday authoritative phải query SQL trực tiếp cho đúng khoảng ngày, không đọc cache.
     [Fact]
     public async Task GetAuthoritativeHolidaysAsync_QueriesSqlForRequestedRangeWithoutCache()
     {
@@ -716,6 +737,7 @@ public sealed class LeaveCatalogServiceTests
             Times.Never);
     }
 
+    // Cập nhật ngày lễ phải lưu trước rồi mới invalidation cache.
     [Fact]
     public async Task UpdateHolidayAsync_UpdatesEntryAndInvalidatesCacheAfterSave()
     {
@@ -756,6 +778,7 @@ public sealed class LeaveCatalogServiceTests
             events);
     }
 
+    // Xóa ngày lễ phải lưu thay đổi trước khi xóa cache.
     [Fact]
     public async Task DeleteHolidayAsync_RemovesEntryAndInvalidatesCacheAfterSave()
     {
