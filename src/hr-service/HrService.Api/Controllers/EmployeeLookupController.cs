@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using HrService.Api.Authorization;
 using HrService.Application.Dtos;
 using HrService.Application.Services;
@@ -54,55 +53,6 @@ public sealed class EmployeeLookupController(EmployeeService employeeService) : 
         return Ok(employee);
     }
 
-    [HttpGet("{managerId:guid}/team")]
-    [Authorize(Policy = PermissionPolicies.EmployeesReadTeamOrAll)]
-    public async Task<ActionResult<IReadOnlyList<EmployeeLookupResponse>>> GetTeam(
-        Guid managerId,
-        [FromQuery, Range(1, int.MaxValue)] int? page,
-        [FromQuery, Range(1, 100)] int? pageSize,
-        [FromQuery] string? search = null,
-        CancellationToken cancellationToken = default)
-    {
-        var requesterId = GetRequesterId();
-        if (!requesterId.HasValue)
-        {
-            return Unauthorized();
-        }
-
-        var authorization = AuthorizationClaimReader.Read(User);
-        var canReadAll = authorization.HasScope("employees.read", "All");
-        var canReadOwnTeam = requesterId.Value == managerId &&
-            authorization.HasScope("employees.read", "Team");
-        if (!canReadAll && !canReadOwnTeam)
-        {
-            return Forbid();
-        }
-
-        if (!IsValidPagination(page, pageSize))
-        {
-            return BadRequest(new ProblemDetails
-            {
-                Status = StatusCodes.Status400BadRequest,
-                Title = "Invalid pagination",
-                Detail = "Both page and pageSize are required. page must be at least 1 and pageSize must be between 1 and 100."
-            });
-        }
-
-        var paged = await employeeService.GetTeamPagedAsync(
-            managerId, page!.Value, pageSize!.Value, search, cancellationToken);
-        Response.Headers["X-Total-Count"] = paged.TotalCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        var employees = paged.Items.Select(employee => new EmployeeLookupResponse(
-            employee.Id,
-            employee.Code,
-            employee.FullName,
-            employee.Role,
-            employee.IsActive,
-            employee.DepartmentId,
-            employee.ManagerId,
-            employee.DepartmentName,
-            employee.ManagerName));
-        return Ok(employees);
-    }
 
     private Guid? GetRequesterId()
     {
