@@ -603,6 +603,7 @@ public sealed class LeaveCatalogServiceTests
             Times.Once);
     }
 
+    // Catalog authoritative phải lấy leave types và policies trực tiếp từ repository, không đọc Redis cache.
     [Fact]
     public async Task GetAuthoritativeLeaveCatalogAsync_ReadsTypesAndPoliciesDirectlyFromSql()
     {
@@ -628,6 +629,7 @@ public sealed class LeaveCatalogServiceTests
                     DaysPerYear = 18m
                 }
             ]);
+        // Mock cache riêng để xác nhận luồng authoritative không gọi đến cache.
         var service = CreateService(repository, cache.Object);
 
         var catalog = await service.GetAuthoritativeLeaveCatalogAsync(2027, includeInactive: false);
@@ -640,6 +642,7 @@ public sealed class LeaveCatalogServiceTests
         repository.Verify(
             item => item.ListLeavePoliciesAsync(2027, It.IsAny<CancellationToken>()),
             Times.Once);
+        // Cả hai loại dữ liệu đều không được đọc từ cache trong luồng authoritative.
         cache.Verify(
             item => item.GetAsync<LeaveTypeResponse[]>(
                 It.IsAny<string>(),
