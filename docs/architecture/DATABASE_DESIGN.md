@@ -102,7 +102,7 @@ Các Scope đang được thực thi trong API là Self, Team và All. Departmen
 
 | Bảng | Mục đích và các cột quan trọng |
 |---|---|
-| `LeaveBalances` | Số dư phép theo nhân viên/loại nghỉ/năm, bao gồm quyền được hưởng và các bộ đếm `Entitled`, `Used`, `Pending`, sử dụng `decimal(6,1)`; có SQL `rowversion` |
+| `LeaveBalances` | Số dư phép theo nhân viên/loại nghỉ/năm, gồm `Entitled`, `Used`, `Pending` kiểu `decimal(6,1)`; có SQL `rowversion` và CHECK constraint đảm bảo ba bộ đếm không âm |
 | `LeaveRequests` | Thông tin đơn nghỉ: ID nhân viên/người phê duyệt, snapshot phòng ban, ID loại nghỉ, khoảng thời gian nghỉ, tổng số ngày, lý do (tối đa 1.000 ký tự), trạng thái và timestamps; có SQL `rowversion` |
 | `LeaveRequestHistories` | Lịch sử thao tác/trạng thái theo kiểu append, ID người thực hiện, ghi chú tùy chọn (tối đa 1.000 ký tự), thời gian thực hiện |
 | `LeaveRequestYearAllocations` | Số ngày được phân bổ cho từng năm dương lịch đối với đơn nghỉ kéo dài qua nhiều năm |
@@ -114,6 +114,11 @@ Các Scope đang được thực thi trong API là Self, Team và All. Departmen
 ```text
 LeaveBalances(EmployeeId, LeaveTypeId, Year)
 ```
+
+- CHECK constraints:
+  - `CK_LeaveBalances_Entitled_NonNegative`: `Entitled >= 0`
+  - `CK_LeaveBalances_Used_NonNegative`: `Used >= 0`
+  - `CK_LeaveBalances_Pending_NonNegative`: `Pending >= 0`
 
 Ngăn việc tạo trùng số dư phép cho cùng:
 
@@ -191,6 +196,7 @@ EF Core Migrations được version theo từng Infrastructure Project sở hữ
 ```text
 20261027041915_InitialLeaveSchema
 20261027060954_AddApprovalAndYearAllocations
+20261117031304_AddLeaveBalanceNonNegativeConstraints
 ```
 
 `DatabaseInitializer` của HR Service sẽ:
