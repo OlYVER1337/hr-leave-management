@@ -7,9 +7,9 @@
 | Repository | OlYVER1337/hr-leave-management |
 | Branch được rà soát | feature/dynamic-authorization-v1 |
 | Baseline code đã đối chiếu | 2bac8327b0ec64b5d1a1cb5d4de81e00e2bd6c4c |
-| HEAD trước commit cập nhật handoff này | 5be4d635aa13211f9d79a1326444a778f512118b |
+| HEAD trước commit cập nhật handoff này | 6b3640089a2ea39a0953b63f09d7a22db0b9806f |
 | Ngày rà soát | 17/11/2026 |
-| Phạm vi | Đối chiếu tài liệu với source, migrations, scripts và evidence trong branch |
+| Phạm vi | Đối chiếu tài liệu/source và bổ sung chú thích tiếng Việt giải thích mục đích, dữ liệu đầu vào, hành vi và assertion trong toàn bộ test HR, Leave và frontend |
 
 Đây là trạng thái feature branch. Không đồng nghĩa branch đã merge/release lên master hoặc production.
 
