@@ -8,7 +8,7 @@
 | Branch được rà soát | feature/dynamic-authorization-v1 |
 | Baseline code đã đối chiếu | 2bac8327b0ec64b5d1a1cb5d4de81e00e2bd6c4c |
 | HEAD trước commit cập nhật handoff này | dbab2ee7ceddb95a0ba753b5961564a7d7c69b69 |
-| Ngày rà soát | 16/11/2026 |
+| Ngày rà soát | 17/11/2026 |
 | Phạm vi | Đối chiếu tài liệu với source, migrations, scripts và evidence trong branch |
 
 Đây là trạng thái feature branch. Không đồng nghĩa branch đã merge/release lên master hoặc production.
@@ -57,7 +57,7 @@ Một lỗi lịch sử ở workload Workforce cũ ghi nhận 21 HTTP 500 tại 
 
 - Dynamic RBAC backend chưa đi cùng permission-driven React UI.
 - Role/Permission catalog CRUD chưa có; chỉ có seed baseline và UserRole assignment API.
-- Leave Balance chưa có bulk initialization hoặc sync khi policy đổi; GET balance chỉ đọc rows hiện hữu.
+- Leave Balance đã có self-sync theo employee/năm qua `POST /api/v1/leave-balances/mine/synchronize`; GET vẫn read-only. Đồng bộ lấy HR catalog authoritative, tạo row thiếu, giữ `Used`/`Pending`, cập nhật `Entitled` trong transaction `SERIALIZABLE`; khi quota mới < `Used + Pending` thì rollback và trả conflict. `CreateAsync` cũng refresh quota từ policy authoritative trong transaction trước khi cộng `Pending`. Chưa có HR bulk reconciliation cho toàn bộ nhân viên; thay đổi mới cần chạy lại full tests SQL/Web trên exact HEAD.
 - Leave request date validation và default balance year dùng UTC, trong khi HR policy year dùng UTC+07.
 - Inactive direct report có thể cần chuẩn hóa giữa lookup by-ID/batch và Team listing.
 - Không có Leave History GET endpoint; History chỉ được ghi.
