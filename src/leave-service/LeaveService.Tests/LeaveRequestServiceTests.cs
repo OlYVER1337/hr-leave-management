@@ -10,6 +10,7 @@ namespace LeaveService.Tests;
 
 public sealed class LeaveRequestServiceTests
 {
+    // Tính số ngày làm việc sau khi loại cuối tuần/ngày lễ, sau đó chia allocation theo năm và reserve balance.
     [Fact]
     public async Task CreateAsync_CalculatesWorkingDaysAndCreatesAnnualBalanceAllocations()
     {
@@ -87,6 +88,7 @@ public sealed class LeaveRequestServiceTests
             Times.Once);
     }
 
+    // Khoảng ngày không hợp lệ phải bị chặn trước khi gọi HR để tránh request dependency thừa.
     [Fact]
     public async Task CreateAsync_RejectsInvalidDateRangeBeforeCallingHr()
     {
@@ -105,6 +107,7 @@ public sealed class LeaveRequestServiceTests
         hrClient.VerifyNoOtherCalls();
     }
 
+    // Ngày bắt đầu đã qua theo business date Việt Nam phải bị từ chối trước khi gọi HR.
     [Fact]
     public async Task CreateAsync_RejectsPastStartDateBeforeCallingHr()
     {
@@ -123,6 +126,7 @@ public sealed class LeaveRequestServiceTests
         hrClient.VerifyNoOtherCalls();
     }
 
+    // Khoảng ngày lọc calendar không hợp lệ phải bị chặn trước khi truy vấn repository.
     [Fact]
     public async Task GetVisibleAsync_RejectsInvalidDateRangeBeforeCallingRepository()
     {
@@ -144,6 +148,7 @@ public sealed class LeaveRequestServiceTests
         repository.VerifyNoOtherCalls();
     }
 
+    // Calendar yêu cầu cả from và to; thiếu một trong hai không được tự suy diễn khoảng ngày.
     [Fact]
     public async Task GetVisibleAsync_CalendarRequiresBothDateBounds()
     {
@@ -173,6 +178,7 @@ public sealed class LeaveRequestServiceTests
         hrClient.VerifyNoOtherCalls();
     }
 
+    // Giới hạn calendar tối đa 62 ngày để tránh truy vấn/phản hồi quá rộng.
     [Fact]
     public async Task GetVisibleAsync_CalendarRejectsRangesLongerThan62Days()
     {
@@ -193,6 +199,7 @@ public sealed class LeaveRequestServiceTests
         hrClient.VerifyNoOtherCalls();
     }
 
+    // Nhân viên inactive không được tạo đơn nghỉ.
     [Fact]
     public async Task CreateAsync_RejectsInactiveEmployee()
     {
@@ -217,6 +224,7 @@ public sealed class LeaveRequestServiceTests
             Times.Never);
     }
 
+    // HR không khả dụng thì Leave phải fail closed và không lưu request/balance/history.
     [Fact]
     public async Task CreateAsync_DoesNotPersistWhenHrServiceIsUnavailable()
     {
@@ -246,6 +254,7 @@ public sealed class LeaveRequestServiceTests
             Times.Never);
     }
 
+    // Chỉ đúng người duyệt được xác minh từ HR mới được approve/reject request.
     [Theory]
     [InlineData(true, LeaveRequestStatus.Approved)]
     [InlineData(false, LeaveRequestStatus.Rejected)]
@@ -312,6 +321,7 @@ public sealed class LeaveRequestServiceTests
             Times.Once);
     }
 
+    // Manager không còn là quản lý hiện tại của nhân viên phải bị từ chối dù request lưu snapshot cũ.
     [Fact]
     public async Task DecideAsync_RejectsManagerWhoIsNoLongerTheEmployeesManager()
     {
@@ -340,6 +350,7 @@ public sealed class LeaveRequestServiceTests
         AssertNoTransition(repository);
     }
 
+    // Nhân viên inactive không thể được xử lý đơn chỉ dựa trên approver snapshot còn khớp.
     [Fact]
     public async Task DecideAsync_RejectsInactiveEmployeeEvenWhenManagerSnapshotMatches()
     {
@@ -366,6 +377,7 @@ public sealed class LeaveRequestServiceTests
         AssertNoTransition(repository);
     }
 
+    // Manager mới theo reporting line hiện tại vẫn được quyết định dù ApproverId lúc tạo đơn đã cũ.
     [Fact]
     public async Task DecideAsync_AllowsNewManagerAfterReassignmentEvenWhenSnapshotIsStale()
     {
@@ -409,6 +421,7 @@ public sealed class LeaveRequestServiceTests
         Assert.Equal(LeaveRequestStatus.Approved, result.Status);
     }
 
+    // Không cho phép employee/manager tự phê duyệt đơn của chính mình, kể cả có global scope.
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -442,6 +455,7 @@ public sealed class LeaveRequestServiceTests
         AssertNoTransition(repository);
     }
 
+    // Khoảng nghỉ quá một năm bị chặn sớm để giới hạn số policy/holiday cần truy vấn.
     [Fact]
     public async Task CreateAsync_RejectsRangeLongerThanOneYearBeforeCallingHr()
     {
@@ -461,6 +475,7 @@ public sealed class LeaveRequestServiceTests
         hrClient.VerifyNoOtherCalls();
     }
 
+    // Scope Self chỉ cần kiểm tra ownership; không cần gọi HR để xác định team.
     [Fact]
     public async Task GetVisibleByIdAsync_SelfScopeReturnsOwnRequestWithoutCallingHr()
     {
@@ -498,6 +513,7 @@ public sealed class LeaveRequestServiceTests
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    // Scope Team phải lấy danh sách thành viên hiện tại từ HR trước khi truy vấn đơn.
     [Fact]
     public async Task GetVisibleByIdAsync_TeamScopeResolvesCurrentTeamFromHr()
     {
@@ -538,6 +554,7 @@ public sealed class LeaveRequestServiceTests
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    // Scope All không cần tra cứu reporting line ở HR.
     [Fact]
     public async Task GetVisibleByIdAsync_AllScopeDoesNotCallHr()
     {
@@ -569,6 +586,7 @@ public sealed class LeaveRequestServiceTests
         hrClient.VerifyNoOtherCalls();
     }
 
+    // Thiếu permission thì từ chối ngay, không gọi HR hoặc database.
     [Fact]
     public async Task GetVisibleByIdAsync_RejectsMissingPermissionBeforeCallingHrOrRepository()
     {
@@ -583,6 +601,7 @@ public sealed class LeaveRequestServiceTests
         repository.VerifyNoOtherCalls();
     }
 
+    // List/calendar phải xác minh read permission trước khi gọi repository.
     [Fact]
     public async Task GetVisibleAsync_RejectsMissingReadPermissionBeforeRepository()
     {
@@ -604,6 +623,7 @@ public sealed class LeaveRequestServiceTests
         repository.VerifyNoOtherCalls();
     }
 
+    // Team filter dùng employee IDs HR trả về ở thời điểm truy vấn.
     [Fact]
     public async Task GetVisibleAsync_UsesCurrentTeamIdsFromHrForTeamScope()
     {
@@ -656,6 +676,7 @@ public sealed class LeaveRequestServiceTests
             Times.Once);
     }
 
+    // Scope Self không được gọi HR dư thừa để lấy team membership.
     [Fact]
     public async Task GetVisibleAsync_SelfScopeDoesNotCallHr()
     {
@@ -699,6 +720,7 @@ public sealed class LeaveRequestServiceTests
             Times.Once);
     }
 
+    // Scope All truy vấn trực tiếp theo phạm vi toàn cục, không cần HR team lookup.
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -745,6 +767,7 @@ public sealed class LeaveRequestServiceTests
             Times.Once);
     }
 
+    // HR team lookup lỗi thì fail closed, không chạy truy vấn với phạm vi thiếu.
     [Fact]
     public async Task GetVisibleAsync_HrTeamLookupFailureDoesNotQueryRepository()
     {
@@ -771,6 +794,7 @@ public sealed class LeaveRequestServiceTests
         repository.VerifyNoOtherCalls();
     }
 
+    // Team không có thành viên truyền danh sách rỗng xuống repository, không được bỏ điều kiện lọc.
     [Fact]
     public async Task GetVisibleAsync_TeamLookupWithNoMembersPassesEmptyScopeToRepository()
     {
@@ -816,6 +840,7 @@ public sealed class LeaveRequestServiceTests
             Times.Once);
     }
 
+    // Người có quyền decide All lấy inbox toàn cục mà không cần gọi HR.
     [Fact]
     public async Task GetPendingAsync_ForGlobalDeciderDoesNotCallHr()
     {
@@ -837,6 +862,7 @@ public sealed class LeaveRequestServiceTests
         hrClient.VerifyNoOtherCalls();
     }
 
+    // Không có leaves.decide thì không được truy cập inbox chờ duyệt.
     [Fact]
     public async Task GetPendingAsync_RejectsCallerWithoutDecisionPermission()
     {
@@ -851,6 +877,7 @@ public sealed class LeaveRequestServiceTests
         hrClient.VerifyNoOtherCalls();
     }
 
+    // HR/global decider được xử lý theo All scope mà không cần manager membership lookup.
     [Fact]
     public async Task DecideAsync_ForGlobalDeciderDoesNotCallHr()
     {
@@ -899,6 +926,7 @@ public sealed class LeaveRequestServiceTests
         hrClient.VerifyNoOtherCalls();
     }
 
+    // Inbox của Manager phải dựa vào team membership hiện tại từ HR.
     [Fact]
     public async Task GetPendingAsync_ForManagerUsesCurrentTeamFromHr()
     {
@@ -932,6 +960,7 @@ public sealed class LeaveRequestServiceTests
             Times.Once);
     }
 
+    // Thiếu decision permission thì summary không gọi HR/repository.
     [Fact]
     public async Task GetSummaryAsync_RejectsCallerWithoutDecisionPermissionBeforeCallingDependencies()
     {
@@ -951,6 +980,7 @@ public sealed class LeaveRequestServiceTests
         hrClient.VerifyNoOtherCalls();
     }
 
+    // Caller chỉ có quyền decide nhận Pending count; các thống kê cần read scope phải để null.
     [Fact]
     public async Task GetSummaryAsync_DecisionOnlyCallerReceivesPendingCountAndNoReadMetrics()
     {
@@ -986,6 +1016,7 @@ public sealed class LeaveRequestServiceTests
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    // Team membership được lấy từ HR; Pending và Approved/Total phải áp dụng đúng scope riêng.
     [Fact]
     public async Task GetSummaryAsync_UsesCurrentTeamAndKeepsReadAndDecisionScopesSeparate()
     {
@@ -1022,6 +1053,7 @@ public sealed class LeaveRequestServiceTests
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    // Các global scope xử lý trực tiếp mà không cần truy vấn HR team.
     [Fact]
     public async Task GetSummaryAsync_GlobalScopesDoNotCallHr()
     {
@@ -1057,6 +1089,7 @@ public sealed class LeaveRequestServiceTests
                 It.IsAny<CancellationToken>()),
             Times.Never);
 
+    // Chủ đơn hủy request Pending phải ghi lại trạng thái Cancelled và lịch sử thao tác.
     [Fact]
     public async Task CancelAsync_RecordsEmployeeCancellation()
     {
