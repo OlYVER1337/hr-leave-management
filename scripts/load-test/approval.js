@@ -136,15 +136,15 @@ export default function (data) {
   const index = (perManagerVu * iterationsPerVu) + __ITER;
   const token = slot.token;
   const requestId = slot.ids[index];
-  const response = http.post(
-    `${leaveBaseUrl}/api/v1/leave-requests/${requestId}/approve`,
-    JSON.stringify({ note: 'Load-test approval' }),
+  const response = http.patch(
+    `${leaveBaseUrl}/api/v1/leave-requests/${requestId}/decision`,
+    JSON.stringify({ decision: 'approve', note: 'Load-test approval' }),
     {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      tags: { endpoint: 'approve_leave_request' },
+      tags: { endpoint: 'leave_decision' },
     },
   );
 
