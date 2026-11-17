@@ -279,6 +279,7 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
         Assert.Equal(manager, persisted.ApproverId);
     }
 
+    // Kiểm tra điều kiện overlap theo khoảng ngày: bao gồm hai đầu mút giao nhau và loại các request nằm hoàn toàn bên ngoài.
     [LeaveSqlFact]
 public async Task DateRange_IncludesOverlapIncludingBoundaries_ExcludesOutside()
 {
