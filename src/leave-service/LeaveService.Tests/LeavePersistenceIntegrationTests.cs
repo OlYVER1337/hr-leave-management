@@ -152,6 +152,7 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
             item => item.EmployeeId == employeeId && item.LeaveTypeId == 2 && item.Year == 2027));
     }
 
+    // Kiểm tra SQL transaction lưu request, history và tăng Pending cùng nhau; không được chỉ lưu một phần.
     [LeaveSqlFact]
     public async Task CreateAsync_PersistsRequestHistoryAndPendingBalanceAtomically()
     {
@@ -243,6 +244,7 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
         Assert.Equal(3m, balance.Entitled);
     }
 
+    // Nhiều request đồng thời cùng sử dụng balance mới không được làm tổng Pending vượt Entitled.
     [LeaveSqlFact]
     public async Task CreateAsync_ConcurrentRequestsCannotOverdrawNewBalance()
     {
@@ -407,6 +409,7 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
         Assert.False(await verifyContext.LeaveRequestHistories.AnyAsync(item => item.LeaveRequestId == request.Id));
     }
 
+    // Approve chuyển Pending sang Used; Reject/Cancel giải phóng Pending và mọi thay đổi phải đi cùng history.
     [LeaveSqlFact]
     public async Task TransitionAsync_UpdatesBalancesAndHistoryForApprovalRejectionAndCancellation()
     {
@@ -557,6 +560,7 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
         Assert.Equal(0m, persistedBalances[cancelledEmployee].Pending);
     }
 
+    // Nhiều request trùng ngày của cùng nhân viên chạy song song: chỉ một request được tạo thành công.
     [LeaveSqlFact]
     public async Task CreateAsync_ManyConcurrentOverlappingRequestsForSameEmployeeCreateExactlyOne()
     {
@@ -610,6 +614,7 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
             item => verifyContext.LeaveRequests.Any(r => r.Id == item.LeaveRequestId && r.EmployeeId == employeeId)));
     }
 
+    // Khi quan hệ Manager hiện tại đã đổi, repository dùng approver đã được HR xác minh thay vì snapshot cũ.
     [LeaveSqlFact]
     public async Task TransitionAsync_UsesVerifiedApproverWhenStoredSnapshotIsStale()
     {
@@ -658,6 +663,7 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
         }
     }
 
+    // Approve và Reject đồng thời trên một request phải chỉ có một chuyển trạng thái thành công.
     [LeaveSqlFact]
     public async Task TransitionAsync_ConcurrentApprovalAndRejectionApplyOnlyOneDecision()
     {
