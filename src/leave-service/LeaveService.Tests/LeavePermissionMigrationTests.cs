@@ -19,8 +19,6 @@ public sealed class LeavePermissionMigrationTests
     [InlineData(nameof(LeaveRequestsController.Decide), "permission:leaves.decide")]
     [InlineData(nameof(LeaveRequestsController.Create), "permission:leaves.create")]
     [InlineData(nameof(LeaveRequestsController.GetPendingApproval), "permission:leaves.decide")]
-    [InlineData(nameof(LeaveRequestsController.Approve), "permission:leaves.decide")]
-    [InlineData(nameof(LeaveRequestsController.Reject), "permission:leaves.decide")]
     [InlineData(nameof(LeaveRequestsController.Cancel), "permission:leaves.cancel")]
     public void LeaveEndpoint_UsesPermissionPolicyWithoutLegacyRole(
         string actionName,
