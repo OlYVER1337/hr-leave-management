@@ -58,6 +58,62 @@ public sealed class LeaveBalanceServiceTests
     }
 
     [Fact]
+    public async Task SynchronizeMineAsync_AcceptsMaximumHrPolicyEntitlement()
+    {
+        var employeeId = Guid.NewGuid();
+        var repository = new Mock<ILeaveRequestRepository>();
+        var hrClient = new Mock<ILeaveHrClient>();
+        hrClient.Setup(item => item.GetLeaveCatalogAsync(2027, "Bearer token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new HrLeaveCatalog(
+                [new HrLeaveType(1, "ANNUAL", "Annual", true, true, true)],
+                [new HrLeavePolicy(11, 1, "ANNUAL", "Annual", 2027, 366m)]));
+        repository.Setup(item => item.SynchronizeBalancesAsync(
+                employeeId,
+                2027,
+                It.Is<IReadOnlyList<LeaveBalanceEntitlement>>(values =>
+                    values.Count == 1 && values[0].Entitled == 366m),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<LeaveBalance>)[new LeaveBalance
+            {
+                EmployeeId = employeeId,
+                LeaveTypeId = 1,
+                Year = 2027,
+                Entitled = 366m
+            }]);
+        var service = new LeaveBalanceService(repository.Object, hrClient.Object, TimeProvider.System);
+
+        var balance = Assert.Single(await service.SynchronizeMineAsync(employeeId, 2027, "Bearer token"));
+
+        Assert.Equal(366m, balance.Entitled);
+        Assert.Equal(366m, balance.Available);
+    }
+
+    [Theory]
+    [InlineData(-0.1)]
+    [InlineData(366.1)]
+    [InlineData(15.25)]
+    public async Task SynchronizeMineAsync_RejectsInvalidPolicyEntitlementBeforeWriting(decimal days)
+    {
+        var employeeId = Guid.NewGuid();
+        var repository = new Mock<ILeaveRequestRepository>();
+        var hrClient = new Mock<ILeaveHrClient>();
+        hrClient.Setup(item => item.GetLeaveCatalogAsync(2027, "Bearer token", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new HrLeaveCatalog(
+                [new HrLeaveType(1, "ANNUAL", "Annual", true, true, true)],
+                [new HrLeavePolicy(11, 1, "ANNUAL", "Annual", 2027, days)]));
+        var service = new LeaveBalanceService(repository.Object, hrClient.Object, TimeProvider.System);
+
+        await Assert.ThrowsAsync<LeaveConflictException>(() =>
+            service.SynchronizeMineAsync(employeeId, 2027, "Bearer token"));
+
+        repository.Verify(item => item.SynchronizeBalancesAsync(
+            It.IsAny<Guid>(),
+            It.IsAny<int>(),
+            It.IsAny<IReadOnlyList<LeaveBalanceEntitlement>>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task SynchronizeMineAsync_UsesVietnamBusinessYearWhenYearIsOmitted()
     {
         var employeeId = Guid.NewGuid();
