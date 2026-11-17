@@ -24,6 +24,129 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
     }
 
     [LeaveSqlFact]
+    public async Task SynchronizeBalancesAsync_CreatesRowsAndIsIdempotent()
+    {
+        var employeeId = Guid.NewGuid();
+        var entitlements = new[]
+        {
+            new LeaveBalanceEntitlement(2, 15m),
+            new LeaveBalanceEntitlement(3, 10m)
+        };
+
+        await using (var context = _fixture.CreateContext())
+        {
+            var balances = await new LeaveRequestRepository(context).SynchronizeBalancesAsync(
+                employeeId, 2027, entitlements);
+            Assert.Equal(2, balances.Count);
+        }
+
+        await using (var context = _fixture.CreateContext())
+        {
+            var balances = await new LeaveRequestRepository(context).SynchronizeBalancesAsync(
+                employeeId, 2027, entitlements);
+            Assert.Equal(2, balances.Count);
+            Assert.All(balances, item =>
+            {
+                Assert.Equal(0m, item.Used);
+                Assert.Equal(0m, item.Pending);
+            });
+        }
+
+        await using var verifyContext = _fixture.CreateContext();
+        Assert.Equal(2, await verifyContext.LeaveBalances.CountAsync(
+            item => item.EmployeeId == employeeId && item.Year == 2027));
+    }
+
+    [LeaveSqlFact]
+    public async Task SynchronizeBalancesAsync_UpdatesEntitlementAndPreservesUsedAndPending()
+    {
+        var employeeId = Guid.NewGuid();
+        await using (var seedContext = _fixture.CreateContext())
+        {
+            seedContext.LeaveBalances.Add(new LeaveBalance
+            {
+                EmployeeId = employeeId,
+                LeaveTypeId = 2,
+                Year = 2027,
+                Entitled = 12m,
+                Used = 3m,
+                Pending = 2m
+            });
+            await seedContext.SaveChangesAsync();
+        }
+
+        await using (var context = _fixture.CreateContext())
+        {
+            var result = await new LeaveRequestRepository(context).SynchronizeBalancesAsync(
+                employeeId,
+                2027,
+                [new LeaveBalanceEntitlement(2, 18m)]);
+            var balance = Assert.Single(result);
+            Assert.Equal(18m, balance.Entitled);
+            Assert.Equal(3m, balance.Used);
+            Assert.Equal(2m, balance.Pending);
+            Assert.Equal(13m, balance.Entitled - balance.Used - balance.Pending);
+        }
+    }
+
+    [LeaveSqlFact]
+    public async Task SynchronizeBalancesAsync_RejectsQuotaBelowUsedAndPendingWithoutChangingRow()
+    {
+        var employeeId = Guid.NewGuid();
+        await using (var seedContext = _fixture.CreateContext())
+        {
+            seedContext.LeaveBalances.Add(new LeaveBalance
+            {
+                EmployeeId = employeeId,
+                LeaveTypeId = 2,
+                Year = 2027,
+                Entitled = 12m,
+                Used = 5m,
+                Pending = 3m
+            });
+            await seedContext.SaveChangesAsync();
+        }
+
+        await using (var context = _fixture.CreateContext())
+        {
+            await Assert.ThrowsAsync<LeaveConflictException>(() =>
+                new LeaveRequestRepository(context).SynchronizeBalancesAsync(
+                    employeeId,
+                    2027,
+                    [new LeaveBalanceEntitlement(2, 7m)]));
+        }
+
+        await using var verifyContext = _fixture.CreateContext();
+        var saved = await verifyContext.LeaveBalances.SingleAsync(
+            item => item.EmployeeId == employeeId && item.LeaveTypeId == 2 && item.Year == 2027);
+        Assert.Equal(12m, saved.Entitled);
+        Assert.Equal(5m, saved.Used);
+        Assert.Equal(3m, saved.Pending);
+    }
+
+    [LeaveSqlFact]
+    public async Task SynchronizeBalancesAsync_ConcurrentCallsCreateOneRowPerLeaveType()
+    {
+        var employeeId = Guid.NewGuid();
+        const int attempts = 8;
+
+        async Task SynchronizeAsync()
+        {
+            await using var context = _fixture.CreateContext();
+            await new LeaveRequestRepository(context).SynchronizeBalancesAsync(
+                employeeId,
+                2027,
+                [new LeaveBalanceEntitlement(2, 15m)]);
+        }
+
+        await Task.WhenAll(Enumerable.Range(0, attempts).Select(_ => SynchronizeAsync()));
+
+        await using var verifyContext = _fixture.CreateContext();
+        Assert.Equal(1, await verifyContext.LeaveBalances.CountAsync(
+            item => item.EmployeeId == employeeId && item.LeaveTypeId == 2 && item.Year == 2027));
+    }
+
+    [LeaveSqlFact]
     public async Task CreateAsync_PersistsRequestHistoryAndPendingBalanceAtomically()
     {
         var employeeId = Guid.NewGuid();
