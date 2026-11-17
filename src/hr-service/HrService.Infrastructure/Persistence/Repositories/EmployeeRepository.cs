@@ -279,11 +279,9 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
         Guid managerId,
         CancellationToken cancellationToken = default)
     {
-        return await dbContext.Employees
-            .AsNoTracking()
+        return await BuildDirectReportsQuery(managerId)
             .Include(employee => employee.Department)
             .Include(employee => employee.Manager)
-            .Where(employee => employee.ManagerId == managerId && employee.IsActive)
             .OrderBy(employee => employee.FullName)
             .ToListAsync(cancellationToken);
     }
@@ -295,9 +293,7 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
         int pageSize,
         CancellationToken cancellationToken = default)
     {
-        var query = dbContext.Employees
-            .AsNoTracking()
-            .Where(employee => employee.ManagerId == managerId && employee.IsActive);
+        var query = BuildDirectReportsQuery(managerId);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -341,9 +337,7 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
         Guid managerId,
         CancellationToken cancellationToken = default)
     {
-        return await dbContext.Employees
-            .AsNoTracking()
-            .Where(employee => employee.ManagerId == managerId && employee.IsActive)
+        return await BuildDirectReportsQuery(managerId)
             .OrderBy(employee => employee.Id)
             .Select(employee => employee.Id)
             .ToArrayAsync(cancellationToken);
@@ -356,6 +350,15 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
         return dbContext.Employees
             .AsNoTracking()
             .AnyAsync(employee => employee.ManagerId == managerId, cancellationToken);
+    }
+
+    // Dùng chung phạm vi nhân viên trực thuộc đang hoạt động cho các truy vấn team.
+    // Mỗi API vẫn tự chọn projection, phân trang hoặc chỉ lấy ID theo nhu cầu.
+    private IQueryable<Employee> BuildDirectReportsQuery(Guid managerId)
+    {
+        return dbContext.Employees
+            .AsNoTracking()
+            .Where(employee => employee.ManagerId == managerId && employee.IsActive);
     }
 
     private IQueryable<Employee> BuildVisibleQuery(
