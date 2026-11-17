@@ -63,7 +63,4 @@ public sealed class EmployeeLookupController(EmployeeService employeeService) : 
             : null;
     }
 
-    private static bool IsValidPagination(int? page, int? pageSize) =>
-        page.HasValue && page.Value >= 1 &&
-        pageSize.HasValue && pageSize.Value is >= 1 and <= 100;
 }
