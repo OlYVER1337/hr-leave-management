@@ -61,7 +61,10 @@ public sealed class PermissionMigrationTests
     {
         var lookup = typeof(EmployeeLookupController);
         AssertPolicy(lookup, nameof(EmployeeLookupController.GetById), "permission:employees.read");
-        AssertPolicy(lookup, nameof(EmployeeLookupController.GetTeam), "permission:employees.read:team-or-all");
+        AssertPolicy(lookup, nameof(EmployeeLookupController.GetBatch), "permission:employees.read");
+
+        // Team lookup was consolidated into /api/v1/me/team.
+        Assert.Null(lookup.GetMethod("GetTeam"));
     }
 
     [Fact]
