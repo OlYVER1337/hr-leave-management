@@ -22,6 +22,13 @@ vi.mock('./mockStore', () => ({
   updateDemoState: vi.fn(),
 }));
 
+function getVietnamBusinessYear(): number {
+  return Number(new Intl.DateTimeFormat('en', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+  }).format(new Date()));
+}
+
 const employee: AuthUser = {
   id: 'employee-1',
   fullName: 'Nguyễn An',
@@ -108,7 +115,7 @@ describe('leave request summary and decisions', () => {
   });
 
   it('loads balances and catalog with two requests instead of three', async () => {
-    const year = new Date().getFullYear();
+    const year = getVietnamBusinessYear();
     mocks.leavePost.mockResolvedValue({
       data: [{
         leaveTypeId: 1,
@@ -254,7 +261,7 @@ describe('built-in leave policies', () => {
   });
 
   it('returns only the fixed three types and represents a deleted type as restorable', async () => {
-    const year = new Date().getFullYear() + 1;
+    const year = getVietnamBusinessYear() + 1;
     mocks.hrGet.mockImplementation(async (path: string) => {
       if (path === '/api/v1/leave-catalog') {
         return {
@@ -290,7 +297,7 @@ describe('built-in leave policies', () => {
   });
 
   it('restores a missing built-in type and creates its default annual policy', async () => {
-    const year = new Date().getFullYear() + 1;
+    const year = getVietnamBusinessYear() + 1;
     mocks.hrGet.mockImplementation(async (path: string) => {
       if (path === '/api/v1/leave-catalog') {
         return { data: { leaveTypes: [], leavePolicies: [] } };
