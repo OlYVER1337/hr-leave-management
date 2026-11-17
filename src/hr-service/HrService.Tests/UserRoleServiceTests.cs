@@ -13,6 +13,7 @@ public sealed class UserRoleServiceTests
     private static readonly DateTimeOffset Now =
         new(2026, 11, 11, 8, 0, 0, TimeSpan.Zero);
 
+    // Grant hợp lệ trong phạm vi quyền actor phải tạo assignment và audit record.
     [Fact]
     public async Task GrantAsync_AddsAssignmentAndAuditWhenGrantIsWithinActorAccess()
     {
@@ -64,6 +65,7 @@ public sealed class UserRoleServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    // Assignment hết hạn được gia hạn trên bản ghi hiện tại và audit phải giữ trạng thái trước cập nhật.
     [Fact]
     public async Task GrantAsync_RenewsExpiredAssignmentInPlaceAndAuditsPreviousState()
     {
@@ -119,6 +121,7 @@ public sealed class UserRoleServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    // Actor không được cấp role có quyền vượt quá permission scope mà chính họ được phép quản lý.
     [Fact]
     public async Task GrantAsync_RejectsGrantThatExceedsActorsPermissionScope()
     {
@@ -152,6 +155,7 @@ public sealed class UserRoleServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // Không cho actor tự gán role cho chính mình.
     [Fact]
     public async Task GrantAsync_RejectsSelfAssignment()
     {
@@ -173,6 +177,7 @@ public sealed class UserRoleServiceTests
             Times.Never);
     }
 
+    // Role có quyền quản lý role không được đặt thời hạn theo quy tắc bảo vệ administrator.
     [Fact]
     public async Task GrantAsync_RejectsExpirationForRoleThatGrantsRoleManagement()
     {
@@ -200,6 +205,7 @@ public sealed class UserRoleServiceTests
         repository.Verify(item => item.Add(It.IsAny<UserRole>()), Times.Never);
     }
 
+    // Không cho thu hồi assignment của administrator quản lý role cuối cùng còn hoạt động.
     [Fact]
     public async Task RevokeAsync_ProtectsLastActiveRoleManagementAdministrator()
     {
@@ -240,6 +246,7 @@ public sealed class UserRoleServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // Khi còn administrator khác, thu hồi phải lưu người thực hiện và audit.
     [Fact]
     public async Task RevokeAsync_RecordsActorAndAuditWhenAnotherAdministratorExists()
     {
