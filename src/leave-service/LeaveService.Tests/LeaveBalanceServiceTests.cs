@@ -10,12 +10,14 @@ namespace LeaveService.Tests;
 
 public sealed class LeaveBalanceServiceTests
 {
+    // Chỉ ANNUAL vừa active vừa trừ quota; SICK inactive và UNPAID không trừ quota nên không được tạo balance.
     [Fact]
     public async Task SynchronizeMineAsync_CreatesEntitlementsForActiveDeductingTypesOnly()
     {
         var employeeId = Guid.NewGuid();
         var repository = new Mock<ILeaveRequestRepository>();
         var hrClient = new Mock<ILeaveHrClient>();
+        // Catalog giả lập ba trường hợp: active + trừ quota, inactive + trừ quota và active + không trừ quota.
         var catalog = new HrLeaveCatalog(
             [
                 new HrLeaveType(1, "ANNUAL", "Annual", true, true, true),
@@ -57,6 +59,7 @@ public sealed class LeaveBalanceServiceTests
             It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    // HR cho phép quota tối đa 366 ngày; Leave Service phải chấp nhận đúng giá trị biên này.
     [Fact]
     public async Task SynchronizeMineAsync_AcceptsMaximumHrPolicyEntitlement()
     {
@@ -88,6 +91,7 @@ public sealed class LeaveBalanceServiceTests
         Assert.Equal(366m, balance.Available);
     }
 
+    // Kiểm tra quota âm, vượt giới hạn HR và có nhiều hơn một chữ số thập phân.
     [Theory]
     [InlineData(-0.1)]
     [InlineData(366.1)]
@@ -113,6 +117,7 @@ public sealed class LeaveBalanceServiceTests
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // 18:00 UTC ngày 31/12 tương ứng 01:00 ngày 01/01 tại Việt Nam, nên năm mặc định phải chuyển sang năm mới.
     [Fact]
     public async Task SynchronizeMineAsync_UsesVietnamBusinessYearWhenYearIsOmitted()
     {
@@ -124,6 +129,7 @@ public sealed class LeaveBalanceServiceTests
         repository.Setup(item => item.SynchronizeBalancesAsync(
                 employeeId, 2027, It.IsAny<IReadOnlyList<LeaveBalanceEntitlement>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<LeaveBalance>)[]);
+        // Cố định thời điểm sát giao thừa UTC để kiểm tra chuyển đổi năm theo giờ Việt Nam.
         var timeProvider = new FixedTimeProvider(
             new DateTimeOffset(2026, 12, 31, 18, 0, 0, TimeSpan.Zero));
         var service = new LeaveBalanceService(repository.Object, hrClient.Object, timeProvider);
@@ -134,6 +140,7 @@ public sealed class LeaveBalanceServiceTests
             2027, "Bearer token", It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    // Một leave type có hai policy cùng năm là dữ liệu không nhất quán; không được ghi balance.
     [Fact]
     public async Task SynchronizeMineAsync_RejectsDuplicatePoliciesBeforeWriting()
     {
@@ -159,6 +166,7 @@ public sealed class LeaveBalanceServiceTests
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // Leave type active nhưng thiếu policy cho năm yêu cầu: phải báo conflict trước khi gọi repository.
     [Fact]
     public async Task SynchronizeMineAsync_RejectsMissingPolicyBeforeWriting()
     {
@@ -181,6 +189,7 @@ public sealed class LeaveBalanceServiceTests
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // HR lỗi thì Leave phải fail closed, không ghi balance dựa trên quota cũ hoặc không xác định.
     [Fact]
     public async Task SynchronizeMineAsync_DoesNotWriteWhenHrCatalogIsUnavailable()
     {
@@ -202,6 +211,7 @@ public sealed class LeaveBalanceServiceTests
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // Kiểm tra employee ID và năm trước khi gọi HR hoặc database.
     [Fact]
     public async Task SynchronizeMineAsync_RejectsInvalidEmployeeOrYear()
     {
