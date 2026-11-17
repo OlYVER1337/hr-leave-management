@@ -15,6 +15,7 @@ public sealed class UserRoleRepositorySqlTests : IClassFixture<AuthorizationSeed
         _fixture = fixture;
     }
 
+    // Truy vấn SQL kiểm tra role catalog, assignment đang hoạt động và trạng thái administrator liên quan.
     [HrSqlFact]
     public async Task UserRoleQueries_ReturnActiveCatalogAssignmentsAndOtherAdministratorState()
     {
