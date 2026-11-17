@@ -20,27 +20,40 @@ vi.mock('./mockStore', () => ({
   updateDemoState: vi.fn(),
 }));
 
-import { getEmployeePage, getEmployeeSummary } from './hrService';
+import { getEmployeeOverviewPage, getEmployeePage } from './hrService';
 
-describe('getEmployeeSummary', () => {
+describe('getEmployeeOverviewPage', () => {
   beforeEach(() => {
     hrGetMock.mockReset();
   });
 
-  it('requests the permission-scoped employee summary endpoint', async () => {
-    hrGetMock.mockResolvedValue({
-      data: { total: 25, active: 23, managers: 4 },
-      headers: {},
-    });
+  it('uses the combined overview endpoint for page data and summary in API mode', async () => {
+    const overview = {
+      items: [],
+      totalCount: 0,
+      summary: { total: 25, active: 23, managers: 4 },
+    };
+    hrGetMock.mockResolvedValue({ data: overview, headers: {} });
 
-    await expect(getEmployeeSummary()).resolves.toEqual({
-      total: 25,
-      active: 23,
-      managers: 4,
-    });
+    await expect(getEmployeeOverviewPage({
+      page: 1,
+      pageSize: 10,
+      search: 'Minh',
+    })).resolves.toEqual(overview);
 
     expect(hrGetMock).toHaveBeenCalledTimes(1);
-    expect(hrGetMock).toHaveBeenCalledWith('/api/v1/employees/summary');
+    expect(hrGetMock).toHaveBeenCalledWith('/api/v1/employees/overview', {
+      params: {
+        page: 1,
+        pageSize: 10,
+        search: 'Minh',
+        role: undefined,
+        isActive: undefined,
+        departmentId: undefined,
+        sortBy: 'fullName',
+        sortDirection: 'asc',
+      },
+    });
   });
 });
 
