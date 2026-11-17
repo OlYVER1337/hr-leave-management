@@ -55,6 +55,20 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
                 };
                 context.LeaveBalances.Add(balance);
             }
+            else
+            {
+                var committedAndPending = balance.Used + balance.Pending;
+                if (allocation.Entitled < committedAndPending)
+                {
+                    throw new LeaveConflictException(
+                        $"The current HR entitlement for {allocation.Year} ({allocation.Entitled:0.0}) " +
+                        $"is below Used + Pending ({committedAndPending:0.0}).");
+                }
+
+                // The create flow already fetched the authoritative HR policy for this year.
+                // Reconcile the balance in the same transaction before reserving new days.
+                balance.Entitled = allocation.Entitled;
+            }
 
             var available = balance.Entitled - balance.Used - balance.Pending;
             if (allocation.Days > available)
