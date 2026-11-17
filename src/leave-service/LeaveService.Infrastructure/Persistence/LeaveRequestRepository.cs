@@ -688,6 +688,73 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
             .ConfigureAwait(false);
     }
 
+    public Task<IReadOnlyList<LeaveBalance>> SynchronizeBalancesAsync(
+        Guid employeeId,
+        int year,
+        IReadOnlyList<LeaveBalanceEntitlement> entitlements,
+        CancellationToken cancellationToken = default) =>
+        ExecuteWithRetryAsync(
+            () => SynchronizeBalancesOnceAsync(employeeId, year, entitlements, cancellationToken),
+            "Leave balances changed concurrently; retry the synchronization.",
+            cancellationToken);
+
+    private async Task<IReadOnlyList<LeaveBalance>> SynchronizeBalancesOnceAsync(
+        Guid employeeId,
+        int year,
+        IReadOnlyList<LeaveBalanceEntitlement> entitlements,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = await context.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
+        var balances = await context.LeaveBalances
+            .Where(item => item.EmployeeId == employeeId && item.Year == year)
+            .ToListAsync(cancellationToken);
+        var balancesByType = balances.ToDictionary(item => item.LeaveTypeId);
+
+        foreach (var entitlement in entitlements)
+        {
+            if (entitlement.LeaveTypeId <= 0 || entitlement.Entitled < 0m)
+            {
+                throw new LeaveConflictException("The HR catalog contains an invalid leave entitlement.");
+            }
+
+            if (!balancesByType.TryGetValue(entitlement.LeaveTypeId, out var balance))
+            {
+                balance = new LeaveBalance
+                {
+                    EmployeeId = employeeId,
+                    LeaveTypeId = entitlement.LeaveTypeId,
+                    Year = year,
+                    Entitled = entitlement.Entitled
+                };
+                context.LeaveBalances.Add(balance);
+                balances.Add(balance);
+                balancesByType.Add(entitlement.LeaveTypeId, balance);
+                continue;
+            }
+
+            var committedAndPending = balance.Used + balance.Pending;
+            if (entitlement.Entitled < committedAndPending)
+            {
+                throw new LeaveConflictException(
+                    $"The new entitlement for leave type '{entitlement.LeaveTypeId}' in {year} " +
+                    $"({entitlement.Entitled:0.0}) is below Used + Pending ({committedAndPending:0.0}).");
+            }
+
+            // Only the policy-derived entitlement changes; historical usage is preserved.
+            balance.Entitled = entitlement.Entitled;
+        }
+
+        await context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return balances
+            .OrderBy(item => item.LeaveTypeId)
+            .ToArray();
+    }
+
     private async Task<IReadOnlyList<LeaveBalance>> UpdateBalancesAsync(
         LeaveRequest request,
         bool approve,
