@@ -36,23 +36,14 @@ export interface EmployeeSummary {
   managers: number;
 }
 
-export async function getEmployeeSummary(): Promise<EmployeeSummary> {
-  if (DEMO_MODE) {
-    const employees = loadDemoState().employees;
-    const activeEmployees = employees.filter((employee) => employee.isActive);
-    return {
-      total: employees.length,
-      active: activeEmployees.length,
-      managers: activeEmployees.filter((employee) => employee.role === 'Manager').length,
-    };
-  }
-
-  try {
-    const { data } = await hrApi.get<EmployeeSummary>('/api/v1/employees/summary');
-    return data;
-  } catch (error) {
-    throw new Error(getApiErrorMessage(error));
-  }
+function getDemoEmployeeSummary(): EmployeeSummary {
+  const employees = loadDemoState().employees;
+  const activeEmployees = employees.filter((employee) => employee.isActive);
+  return {
+    total: employees.length,
+    active: activeEmployees.length,
+    managers: activeEmployees.filter((employee) => employee.role === 'Manager').length,
+  };
 }
 
 export interface EmployeeOverview extends PagedResult<Employee> {
@@ -68,7 +59,7 @@ export async function getEmployeeOverviewPage(
   if (DEMO_MODE) {
     const [result, summary] = await Promise.all([
       getEmployeePage({ ...query, page, pageSize }),
-      getEmployeeSummary(),
+      getDemoEmployeeSummary(),
     ]);
     return { ...result, summary };
   }
