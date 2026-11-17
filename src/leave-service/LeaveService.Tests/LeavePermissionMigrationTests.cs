@@ -10,6 +10,7 @@ namespace LeaveService.Tests;
 
 public sealed class LeavePermissionMigrationTests
 {
+    // Các endpoint nghỉ phép phải dùng permission policy mới thay vì role legacy.
     [Theory]
     [InlineData(nameof(LeaveRequestsController.GetVisible), "permission:leaves.read")]
     [InlineData(nameof(LeaveRequestsController.GetCalendar), "permission:leaves.read")]
@@ -32,6 +33,7 @@ public sealed class LeavePermissionMigrationTests
         Assert.DoesNotContain(authorization, attribute => !string.IsNullOrWhiteSpace(attribute.Roles));
     }
 
+    // API balance cá nhân chỉ được gọi khi token có leaves.read với scope Self hoặc All.
     [Fact]
     public void PersonalBalanceEndpoint_RequiresSelfOrAllReadScope()
     {
@@ -43,6 +45,7 @@ public sealed class LeavePermissionMigrationTests
             attribute.Policy == "permission:leaves.read:self-or-all" && attribute.Roles is null);
     }
 
+    // Application service không nhận cờ IsHr vì quyền phải lấy từ effective permission.
     [Fact]
     public void LeaveRequestService_DoesNotAcceptIsHrFlag()
     {
@@ -51,6 +54,7 @@ public sealed class LeavePermissionMigrationTests
         AssertNoBooleanParameters(nameof(LeaveRequestService.DecideAsync));
     }
 
+    // LeaveAccess phải được tạo từ permission/scope claim có cấu trúc trong JWT.
     [Fact]
     public void LeaveRequestService_UsesLeaveAccessFromApplicationPermissions()
     {
@@ -66,6 +70,7 @@ public sealed class LeavePermissionMigrationTests
             property.Name == "CanDecideTeam" && property.PropertyType == typeof(bool));
     }
 
+    // Kiểm tra LeaveAccess đọc đúng authz version và danh sách permission/scope.
     [Fact]
     public void LeaveAccess_ReadsPermissionAndScopeFromVersionedJwtClaims()
     {
@@ -84,6 +89,7 @@ public sealed class LeavePermissionMigrationTests
         Assert.False(access.CanDecideAll);
     }
 
+    // Claim sai cấu trúc hoặc thiếu version không được coi là quyền hợp lệ.
     [Fact]
     public void LeaveAccess_RejectsInvalidOrUnversionedPermissionClaims()
     {
@@ -102,6 +108,7 @@ public sealed class LeavePermissionMigrationTests
     }
 
 
+    // Role HR legacy không tự cấp quyền truy cập trong Leave Service.
     [Fact]
     public void LeaveAccess_DoesNotGrantAccessFromLegacyHrRoleClaim()
     {
