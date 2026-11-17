@@ -6,6 +6,7 @@ namespace LeaveService.Tests;
 
 public sealed class HrServiceClientTests
 {
+    // Các lookup leave type, policy và holiday dùng authoritative=true để HR đọc SQL thay vì Redis cache.
     [Fact]
     public async Task CatalogLookups_RequestAuthoritativeSqlReads()
     {
@@ -54,6 +55,7 @@ public sealed class HrServiceClientTests
             Assert.Single(handler.RequestedUris));
     }
 
+    // Leave chỉ cần danh sách employee ID của team nên gọi leave-scope endpoint, không lấy toàn bộ hồ sơ nhân viên.
     [Fact]
     public async Task GetTeamEmployeeIds_UsesLeaveScopeEndpointAndReturnsOnlyIds()
     {
