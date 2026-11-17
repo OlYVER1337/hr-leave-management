@@ -10,6 +10,7 @@ namespace HrService.Tests;
 
 public sealed class AuthenticationServiceTests
 {
+    // Email được chuẩn hóa trước khi tra cứu; thông tin đăng nhập hợp lệ phải trả access token.
     [Fact]
     public async Task AuthenticateAsync_NormalizesEmailAndReturnsToken()
     {
@@ -103,6 +104,7 @@ public sealed class AuthenticationServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    // Các trường hợp thiếu email hoặc password phải bị từ chối trước bước xác thực.
     [Theory]
     [InlineData("", "some-password")]
     [InlineData("employee@example.com", "")]
@@ -133,6 +135,7 @@ public sealed class AuthenticationServiceTests
             Times.Never);
     }
 
+    // Dùng cùng thông báo lỗi cho email lạ và password sai để tránh dò tìm tài khoản.
     [Fact]
     public async Task AuthenticateAsync_UsesSameErrorForUnknownUserAndWrongPassword()
     {
@@ -168,6 +171,7 @@ public sealed class AuthenticationServiceTests
         Assert.Equal(401, unknownUser.StatusCode);
     }
 
+    // Refresh phải xoay refresh token đã lưu và tính lại permission hiện tại trước khi phát JWT mới.
     [Fact]
     public async Task RefreshAsync_RotatesPersistedTokenAndReevaluatesAuthorization()
     {
@@ -244,6 +248,7 @@ public sealed class AuthenticationServiceTests
             Times.Once);
     }
 
+    // Sau khi role bị thu hồi, refresh token cũ không được giữ permission đã mất.
     [Fact]
     public async Task RefreshAsync_AfterRoleRevocation_IssuesReducedAuthorization()
     {
@@ -318,6 +323,7 @@ public sealed class AuthenticationServiceTests
             Times.Once);
     }
 
+    // Không chấp nhận refresh token bị thiếu hoặc hết hạn.
     [Fact]
     public async Task RefreshAsync_RejectsMissingOrExpiredRefreshToken()
     {
