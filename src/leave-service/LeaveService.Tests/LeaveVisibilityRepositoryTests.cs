@@ -57,6 +57,7 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
         return result is not null;
     }
 
+    // Truy vấn SQL phải lọc đơn theo Self, Team hoặc All đúng với quyền được truyền vào.
     [LeaveSqlFact]
     public async Task GetVisibleById_EnforcesSelfTeamAndAllScopes()
     {
@@ -97,6 +98,7 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
             new LeavePermissionGrant("leaves.decide", ["All"])
         ]);
 
+    // Team scope dựa trên membership hiện tại từ HR, không dựa ApproverId snapshot cũ.
     [LeaveSqlFact]
     public async Task TeamScope_UsesCurrentHrTeamMembership_NotApproverSnapshot()
     {
@@ -115,6 +117,7 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
         Assert.DoesNotContain(movedRequest.Id, visible);
     }
 
+    // Scope All được xem đơn của mọi nhân viên và không phụ thuộc người duyệt.
     [LeaveSqlFact]
     public async Task AllScope_SeesRequestsOfAnyEmployeeAndApprover()
     {
@@ -127,6 +130,7 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
         Assert.Contains(b.Id, visible);
     }
 
+    // Scope Self chỉ trả về đơn do chính actor tạo.
     [LeaveSqlFact]
     public async Task SelfScope_OnlyReturnsRequestsOwnedByActor()
     {
@@ -142,6 +146,7 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
         Assert.DoesNotContain(assignedRequest.Id, visible);
     }
 
+    // Team rỗng phải trả kết quả rỗng, không được hiểu nhầm thành bỏ lọc.
     [LeaveSqlFact]
     public async Task TeamScope_EmptyTeamDoesNotWidenAccess()
     {
@@ -153,6 +158,7 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
         Assert.DoesNotContain(request.Id, visible);
     }
 
+    // Khi chỉ được cấp Team, dữ liệu trả về phải giới hạn trong danh sách thành viên team.
     [LeaveSqlFact]
     public async Task TeamOnly_ReturnsRequestsOfTeamMembersAndNotOwnRequests()
     {
@@ -167,6 +173,7 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
         Assert.Contains(memberRequest.Id, visible);
     }
 
+    // Lịch chỉ hiển thị các đơn Pending hoặc Approved theo quy tắc nghiệp vụ.
     [LeaveSqlFact]
     public async Task Calendar_ReturnsOnlyPendingAndApproved()
     {
@@ -201,6 +208,7 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
         Assert.DoesNotContain(cancelled.Id, calendar);
     }
 
+    // Pending lấy theo decision scope; Approved/Total lấy theo read scope, hai quyền không được nhập làm một.
     [LeaveSqlFact]
     public async Task GetSummaryAsync_AppliesReadAndDecisionScopesIndependently()
     {
@@ -243,6 +251,7 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
         Assert.Equal((Pending: 1, Approved: 1, Total: 2), summary);
     }
 
+    // Quyết định trong Team phải xác minh quan hệ Manager hiện tại và không dùng ApproverId snapshot làm căn cứ.
     [LeaveSqlFact]
     public async Task TeamDecision_RequiresLiveManagerVerificationAndNeverUsesApproverSnapshot()
     {
