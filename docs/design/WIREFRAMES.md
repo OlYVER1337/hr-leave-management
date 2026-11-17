@@ -487,7 +487,7 @@ thể vượt qua giới hạn bằng cách gọi API trực tiếp.
 2. Frontend gọi pending-approval.
 3. Người duyệt mở modal xem employee, dates, type, reason.
 4. Có thể nhập optional note.
-5. Gửi approve hoặc reject.
+5. Gửi PATCH /{id}/decision với decision=approve hoặc decision=reject.
 6. Backend xác thực role, quyền trên employee, trạng thái Pending và chống tự duyệt.
 7. Cập nhật status, balance, history.
 8. Frontend toast kết quả và reload inbox.
@@ -516,7 +516,7 @@ Employee mở My Leaves → action chỉ hiển thị với request Pending củ
 | My requests | Leave LeaveRequestsController | GET /api/v1/leave-requests/mine |
 | Calendar | Leave LeaveRequestsController | GET /api/v1/leave-requests/calendar?from=&to= |
 | Approval inbox | Leave LeaveRequestsController | GET /api/v1/leave-requests/pending-approval |
-| Approve/reject | Leave LeaveRequestsController | POST /{id}/approve; POST /{id}/reject |
+| Approve/reject | Leave LeaveRequestsController | PATCH /{id}/decision |
 | My balance | Leave LeaveBalancesController | GET /api/v1/leave-balances/mine?year= |
 
 Endpoints are relative to each service's API base URL.
