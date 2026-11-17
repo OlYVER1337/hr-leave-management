@@ -114,7 +114,9 @@ describe('leave request summary and decisions', () => {
     expect(mocks.leaveGet).toHaveBeenCalledWith('/api/v1/leave-requests/summary');
   });
 
+  // Balance được khởi tạo/đồng bộ bằng POST; HR catalog cung cấp tên và metadata để hiển thị.
   it('loads balances and catalog with two requests instead of three', async () => {
+    // Dùng năm nghiệp vụ Việt Nam để test không phụ thuộc múi giờ máy chạy test.
     const year = getVietnamBusinessYear();
     mocks.leavePost.mockResolvedValue({
       data: [{
@@ -140,6 +142,7 @@ describe('leave request summary and decisions', () => {
       },
     });
 
+    // Hàm getBalances phải đồng bộ balance ở Leave Service rồi ghép dữ liệu catalog từ HR.
     const result = await getBalances(employee);
 
     expect(result).toHaveLength(1);
@@ -150,6 +153,7 @@ describe('leave request summary and decisions', () => {
       pending: 1,
       available: 12,
     });
+    // Chỉ có một POST đến Leave và một GET đến HR; không còn GET balance cũ hoặc request thừa.
     expect(mocks.leavePost).toHaveBeenCalledTimes(1);
     expect(mocks.leavePost).toHaveBeenCalledWith(
       '/api/v1/leave-balances/mine/synchronize',
