@@ -476,7 +476,7 @@ export async function getBalances(user: AuthUser): Promise<LeaveBalance[]> {
   try {
     const year = new Date().getFullYear();
     const [{ data: response }, { data: catalog }] = await Promise.all([
-      leaveApi.get<LeaveBalanceRecord[]>('/api/v1/leave-balances/mine', { params: { year } }),
+      leaveApi.post<LeaveBalanceRecord[]>('/api/v1/leave-balances/mine/synchronize', null, { params: { year } }),
       hrApi.get<LeaveCatalogRecord>('/api/v1/leave-catalog', { params: { year } }),
     ]);
     const { leaveTypes: types, leavePolicies: policies } = catalog;
