@@ -17,6 +17,7 @@ public sealed class AuthorizationSeederSqlTests : IClassFixture<AuthorizationSee
         _fixture = fixture;
     }
 
+    // Chạy seeder trên SQL Server để xác nhận baseline roles/permissions và backfill role legacy; chạy lặp lại không được nhân bản dữ liệu.
     [HrSqlFact]
     public async Task SeedAsync_CreatesBaselineAndBackfillsLegacyRoles_Idempotently()
     {
