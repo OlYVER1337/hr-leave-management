@@ -65,7 +65,8 @@ jobs:
               --output "docs/architecture/diagrams/png/$name.png" \
               --theme neutral \
               --backgroundColor white \
-              --scale 2
+              --scale 2 \
+              --puppeteerConfigFile .github/workflows/puppeteer-config.json
           done
 
       - name: Commit rendered diagrams
