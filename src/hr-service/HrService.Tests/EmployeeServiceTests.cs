@@ -14,6 +14,7 @@ namespace HrService.Tests;
 
 public sealed class EmployeeServiceTests
 {
+    // Đảm bảo endpoint overview dùng permission policy động thay vì role legacy.
     [Fact]
     public void EmployeeOverviewEndpointUsesExistingDynamicReadPolicy()
     {
@@ -26,6 +27,7 @@ public sealed class EmployeeServiceTests
             attribute.Policy == PermissionPolicies.EmployeesRead && attribute.Roles is null);
     }
 
+    // Kết quả nhân viên phải là hợp của Self và Team, không vượt phạm vi được cấp.
     [Fact]
     public async Task GetVisibleAsync_CombinesSelfAndTeamScopes()
     {
@@ -56,6 +58,7 @@ public sealed class EmployeeServiceTests
             Times.Once);
     }
 
+    // Danh sách phân trang và summary phải cùng tuân theo authorization scope của caller.
     [Fact]
     public async Task GetVisibleOverviewPagedAsync_ReturnsPageAndScopedSummary()
     {
@@ -128,6 +131,7 @@ public sealed class EmployeeServiceTests
             actorId, true, true, false, It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    // Không có read scope được hỗ trợ thì không được trả dữ liệu nhân viên.
     [Fact]
     public async Task GetVisibleAsync_RejectsAuthorizationWithoutSupportedReadScope()
     {
@@ -150,6 +154,7 @@ public sealed class EmployeeServiceTests
             Times.Never);
     }
 
+    // API Team yêu cầu đúng permission employees.read với scope Team.
     [Fact]
     public void GetTeamEndpoint_RequiresEmployeesReadTeamScope()
     {
@@ -163,6 +168,7 @@ public sealed class EmployeeServiceTests
             attribute.Policy == PermissionPolicies.EmployeesReadTeam && attribute.Roles is null);
     }
 
+    // Không cho lookup nhân viên nằm ngoài phạm vi của người gọi.
     [Fact]
     public async Task GetLookupAsync_RejectsUserOutsideEmployeeScope()
     {
@@ -180,6 +186,7 @@ public sealed class EmployeeServiceTests
             Times.Never);
     }
 
+    // Manager chỉ xem direct report và response chỉ chứa các trường lookup cần thiết.
     [Fact]
     public async Task GetLookupAsync_AllowsDirectManagerAndReturnsOnlyLookupFields()
     {
@@ -208,6 +215,7 @@ public sealed class EmployeeServiceTests
         Assert.DoesNotContain("Email", typeof(EmployeeLookupResponse).GetProperties().Select(property => property.Name));
     }
 
+    // Scope All cho phép lookup không cần quan hệ manager trực tiếp.
     [Fact]
     public async Task GetLookupAsync_AllowsAllScopeWithoutManagerRelationship()
     {
@@ -230,6 +238,7 @@ public sealed class EmployeeServiceTests
             Times.Never);
     }
 
+    // Danh sách Team phải được giới hạn vào các nhân viên báo cáo trực tiếp cho Manager.
     [Fact]
     public async Task GetTeamAsync_ReturnsEmployeesFromManagersDirectReports()
     {
@@ -254,6 +263,7 @@ public sealed class EmployeeServiceTests
             Times.Once);
     }
 
+    // Đổi mật khẩu phải xác minh mật khẩu hiện tại trước khi lưu mật khẩu mới.
     [Fact]
     public async Task ChangePasswordAsync_VerifiesCurrentPasswordHashesNewPasswordAndSaves()
     {
@@ -283,6 +293,7 @@ public sealed class EmployeeServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    // Mật khẩu hiện tại sai thì không được thay đổi dữ liệu.
     [Fact]
     public async Task ChangePasswordAsync_RejectsIncorrectCurrentPasswordWithoutSaving()
     {
@@ -310,6 +321,7 @@ public sealed class EmployeeServiceTests
             Times.Never);
     }
 
+    // Mật khẩu reset phải tuân theo giới hạn độ dài cấu hình.
     [Theory]
     [InlineData("short")]
     [InlineData("1234567890123456789012345678901")]
@@ -331,6 +343,7 @@ public sealed class EmployeeServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // Chuẩn hóa thông tin nhân viên và bảo đảm password được xử lý qua password hasher.
     [Fact]
     public async Task CreateAsync_NormalizesEmployeeFieldsAndHashesPassword()
     {
@@ -384,6 +397,7 @@ public sealed class EmployeeServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    // Gọi deactivate nhiều lần cho nhân viên đã inactive không tạo thêm thay đổi.
     [Fact]
     public async Task DeactivateAsync_IsIdempotentForAlreadyInactiveEmployee()
     {
@@ -412,6 +426,7 @@ public sealed class EmployeeServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // Khi deactivate phải thu hồi refresh token để tài khoản không tiếp tục refresh phiên.
     [Fact]
     public async Task DeactivateAsync_RevokesAllRefreshTokensWhenDeactivatingEmployee()
     {
@@ -439,6 +454,7 @@ public sealed class EmployeeServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    // Không cho bỏ role Manager khi nhân viên vẫn đang quản lý direct reports.
     [Fact]
     public async Task UpdateAsync_RejectsRemovingManagerRoleWhenEmployeeHasDirectReports()
     {
@@ -489,6 +505,7 @@ public sealed class EmployeeServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // Không cho nhân viên tự gán chính mình làm Manager.
     [Fact]
     public async Task UpdateAsync_RejectsSelfAsManagerWithoutSaving()
     {
