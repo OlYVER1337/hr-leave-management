@@ -9,6 +9,7 @@ namespace LeaveService.Tests;
 
 public sealed class HrCallMetricsMiddlewareTests
 {
+    // Middleware phải ghi metrics về lời gọi HR trước thời điểm response headers được gửi cho client.
     [Fact]
     public async Task AddsHrCallMetricsBeforeResponseStarts()
     {
