@@ -15,11 +15,12 @@ public sealed class LeaveTeamScopeControllerTests
     [Theory]
     [InlineData("leaves.read")]
     [InlineData("leaves.decide")]
-    public async Task GetTeamEmployeeIds_AllowsMatchingTeamPermission(string permissionCode)
+    public async Task GetTeamEmployeeIds_AllowsManagerWithMatchingTeamPermission(string permissionCode)
     {
         var managerId = Guid.NewGuid();
         var expectedIds = new[] { Guid.NewGuid(), Guid.NewGuid() };
         var controller = CreateController(
+            managerId,
             managerId,
             expectedIds,
             out var employeeRepository,
@@ -27,60 +28,57 @@ public sealed class LeaveTeamScopeControllerTests
 
         var action = await controller.GetTeamEmployeeIds(managerId, CancellationToken.None);
 
-        var response = Assert.IsType<OkObjectResult>(action.Result);
-        var actualIds = Assert.IsAssignableFrom<IReadOnlyList<Guid>>(response.Value);
-        Assert.Equal(expectedIds, actualIds);
-        employeeRepository.Verify(
-            repository => repository.GetDirectReportIdsAsync(
-                managerId,
-                It.IsAny<CancellationToken>()),
-            Times.Once);
+        AssertTeamIdsReturned(action, expectedIds);
+        VerifyTeamQuery(employeeRepository, managerId);
+    }
+
+    [Theory]
+    [InlineData("leaves.read")]
+    [InlineData("leaves.decide")]
+    public async Task GetTeamEmployeeIds_AllowsHrWithAllPermissionToQueryAnotherManager(string permissionCode)
+    {
+        var hrEmployeeId = Guid.NewGuid();
+        var managerId = Guid.NewGuid();
+        var expectedIds = new[] { Guid.NewGuid(), Guid.NewGuid() };
+        var controller = CreateController(
+            hrEmployeeId,
+            managerId,
+            expectedIds,
+            out var employeeRepository,
+            (permissionCode, "All"));
+
+        var action = await controller.GetTeamEmployeeIds(managerId, CancellationToken.None);
+
+        AssertTeamIdsReturned(action, expectedIds);
+        VerifyTeamQuery(employeeRepository, managerId);
     }
 
     [Fact]
-    public async Task GetTeamEmployeeIds_DoesNotRequireEmployeesReadPermission()
+    public async Task GetTeamEmployeeIds_AllowsAllScopeForOwnTeam()
     {
         var managerId = Guid.NewGuid();
         var expectedIds = new[] { Guid.NewGuid() };
         var controller = CreateController(
             managerId,
+            managerId,
             expectedIds,
             out var employeeRepository,
-            ("leaves.read", "Team"));
+            ("leaves.read", "All"));
 
         var action = await controller.GetTeamEmployeeIds(managerId, CancellationToken.None);
 
-        Assert.IsType<OkObjectResult>(action.Result);
-        employeeRepository.Verify(
-            repository => repository.GetDirectReportIdsAsync(
-                managerId,
-                It.IsAny<CancellationToken>()),
-            Times.Once);
+        AssertTeamIdsReturned(action, expectedIds);
+        VerifyTeamQuery(employeeRepository, managerId);
     }
 
     [Fact]
-    public async Task GetTeamEmployeeIds_DeniesEmployeesReadOnlyPermission()
-    {
-        var managerId = Guid.NewGuid();
-        var controller = CreateController(
-            managerId,
-            [],
-            out var employeeRepository,
-            ("employees.read", "Team"));
-
-        var action = await controller.GetTeamEmployeeIds(managerId, CancellationToken.None);
-
-        Assert.IsType<ForbidResult>(action.Result);
-        employeeRepository.VerifyNoOtherCalls();
-    }
-
-    [Fact]
-    public async Task GetTeamEmployeeIds_DeniesQueryForAnotherManager()
+    public async Task GetTeamEmployeeIds_DeniesTeamPermissionForAnotherManager()
     {
         var requesterId = Guid.NewGuid();
         var otherManagerId = Guid.NewGuid();
         var controller = CreateController(
             requesterId,
+            otherManagerId,
             [],
             out var employeeRepository,
             ("leaves.read", "Team"));
@@ -92,16 +90,35 @@ public sealed class LeaveTeamScopeControllerTests
     }
 
     [Fact]
-    public async Task GetTeamEmployeeIds_DoesNotTreatAllAsTeamPermission()
+    public async Task GetTeamEmployeeIds_DeniesAllWhenCallerHasNoLeaveAllPermission()
+    {
+        var requesterId = Guid.NewGuid();
+        var otherManagerId = Guid.NewGuid();
+        var controller = CreateController(
+            requesterId,
+            otherManagerId,
+            [],
+            out var employeeRepository,
+            ("employees.read", "All"));
+
+        var action = await controller.GetTeamEmployeeIds(otherManagerId, CancellationToken.None);
+
+        Assert.IsType<ForbidResult>(action.Result);
+        employeeRepository.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetTeamEmployeeIds_DeniesWhenManagerHasOnlyAllPermissionForDifferentPermission()
     {
         var managerId = Guid.NewGuid();
         var controller = CreateController(
             managerId,
+            Guid.NewGuid(),
             [],
             out var employeeRepository,
-            ("leaves.read", "All"));
+            ("employees.read", "All"));
 
-        var action = await controller.GetTeamEmployeeIds(managerId, CancellationToken.None);
+        var action = await controller.GetTeamEmployeeIds(Guid.NewGuid(), CancellationToken.None);
 
         Assert.IsType<ForbidResult>(action.Result);
         employeeRepository.VerifyNoOtherCalls();
@@ -109,6 +126,7 @@ public sealed class LeaveTeamScopeControllerTests
 
     private static LeaveTeamScopeController CreateController(
         Guid requesterId,
+        Guid queriedManagerId,
         IReadOnlyList<Guid> teamEmployeeIds,
         out Mock<IEmployeeRepository> employeeRepository,
         params (string PermissionCode, string Scope)[] grants)
@@ -116,7 +134,7 @@ public sealed class LeaveTeamScopeControllerTests
         employeeRepository = new Mock<IEmployeeRepository>();
         employeeRepository
             .Setup(repository => repository.GetDirectReportIdsAsync(
-                requesterId,
+                queriedManagerId,
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(teamEmployeeIds);
 
@@ -146,5 +164,26 @@ public sealed class LeaveTeamScopeControllerTests
             HttpContext = new DefaultHttpContext { User = principal }
         };
         return controller;
+    }
+
+    private static void AssertTeamIdsReturned(
+        ActionResult<IReadOnlyList<Guid>> action,
+        IReadOnlyList<Guid> expectedIds)
+    {
+        var response = Assert.IsType<OkObjectResult>(action.Result);
+        var actualIds = Assert.IsAssignableFrom<IReadOnlyList<Guid>>(response.Value);
+        Assert.Equal(expectedIds, actualIds);
+    }
+
+    private static void VerifyTeamQuery(
+        Mock<IEmployeeRepository> employeeRepository,
+        Guid managerId)
+    {
+        employeeRepository.Verify(
+            repository => repository.GetDirectReportIdsAsync(
+                managerId,
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+        employeeRepository.VerifyNoOtherCalls();
     }
 }
