@@ -8,6 +8,7 @@ namespace HrService.Tests;
 
 public sealed class AuthorizationServiceTests
 {
+    // Permission từ nhiều role được hợp nhất; các scope trùng phải được loại bỏ.
     [Fact]
     public async Task GetEffectiveAuthorizationAsync_UnionsAndDeduplicatesScopesAcrossRoles()
     {
@@ -48,6 +49,7 @@ public sealed class AuthorizationServiceTests
             Times.Once);
     }
 
+    // V1 chưa hỗ trợ Department scope nên service không được phát scope này.
     [Fact]
     public async Task GetEffectiveAuthorizationAsync_RejectsUnsupportedDepartmentScopeInV1()
     {
@@ -71,6 +73,7 @@ public sealed class AuthorizationServiceTests
         Assert.Empty(result.Permissions);
     }
 
+    // Không có grant hợp lệ thì kết quả authorization phải rỗng, không tự kế thừa quyền.
     [Fact]
     public async Task GetEffectiveAuthorizationAsync_ReturnsEmptyAuthorizationWhenNoGrantsExist()
     {
@@ -91,6 +94,7 @@ public sealed class AuthorizationServiceTests
         Assert.Empty(result.GetScopes("employees.read"));
     }
 
+    // Employee ID rỗng phải bị chặn ngay mà không truy cập repository.
     [Fact]
     public async Task GetEffectiveAuthorizationAsync_RejectsEmptyEmployeeIdWithoutQueryingRepository()
     {
