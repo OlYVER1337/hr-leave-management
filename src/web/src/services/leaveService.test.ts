@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   hrPost: vi.fn(),
   hrPut: vi.fn(),
   leaveGet: vi.fn(),
+  leavePost: vi.fn(),
   leavePatch: vi.fn(),
 }));
 
@@ -14,7 +15,7 @@ vi.mock('./config', () => ({ DEMO_MODE: false }));
 vi.mock('./apiClient', () => ({
   getApiErrorMessage: (error: unknown) => String(error),
   hrApi: { get: mocks.hrGet, post: mocks.hrPost, put: mocks.hrPut },
-  leaveApi: { get: mocks.leaveGet, patch: mocks.leavePatch },
+  leaveApi: { get: mocks.leaveGet, post: mocks.leavePost, patch: mocks.leavePatch },
 }));
 vi.mock('./mockStore', () => ({
   loadDemoState: vi.fn(),
@@ -108,7 +109,7 @@ describe('leave request summary and decisions', () => {
 
   it('loads balances and catalog with two requests instead of three', async () => {
     const year = new Date().getFullYear();
-    mocks.leaveGet.mockResolvedValue({
+    mocks.leavePost.mockResolvedValue({
       data: [{
         leaveTypeId: 1,
         year,
@@ -142,10 +143,12 @@ describe('leave request summary and decisions', () => {
       pending: 1,
       available: 12,
     });
-    expect(mocks.leaveGet).toHaveBeenCalledTimes(1);
-    expect(mocks.leaveGet).toHaveBeenCalledWith('/api/v1/leave-balances/mine', {
-      params: { year },
-    });
+    expect(mocks.leavePost).toHaveBeenCalledTimes(1);
+    expect(mocks.leavePost).toHaveBeenCalledWith(
+      '/api/v1/leave-balances/mine/synchronize',
+      null,
+      { params: { year } },
+    );
     expect(mocks.hrGet).toHaveBeenCalledTimes(1);
     expect(mocks.hrGet).toHaveBeenCalledWith('/api/v1/leave-catalog', {
       params: { year },
