@@ -103,9 +103,9 @@ Request có range tối đa 366 ngày; reason bắt buộc, tối đa 1.000 ký 
 
 ### Balance hiện tại
 
-Balance key duy nhất là EmployeeId + LeaveTypeId + Year; entitlement/used/pending dùng decimal(6,1), có RowVersion. Balance row có thể được tạo lazy trong flow tạo request cho leave type trừ quota.
+Balance key duy nhất là EmployeeId + LeaveTypeId + Year; entitlement/used/pending dùng decimal(6,1), có RowVersion và CHECK constraint ngăn các bộ đếm âm. Balance row được tạo lazy trong flow tạo request cho leave type trừ quota hoặc qua self-sync API theo employee/năm.
 
-GET /api/v1/leave-balances/mine hiện chỉ đọc các rows tồn tại; không khởi tạo balance cho tất cả loại phép. Không có worker/event/outbox để đồng bộ entitlement sau khi Leave Policy thay đổi. Đây là gap P1 trong planning/BACKLOG.md.
+GET `/api/v1/leave-balances/mine` chỉ đọc các rows tồn tại. POST `/api/v1/leave-balances/mine/synchronize` tạo row cho leave type active có `DeductsBalance=true`, lấy quota từ HR authoritative catalog và cập nhật Entitled nhưng giữ Used/Pending. Nếu quota mới thấp hơn Used + Pending, transaction rollback và trả conflict. Luồng tạo request cũng refresh Entitled từ policy authoritative trong transaction. Self-sync hiện chỉ xử lý caller; chưa có HR bulk reconciliation/worker cho toàn bộ nhân viên.
 
 ### History hiện tại
 
@@ -136,7 +136,7 @@ Leave Service gọi HR với authoritative=true khi lấy leave types/policies/h
 
 HR Leave Policy dùng business calendar UTC+07:00; chỉ tạo/sửa policy của năm lớn hơn năm hiện tại theo UTC+07. Policy năm hiện tại/quá khứ read-only.
 
-Trong khi đó, Leave Request validation hiện xác định "today" và year mặc định của Leave Balance bằng UTC. Ở thời điểm ranh giới ngày/năm tại Việt Nam có thể lệch một ngày/năm so với nghiệp vụ UTC+07. Đây là gap cần thống nhất timezone trong planning/BACKLOG.md.
+Leave Request validation, default year của Leave Balance và business date/year trong `leaveService.ts` đều dùng UTC+07 (`Asia/Ho_Chi_Minh`). Cần duy trì kiểm thử ở ranh giới 31/12–01/01 và rà soát các màn hình frontend khác để không dùng browser-local time cho nghiệp vụ.
 
 ## 10. Giới hạn và non-goals V1
 
