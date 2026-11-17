@@ -21,15 +21,20 @@ public sealed class LeaveTeamScopeController(EmployeeService employeeService) : 
             return Unauthorized();
         }
 
-        if (requesterId.Value != managerId)
-        {
-            return Forbid();
-        }
-
         var authorization = AuthorizationClaimReader.Read(User);
-        var canReadLeaveTeam = authorization.HasScope("leaves.read", "Team");
-        var canDecideLeaveTeam = authorization.HasScope("leaves.decide", "Team");
-        if (!canReadLeaveTeam && !canDecideLeaveTeam)
+
+        var hasTeamScope =
+            authorization.HasScope("leaves.read", "Team") ||
+            authorization.HasScope("leaves.decide", "Team");
+
+        var hasAllScope =
+            authorization.HasScope("leaves.read", "All") ||
+            authorization.HasScope("leaves.decide", "All");
+
+        // Team chỉ được truy vấn team của chính người gọi.
+        // All được phép truy vấn team của bất kỳ Manager nào.
+        var isOwnTeam = requesterId.Value == managerId;
+        if (!hasAllScope && !(isOwnTeam && hasTeamScope))
         {
             return Forbid();
         }
@@ -37,6 +42,7 @@ public sealed class LeaveTeamScopeController(EmployeeService employeeService) : 
         var employeeIds = await employeeService.GetTeamEmployeeIdsAsync(
             managerId,
             cancellationToken);
+
         return Ok(employeeIds);
     }
 }
