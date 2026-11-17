@@ -33,6 +33,25 @@ public sealed class HrServiceClientTests
     }
 
     [Fact]
+    public async Task GetLeaveCatalog_UsesAuthoritativeCatalogEndpoint()
+    {
+        var handler = new RecordingHttpMessageHandler();
+        using var httpClient = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("http://hr-service")
+        };
+        var client = new HrServiceClient(httpClient);
+
+        var catalog = await client.GetLeaveCatalogAsync(2027, "Bearer test-token");
+
+        Assert.Equal("ANNUAL", Assert.Single(catalog.LeaveTypes).Code);
+        Assert.Equal(15m, Assert.Single(catalog.LeavePolicies).DaysPerYear);
+        Assert.Equal(
+            "/api/v1/leave-catalog?year=2027&authoritative=true",
+            Assert.Single(handler.RequestedUris));
+    }
+
+    [Fact]
     public async Task GetTeamEmployeeIds_UsesLeaveScopeEndpointAndReturnsOnlyIds()
     {
         var managerId = Guid.Parse("11111111-1111-1111-1111-111111111111");
@@ -66,6 +85,8 @@ public sealed class HrServiceClientTests
                 "/api/v1/leave-types/4" =>
                     """{"id":4,"code":"ANNUAL","name":"Annual","isPaid":true,"deductsBalance":true,"isActive":true}""",
                 "/api/v1/leave-policies" => "[]",
+                "/api/v1/leave-catalog" =>
+                    """{"leaveTypes":[{"id":1,"code":"ANNUAL","name":"Annual","isPaid":true,"deductsBalance":true,"isActive":true}],"leavePolicies":[{"id":12,"leaveTypeId":1,"leaveTypeCode":"ANNUAL","leaveTypeName":"Annual","year":2027,"daysPerYear":15}]}""",
                 "/api/v1/holidays" => "[]",
                 _ when request.RequestUri.AbsolutePath.StartsWith(
                     "/api/v1/leave-scope/managers/",
