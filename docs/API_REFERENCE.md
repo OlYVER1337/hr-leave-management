@@ -89,7 +89,7 @@ Giới hạn: API hiện chỉ quản lý assignment cho danh mục Role đượ
 | POST /api/v1/departments | departments.create:All | Tạo phòng ban |
 | PUT /api/v1/departments/{id} | departments.update:All | Cập nhật phòng ban |
 | DELETE /api/v1/departments/{id} | departments.delete:All | Xóa theo điều kiện nghiệp vụ |
-| GET /api/v1/leave-catalog?year=2027 | Authenticated | Trả leaveTypes và leavePolicies trong một response |
+| GET /api/v1/leave-catalog?year=2027[&authoritative=true] | Authenticated | Trả leaveTypes và leavePolicies; authoritative=true bypass Redis và đọc SQL trực tiếp |
 | GET /api/v1/leave-catalog?includeInactive=true | leave-types.update:All bổ sung | Bao gồm leave type inactive |
 | GET /api/v1/leave-types[/{id}] | Authenticated | Đọc loại nghỉ; includeInactive=true cần leave-types.update:All |
 | POST /api/v1/leave-types | leave-types.create:All | Tạo/khôi phục loại nghỉ chuẩn |
@@ -151,7 +151,7 @@ Trạng thái LeaveRequestStatus: 0 Pending, 1 Approved, 2 Rejected, 3 Cancelled
 - Với Team scope, Leave gọi HR để lấy membership hiện tại; khi quyết định đơn, xác minh Employee còn active và ManagerId vẫn là actor. HR unavailable thì fail closed, trả 503.
 - Leave Service không truy cập HR_DB trực tiếp.
 
-Balance row được tạo lazy trong flow tạo request nếu loại nghỉ trừ quota và chưa có row. GET leave-balances/mine chỉ đọc rows đã tồn tại; không bulk initialize hoặc đồng bộ Entitled khi HR đổi policy.
+Balance row được tạo khi nhân viên gọi POST `/api/v1/leave-balances/mine/synchronize` hoặc khi tạo request thuộc leave type trừ quota. GET `/api/v1/leave-balances/mine` chỉ đọc rows đã tồn tại. Self-sync tạo row cho loại nghỉ active/deducting và cập nhật Entitled theo HR catalog authoritative; CreateAsync cũng refresh quota trong transaction.
 
 History ghi Created/Approved/Rejected/Cancelled nhưng hiện chưa có GET API riêng để đọc history.
 
