@@ -517,7 +517,7 @@ Employee mở My Leaves → action chỉ hiển thị với request Pending củ
 | Calendar | Leave LeaveRequestsController | GET /api/v1/leave-requests/calendar?from=&to= |
 | Approval inbox | Leave LeaveRequestsController | GET /api/v1/leave-requests/pending-approval |
 | Approve/reject | Leave LeaveRequestsController | PATCH /{id}/decision |
-| My balance | Leave LeaveBalancesController | GET /api/v1/leave-balances/mine?year= |
+| My balance | Leave LeaveBalancesController | POST /api/v1/leave-balances/mine/synchronize?year= để khởi tạo/đồng bộ; GET /api/v1/leave-balances/mine?year= để chỉ đọc |
 
 Endpoints are relative to each service's API base URL.
 
