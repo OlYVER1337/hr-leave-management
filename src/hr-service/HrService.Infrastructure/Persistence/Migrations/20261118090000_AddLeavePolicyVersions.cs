@@ -79,22 +79,21 @@ public partial class AddLeavePolicyVersions : Migration
 
     protected override void Down(MigrationBuilder migrationBuilder)
     {
-        // Keep only the latest version for each type/year before restoring the
-        // former unique constraint. Rolling this migration back loses version history.
+        // Refuse a destructive rollback when multiple versions exist for a policy.
+        // An operator must export/resolve the history explicitly before downgrading.
         migrationBuilder.Sql("""
-            WITH [RankedPolicies] AS
+            IF EXISTS
             (
-                SELECT [Id],
-                       ROW_NUMBER() OVER (
-                           PARTITION BY [LeaveTypeId], [Year]
-                           ORDER BY [EffectiveFrom] DESC, [CreatedAtUtc] DESC, [Id] DESC
-                       ) AS [VersionNumber]
+                SELECT 1
                 FROM [LeavePolicies]
+                GROUP BY [LeaveTypeId], [Year]
+                HAVING COUNT(*) > 1
             )
-            DELETE FROM [LeavePolicies]
-            WHERE [Id] IN (
-                SELECT [Id] FROM [RankedPolicies] WHERE [VersionNumber] > 1
-            );
+            BEGIN
+                THROW 51000,
+                    'Cannot downgrade LeavePolicyVersions while version history exists. Resolve the history explicitly first.',
+                    1;
+            END;
             """);
 
         migrationBuilder.DropIndex(
