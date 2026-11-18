@@ -78,4 +78,6 @@ export interface LeavePolicy {
   year?: number;
   effectiveFrom?: string;
   reason?: string;
+  versionNumber?: number;
+  versionMissing?: boolean;
 }
