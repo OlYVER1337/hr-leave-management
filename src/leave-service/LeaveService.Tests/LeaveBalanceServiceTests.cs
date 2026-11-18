@@ -49,7 +49,7 @@ public sealed class LeaveBalanceServiceTests
         var result = await service.SynchronizeMineAsync(employeeId, 2027, "Bearer token");
 
         var balance = Assert.Single(result);
-        Assert.Equal(new LeaveBalanceResponse(1, 2027, 15m, 0m, 0m, 15m), balance);
+        Assert.Equal(new LeaveBalanceResponse(1, 2027, 15m, 0m, 0m, 15m, 15m), balance);
         hrClient.Verify(item => item.GetLeaveCatalogAsync(
             2027, "Bearer token", It.IsAny<CancellationToken>()), Times.Once);
         repository.Verify(item => item.SynchronizeBalancesAsync(

@@ -126,6 +126,7 @@ describe('leave request summary and decisions', () => {
         leaveTypeId: 1,
         year,
         entitled: 15,
+        policyDays: 15,
         used: 2,
         pending: 1,
         available: 12,
@@ -149,6 +150,7 @@ describe('leave request summary and decisions', () => {
     expect(result[0]).toMatchObject({
       code: 'ANNUAL',
       entitled: 15,
+      policyDays: 15,
       used: 2,
       pending: 1,
       available: 12,

@@ -47,6 +47,7 @@ interface LeaveBalanceRecord {
   leaveTypeId: number;
   year: number;
   entitled: number;
+  policyDays: number;
   used: number;
   pending: number;
   available: number;
@@ -520,6 +521,7 @@ export async function getBalances(user: AuthUser): Promise<LeaveBalance[]> {
         code,
         name: getLocalizedLeaveTypeName(type.code, type.name),
         entitled,
+        policyDays: type.deductsBalance ? (balance?.policyDays ?? entitled ?? 0) : undefined,
         used,
         pending,
         available: type.deductsBalance ? (balance?.available ?? Math.max(0, (entitled ?? 0) - used - pending)) : null,
