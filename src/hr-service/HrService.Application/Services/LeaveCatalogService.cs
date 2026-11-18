@@ -261,7 +261,7 @@ public sealed class LeaveCatalogService(
         EnsureFuturePolicyYear(request.Year);
 
         var effectiveFrom = request.EffectiveFrom ?? GetBusinessToday();
-        EnsurePolicyEffectiveFrom(effectiveFrom);
+        EnsurePolicyEffectiveFrom(effectiveFrom, request.Year);
 
         var leaveType = await repository.GetLeaveTypeForUpdateByIdAsync(
             request.LeaveTypeId,
@@ -341,7 +341,7 @@ public sealed class LeaveCatalogService(
             throw Problems.Invalid("leaveTypeId", "A policy version requires an active leave type that deducts a balance.");
 
         var effectiveFrom = request.EffectiveFrom ?? GetBusinessToday();
-        EnsurePolicyEffectiveFrom(effectiveFrom);
+        EnsurePolicyEffectiveFrom(effectiveFrom, original.Year);
 
         var versions = await repository.ListLeavePoliciesAsync(original.Year, cancellationToken)
             ?? Array.Empty<LeavePolicy>();
@@ -552,13 +552,20 @@ public sealed class LeaveCatalogService(
         }
     }
 
-    private void EnsurePolicyEffectiveFrom(DateOnly effectiveFrom)
+    private void EnsurePolicyEffectiveFrom(DateOnly effectiveFrom, int policyYear)
     {
         if (effectiveFrom < GetBusinessToday())
         {
             throw Problems.Invalid(
                 "effectiveFrom",
                 "A new policy version cannot take effect before the current business date.");
+        }
+
+        if (effectiveFrom.Year > policyYear)
+        {
+            throw Problems.Invalid(
+                "effectiveFrom",
+                "A policy version cannot take effect after the end of its policy year.");
         }
     }
 

@@ -327,6 +327,24 @@ public sealed class LeaveCatalogServiceTests
         Assert.Equal(new DateOnly(2026, 6, 1), policy.EffectiveFrom);
     }
 
+    // EffectiveFrom có thể nằm trong năm trước của policy tương lai, nhưng không được nằm sau năm áp dụng.
+    [Fact]
+    public async Task CreateLeavePolicyAsync_RejectsEffectiveDateAfterPolicyYear()
+    {
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        var service = CreateService(repository, new InMemoryLeaveCatalogCache(), unitOfWork);
+
+        var exception = await Assert.ThrowsAsync<RequestValidationException>(
+            () => service.CreateLeavePolicyAsync(
+                new LeavePolicyRequest(4, 2027, 15m, new DateOnly(2028, 1, 1))));
+
+        Assert.Contains("effectiveFrom", exception.Errors.Keys);
+        repository.Verify(item => item.GetLeaveTypeForUpdateByIdAsync(
+            It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     // Chỉ cho phép tạo policy version cho năm tương lai.
     [Theory]
     [InlineData(2024)]
