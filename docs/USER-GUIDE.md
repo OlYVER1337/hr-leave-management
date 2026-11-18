@@ -95,10 +95,12 @@ bằng tài khoản có quyền tương ứng.
    hạn mức đầu tiên hoặc phiên bản mới, nhập số ngày, **Ngày hiệu lực** và lý
    do thay đổi. Với năm hiện tại, ngày hiệu lực sớm nhất là hôm nay; với năm
    tương lai, ngày hiệu lực sớm nhất là 01/01 của năm đã chọn. Không cho đặt
-   hiệu lực hồi tố hoặc sang năm khác. Request tạo trước ngày hiệu lực dùng
-   phiên bản cũ; request tạo từ ngày đó trở đi dùng phiên bản mới. Phiên bản
-   cũ được giữ lại, không bị ghi đè. Nếu thiếu một loại chuẩn, HR có thể khôi
-   phục loại đó cho năm hiện tại hoặc năm tương lai. Tab **Ngày nghỉ lễ** dùng để thêm, sửa hoặc xóa ngày lễ.
+   hiệu lực hồi tố hoặc sang năm khác. Với mỗi năm phân bổ, nếu năm đó đã bắt
+   đầu thì đơn dùng phiên bản có hiệu lực tại ngày gửi đơn; nếu đơn được gửi
+   trước khi năm phân bổ bắt đầu, hệ thống dùng mốc 01/01 của năm đó. Phiên bản
+   đã áp dụng được lưu snapshot, phiên bản cũ không bị ghi đè. Nếu thiếu một
+   loại chuẩn, HR có thể khôi phục loại đó cho năm hiện tại hoặc năm tương lai.
+   Tab **Ngày nghỉ lễ** dùng để thêm, sửa hoặc xóa ngày lễ.
 4. Dùng **Tất cả đơn nghỉ** để theo dõi các đơn trong tổ chức và
    **Hộp thư phê duyệt** để xử lý đơn chờ.
 
