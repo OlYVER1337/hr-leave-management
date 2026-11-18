@@ -344,7 +344,10 @@ public sealed class LeaveCatalogService(
         if (!leaveType.IsActive || !leaveType.DeductsBalance)
             throw Problems.Invalid("leaveTypeId", "A policy version requires an active leave type that deducts a balance.");
 
-        var effectiveFrom = request.EffectiveFrom ?? GetBusinessToday();
+        var today = GetBusinessToday();
+        var firstPolicyDate = new DateOnly(original.Year, 1, 1);
+        var effectiveFrom = request.EffectiveFrom
+            ?? (today > firstPolicyDate ? today : firstPolicyDate);
         EnsurePolicyEffectiveFrom(effectiveFrom, original.Year);
 
         var versions = await repository.ListLeavePoliciesAsync(original.Year, cancellationToken);
