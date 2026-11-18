@@ -643,7 +643,11 @@ export async function getPolicies(year = getBusinessYear() + 1): Promise<LeavePo
         id: type ? `type-${type.id}` : `type-${definition.code}`,
         leaveTypeId: type?.id,
         policyId: policy?.id,
-        effectiveFrom: policy?.effectiveFrom,
+        effectiveFrom: policy?.effectiveFrom &&
+          policy.effectiveFrom >= `${year}-01-01` &&
+          policy.effectiveFrom <= `${year}-12-31`
+          ? policy.effectiveFrom
+          : undefined,
         reason: policy?.reason,
         year,
         typeCode: definition.code,
