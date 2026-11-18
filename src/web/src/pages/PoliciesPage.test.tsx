@@ -146,6 +146,21 @@ describe('PoliciesPage', () => {
     expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveValue(`${futureYear}-02-02`);
   });
 
+  it('moves a legacy prior-year effective date to the selected future year start', async () => {
+    const user = userEvent.setup();
+    vi.mocked(getPolicies).mockResolvedValue([
+      { ...annual, effectiveFrom: `${currentBusinessYear}-11-18` },
+      sick,
+      unpaid,
+    ]);
+    renderPoliciesPage();
+
+    await user.click((await screen.findAllByRole('button', { name: 'Tạo phiên bản mới' }))[0]);
+
+    expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveAttribute('min', `${futureYear}-01-01`);
+    expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveValue(`${futureYear}-01-01`);
+  });
+
   it('disables version creation when the latest version is already effective on year end', async () => {
     vi.mocked(getPolicies).mockResolvedValue([
       { ...annual, effectiveFrom: `${futureYear}-12-31` },
