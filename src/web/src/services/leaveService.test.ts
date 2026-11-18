@@ -403,6 +403,37 @@ describe('built-in leave policies', () => {
     });
   });
 
+  it('numbers policy versions separately for each leave type and policy year', async () => {
+    const year = getVietnamBusinessYear();
+    mocks.hrGet.mockResolvedValue({
+      data: {
+        leaveTypes: [
+          { id: 1, code: 'ANNUAL', name: 'Annual leave', isPaid: true, deductsBalance: true, isActive: true },
+        ],
+        leavePolicies: [
+          { id: 10, leaveTypeId: 1, year, daysPerYear: 12, effectiveFrom: `${year}-01-01` },
+          { id: 11, leaveTypeId: 1, year, daysPerYear: 15, effectiveFrom: `${year}-06-01` },
+          { id: 12, leaveTypeId: 1, year: year + 1, daysPerYear: 18, effectiveFrom: `${year + 1}-01-01` },
+        ],
+      },
+    });
+
+    const versions = await getPolicyVersions();
+
+    expect(versions.map((policy) => ({
+      year: policy.year,
+      versionNumber: policy.versionNumber,
+      policyId: policy.policyId,
+    }))).toEqual([
+      { year, versionNumber: 1, policyId: 10 },
+      { year, versionNumber: 2, policyId: 11 },
+      { year: year + 1, versionNumber: 1, policyId: 12 },
+    ]);
+    expect(mocks.hrGet).toHaveBeenCalledWith('/api/v1/leave-catalog', {
+      params: { includeInactive: true },
+    });
+  });
+
   it('does not display a legacy prior-year policy as current but keeps it available for appending', async () => {
     const year = getVietnamBusinessYear() + 1;
     mocks.hrGet.mockImplementation(async (path: string) => {
