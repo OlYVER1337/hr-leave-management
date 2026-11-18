@@ -223,23 +223,27 @@ describe('PoliciesPage', () => {
     expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveAttribute('min', `${futureYear}-01-01`);
   });
 
-  it('does not open a new version when the current year has no later effective date', async () => {
+  it('defaults to the next policy year when the current year has no later effective date', async () => {
     const user = userEvent.setup();
     vi.mocked(getPolicies).mockImplementation(async (year, asOfDate) => {
-      const effectiveFrom = asOfDate === `${currentBusinessYear}-12-31`
-        ? `${currentBusinessYear}-12-31`
-        : `${currentBusinessYear}-01-01`;
-      return [{ ...annual, year, effectiveFrom }, { ...sick, year }, { ...unpaid, year }];
+      if (year === currentBusinessYear && asOfDate === `${currentBusinessYear}-12-31`) {
+        return [{ ...annual, year, effectiveFrom: `${currentBusinessYear}-12-31` }, { ...sick, year }, { ...unpaid, year }];
+      }
+      if (year === futureYear) {
+        return [
+          { ...annual, year, policyId: undefined, effectiveFrom: undefined },
+          { ...sick, year, policyId: undefined, effectiveFrom: undefined },
+          { ...unpaid, year },
+        ];
+      }
+      return policies;
     });
     renderPoliciesPage();
 
     await user.click((await screen.findAllByRole('button', { name: 'Tạo phiên bản mới' }))[0]);
 
-    await waitFor(() => expect(mocks.notify).toHaveBeenCalledWith(
-      'Không còn ngày hiệu lực hợp lệ trong năm hiện tại.',
-      'error',
-    ));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(await screen.findByLabelText('Năm áp dụng')).toHaveValue(String(futureYear));
+    expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveValue(`${futureYear}-01-01`);
   });
 
   it('restores a deleted built-in policy', async () => {
