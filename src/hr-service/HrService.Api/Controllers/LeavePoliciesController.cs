@@ -14,11 +14,12 @@ public sealed class LeavePoliciesController(LeaveCatalogService catalogService) 
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<LeavePolicyResponse>>> GetAll(
         [FromQuery] int? year,
+        [FromQuery] DateOnly? asOfDate,
         [FromQuery] bool authoritative,
         CancellationToken cancellationToken)
     {
         var policies = authoritative
-            ? await catalogService.GetAuthoritativeLeavePoliciesAsync(year, cancellationToken)
+            ? await catalogService.GetAuthoritativeLeavePoliciesAsync(year, asOfDate, cancellationToken)
             : await catalogService.GetLeavePoliciesAsync(year, cancellationToken);
         return Ok(policies);
     }
