@@ -106,7 +106,7 @@ describe('PoliciesPage', () => {
     expect(screen.queryByRole('button', { name: /Xóa chính sách/ })).not.toBeInTheDocument();
   });
 
-  it('locks policy versions for the current year', async () => {
+  it('allows current-year policy versions from the current business date onward', async () => {
     const user = userEvent.setup();
     renderPoliciesPage();
 
@@ -116,12 +116,19 @@ describe('PoliciesPage', () => {
       String(currentBusinessYear),
     );
 
-    await waitFor(() => {
-      expect(screen.getAllByRole('button', { name: 'Chính sách đã khóa' })).toHaveLength(2);
-    });
-    expect(screen.getAllByRole('button', { name: 'Chính sách đã khóa' }).every(
-      (button) => (button as HTMLButtonElement).disabled,
-    )).toBe(true);
+    const createButtons = await screen.findAllByRole('button', { name: 'Tạo phiên bản mới' });
+    expect(createButtons).toHaveLength(2);
+    await user.click(createButtons[0]);
+
+    expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveAttribute('min');
+    expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveValue(
+      new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date()),
+    );
   });
 
   it('opens a new version with an effective date after the latest scheduled version', async () => {
@@ -135,6 +142,7 @@ describe('PoliciesPage', () => {
 
     await user.click((await screen.findAllByRole('button', { name: 'Tạo phiên bản mới' }))[0]);
 
+    expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveAttribute('min', `${futureYear}-01-01`);
     expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveValue(`${futureYear}-02-02`);
   });
 
