@@ -124,6 +124,32 @@ describe('PoliciesPage', () => {
     )).toBe(true);
   });
 
+  it('opens a new version with an effective date after the latest scheduled version', async () => {
+    const user = userEvent.setup();
+    vi.mocked(getPolicies).mockResolvedValue([
+      { ...annual, effectiveFrom: `${futureYear}-02-01` },
+      sick,
+      unpaid,
+    ]);
+    renderPoliciesPage();
+
+    await user.click((await screen.findAllByRole('button', { name: 'Tạo phiên bản mới' }))[0]);
+
+    expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveValue(`${futureYear}-02-02`);
+  });
+
+  it('disables version creation when the latest version is already effective on year end', async () => {
+    vi.mocked(getPolicies).mockResolvedValue([
+      { ...annual, effectiveFrom: `${futureYear}-12-31` },
+      sick,
+      unpaid,
+    ]);
+    renderPoliciesPage();
+
+    const button = await screen.findByRole('button', { name: 'Hết thời gian tạo phiên bản' });
+    expect(button).toBeDisabled();
+  });
+
   it('restores a deleted built-in policy', async () => {
     const user = userEvent.setup();
     vi.mocked(getPolicies)
