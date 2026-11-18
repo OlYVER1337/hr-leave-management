@@ -103,16 +103,27 @@ export function getApiErrorMessage(error: unknown): string {
       detail?: string;
       title?: string;
       message?: string;
-      errors?: Record<string, string[]>;
+      errors?: Record<string, string[] | string>;
     } | undefined;
+    if (data?.errors) {
+      const fieldLabels: Record<string, string> = {
+        effectiveFrom: 'Ngày hiệu lực',
+        daysPerYear: 'Số ngày mỗi năm',
+        year: 'Năm áp dụng',
+        leaveTypeId: 'Loại nghỉ',
+        reason: 'Lý do thay đổi',
+      };
+      const details = Object.entries(data.errors)
+        .flatMap(([field, messages]) => {
+          const list = Array.isArray(messages) ? messages : [messages];
+          return list.map((message) =>
+            `${fieldLabels[field] ?? field}: ${message}`);
+        })
+        .join('; ');
+      if (details) return `Dữ liệu không hợp lệ: ${details}`;
+    }
     if (data?.detail) return data.detail;
     if (data?.message) return data.message;
-    if (data?.errors) {
-      const details = Object.entries(data.errors)
-        .flatMap(([field, messages]) => messages.map((message) => `${field}: ${message}`))
-        .join(' ');
-      if (details) return details;
-    }
     if (data?.title) return data.title;
     if (error.code === 'ECONNABORTED') return 'API phản hồi quá lâu. Vui lòng thử lại.';
     if (!error.response) return 'Không thể kết nối API. Hãy kiểm tra backend và Docker Compose.';
