@@ -407,7 +407,7 @@ Tab Loại nghỉ & hạn mức:
     │ QUẢN TRỊ  Chính sách nghỉ phép                                             │
     ├────────────────────────────────────────────────────────────────────────────┤
     │ [Loại nghỉ & hạn mức (n)] [Ngày nghỉ lễ (n)]                              │
-    │ Lọc version: [Đang có hiệu lực ▼] [Tất cả | Version 1 | Version 2 ...]     │
+    │ Hiển thị: [Đang có hiệu lực ▼] [Tất cả lịch sử]                             │
     ├──────────────────────┬─────────────────────┬───────────────────────────────┤
     │ [Icon] Active        │ [Icon] Active        │ [Icon] Active                 │
     │ Nghỉ phép năm        │ Nghỉ ốm              │ Nghỉ không lương              │
@@ -415,7 +415,8 @@ Tab Loại nghỉ & hạn mức:
     │ 12 ngày / năm        │ 10 ngày / năm        │ Không giới hạn                │
     │ Hưởng lương          │ Hưởng lương          │ Không hưởng lương             │
     │ Trừ số dư            │ Trừ số dư            │ Không trừ số dư               │
-    │ [Sửa hạn mức]        │ [Sửa hạn mức]        │                               │
+    │ [Tạo phiên bản mới] │ [Tạo phiên bản mới] │                               │
+    │ [2 phiên bản · Xem lịch sử] [1 phiên bản · Xem lịch sử]                    │
     └──────────────────────┴─────────────────────┴───────────────────────────────┘
 
     Chỉ có ba loại nghỉ cố định: `ANNUAL`, `SICK`, `UNPAID`. Không tạo hoặc xóa
@@ -438,16 +439,19 @@ Tab Ngày nghỉ lễ:
 
 Holiday modal: tên ngày lễ + ngày. Create/edit/delete đã được nối frontend HR API.
 
-Policies mặc định hiển thị phiên bản đang có hiệu lực tại ngày hiện tại
-(UTC+07:00). Một bộ lọc version chung gồm: Đang có hiệu lực, Tất cả phiên bản,
-Version 1, Version 2... Khi chọn Version N, ANNUAL và SICK hiển thị version thứ
-N theo lịch sử riêng của từng loại; loại chưa có version tương ứng được đánh
-dấu rõ. UNPAID không có quota nên không có version. Năm áp dụng chỉ được chọn
-khi tạo phiên bản trong modal. HR có thể tạo phiên bản cho năm hiện tại và năm
-tương lai; các năm đã kết thúc chỉ được xem. Ngày hiệu lực của năm hiện tại
-không được trước hôm nay; với năm tương lai, ngày hiệu lực sớm nhất là 01/01
-của năm được chọn. Backend kiểm tra cùng quy tắc, không cho tạo phiên bản hồi tố
-hoặc đặt hiệu lực ở sai năm qua API.
+Policies mặc định hiển thị các chính sách đang có hiệu lực tại ngày hiện tại
+(UTC+07:00). Bộ lọc chung gồm hai chế độ: Đang có hiệu lực và Tất cả lịch sử.
+Ở chế độ hiện hành, mỗi thẻ hiển thị quota, ngày hiệu lực và nút Tạo phiên bản
+mới; ANNUAL/SICK có thêm số lượng version và nút Xem lịch sử. Bấm Xem lịch sử
+mở modal riêng của loại nghỉ đó, các version sắp xếp theo ngày hiệu lực mới
+nhất trước, hiển thị số ngày, lý do và trạng thái hiện hành. Ở chế độ Tất cả
+lịch sử, các version được nhóm theo loại nghỉ; phiên bản là bất biến và chỉ đọc.
+UNPAID không áp dụng quota nên không có version. Modal tạo phiên bản hiển thị
+quota và ngày hiệu lực hiện tại, gồm năm áp dụng, số ngày mới, ngày hiệu lực và
+lý do. HR có thể tạo phiên bản cho năm hiện tại và năm tương lai; các năm đã kết
+thúc chỉ được xem. Ngày hiệu lực của năm hiện tại không được trước hôm nay; năm
+tương lai bắt đầu sớm nhất từ 01/01 của năm đó. Backend kiểm tra cùng quy tắc,
+không cho tạo phiên bản hồi tố hoặc đặt hiệu lực ở sai năm qua API.
 
 ### 4.11. Hồ sơ của tôi — /profile
 
