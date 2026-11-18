@@ -597,7 +597,10 @@ export async function decideLeaveRequest(id: string, decision: 'approve' | 'reje
   } catch (error) { throw new Error(getApiErrorMessage(error)); }
 }
 
-export async function getPolicies(year = getBusinessYear() + 1): Promise<LeavePolicy[]> {
+export async function getPolicies(
+  year = getBusinessYear(),
+  asOfDate = year === getBusinessYear() ? getBusinessDate() : `${year}-12-31`,
+): Promise<LeavePolicy[]> {
   if (DEMO_MODE) {
     const savedPolicies = new Map(
       loadDemoState().policies.map((policy) => [policy.typeCode.toUpperCase(), policy]),
@@ -633,12 +636,23 @@ export async function getPolicies(year = getBusinessYear() + 1): Promise<LeavePo
     const { leaveTypes: types, leavePolicies: policies } = catalog;
     return builtInLeaveTypes.map((definition) => {
       const type = types.find((candidate) => candidate.code.toUpperCase() === definition.code);
-      const policy = type && policies
-        .filter((candidate) => candidate.leaveTypeId === type.id && candidate.year === year)
-        .sort((left, right) =>
-          (right.effectiveFrom ?? '').localeCompare(left.effectiveFrom ?? '') ||
-          (right.createdAtUtc ?? '').localeCompare(left.createdAtUtc ?? '') ||
-          right.id - left.id)[0];
+      const candidates = type
+        ? policies
+          .filter((candidate) => candidate.leaveTypeId === type.id && candidate.year === year)
+          .sort((left, right) =>
+            (right.effectiveFrom ?? '').localeCompare(left.effectiveFrom ?? '') ||
+            (right.createdAtUtc ?? '').localeCompare(left.createdAtUtc ?? '') ||
+            right.id - left.id)
+        : [];
+      const firstDayOfPolicyYear = `${year}-01-01`;
+      const policy = candidates.find((candidate) =>
+        Boolean(candidate.effectiveFrom) &&
+        candidate.effectiveFrom! >= firstDayOfPolicyYear &&
+        candidate.effectiveFrom! <= asOfDate)
+        // Keep a legacy row available for appending a valid version, but do not
+        // expose its prior-year EffectiveFrom as the current policy date.
+        ?? candidates.find((candidate) =>
+          !candidate.effectiveFrom || candidate.effectiveFrom < firstDayOfPolicyYear);
       return {
         id: type ? `type-${type.id}` : `type-${definition.code}`,
         leaveTypeId: type?.id,
@@ -749,7 +763,7 @@ export async function savePolicies(policies: LeavePolicy[]): Promise<void> {
     return;
   }
   try {
-    const defaultYear = getBusinessYear() + 1;
+    const defaultYear = getBusinessYear();
 
     // Policy version changes must not update the separate LeaveType resource.
     // Keeping this request isolated avoids requiring leave-types.update for a
