@@ -25,7 +25,7 @@ Chỉ các mối quan hệ mà cùng một service sở hữu hoàn toàn mới 
 | `Departments` | Các đơn vị tổ chức: `Id` tự tăng, `Name` bắt buộc (tối đa 100 ký tự) |
 | `Employees` | Thông tin nhân sự và tài khoản: `Id` kiểu GUID, `Code` (20), `FullName` (150), `Email` (200), `PasswordHash`, `Role` dạng chuỗi, `HireDate`, `IsActive`, `DepartmentId`, `ManagerId` tùy chọn |
 | `LeaveTypes` | Danh mục loại nghỉ: `Id` tự tăng, `Code` (20), `Name` (100), `IsPaid`, `DeductsBalance`, `IsActive` |
-| `LeavePolicies` | Chính sách số ngày nghỉ theo năm: `Id` tự tăng, `LeaveTypeId`, `Year`, `DaysPerYear` (`decimal(5,1)`) |
+| `LeavePolicies` | Các phiên bản chính sách theo loại nghỉ/năm: `Id`, `LeaveTypeId`, `Year`, `DaysPerYear` (`decimal(5,1)`), `EffectiveFrom` (`date`), `CreatedAtUtc` (`datetime2`), `Reason` (tối đa 500 ký tự). Policy cũ được chuyển thành phiên bản nền có hiệu lực từ 01/01/2000. |
 | `Holidays` | Các ngày không làm việc: `Id` tự tăng, `HolidayDate`, `Name` (150) |
 | `RefreshTokens` | Vòng đời Refresh Token đã được hash: `Id` GUID, `EmployeeId`, `TokenHash`, thời gian tạo/hết hạn/thu hồi và hash của token thay thế |
 
@@ -36,7 +36,7 @@ Chỉ các mối quan hệ mà cùng một service sở hữu hoàn toàn mới 
   - `Employees.Code`
   - `Employees.Email`
   - `LeaveTypes.Code`
-  - `LeavePolicies(LeaveTypeId, Year)`
+  - `LeavePolicies(LeaveTypeId, Year, EffectiveFrom)`
   - `Holidays.HolidayDate`
   - `RefreshTokens.TokenHash`
 
@@ -102,10 +102,10 @@ Các Scope đang được thực thi trong API là Self, Team và All. Departmen
 
 | Bảng | Mục đích và các cột quan trọng |
 |---|---|
-| `LeaveBalances` | Số dư phép theo nhân viên/loại nghỉ/năm, gồm `Entitled`, `Used`, `Pending` kiểu `decimal(6,1)`; có SQL `rowversion` và CHECK constraint đảm bảo ba bộ đếm không âm |
+| `LeaveBalances` | Số dư theo nhân viên/loại nghỉ/năm, gồm `PolicyDays`, `Used`, `Pending` (`decimal(6,1)`) và SQL `rowversion`. `Entitled` không còn là cột lưu; được suy ra là `max(PolicyDays, Used + Pending)`. |
 | `LeaveRequests` | Thông tin đơn nghỉ: ID nhân viên/người phê duyệt, snapshot phòng ban, ID loại nghỉ, khoảng thời gian nghỉ, tổng số ngày, lý do (tối đa 1.000 ký tự), trạng thái và timestamps; có SQL `rowversion` |
 | `LeaveRequestHistories` | Lịch sử thao tác/trạng thái theo kiểu append, ID người thực hiện, ghi chú tùy chọn (tối đa 1.000 ký tự), thời gian thực hiện |
-| `LeaveRequestYearAllocations` | Số ngày được phân bổ cho từng năm dương lịch đối với đơn nghỉ kéo dài qua nhiều năm |
+| `LeaveRequestYearAllocations` | Phân bổ ngày nghỉ theo từng năm, gồm `Days`, `PolicyVersionId` (scalar reference tới HR, nullable với dữ liệu lịch sử) và `PolicyDaysAtCreation` (quota snapshot lúc tạo đơn, nullable với dữ liệu lịch sử) |
 
 ### Các khóa và ràng buộc quan trọng
 
@@ -116,9 +116,11 @@ LeaveBalances(EmployeeId, LeaveTypeId, Year)
 ```
 
 - CHECK constraints:
-  - `CK_LeaveBalances_Entitled_NonNegative`: `Entitled >= 0`
+  - `CK_LeaveBalances_PolicyDays_NonNegative`: `PolicyDays >= 0`
   - `CK_LeaveBalances_Used_NonNegative`: `Used >= 0`
   - `CK_LeaveBalances_Pending_NonNegative`: `Pending >= 0`
+
+`Entitled = max(PolicyDays, Used + Pending)`; `Available = Entitled - Used - Pending`. Leave Service không tạo foreign key xuyên database tới HR `LeavePolicies`; `PolicyVersionId` là scalar reference do HR sở hữu.
 
 Ngăn việc tạo trùng số dư phép cho cùng:
 
@@ -189,6 +191,7 @@ EF Core Migrations được version theo từng Infrastructure Project sở hữ
 20261026043924_InitialHrSchema
 20261102014444_AddRefreshTokens
 20261111043715_AddDynamicAuthorizationSchema
+20261118090000_AddLeavePolicyVersions
 ```
 
 ### Leave Service
@@ -197,6 +200,7 @@ EF Core Migrations được version theo từng Infrastructure Project sở hữ
 20261027041915_InitialLeaveSchema
 20261027060954_AddApprovalAndYearAllocations
 20261117031304_AddLeaveBalanceNonNegativeConstraints
+20261118093000_AddPolicySnapshotsToLeaveBalances
 ```
 
 `DatabaseInitializer` của HR Service sẽ:

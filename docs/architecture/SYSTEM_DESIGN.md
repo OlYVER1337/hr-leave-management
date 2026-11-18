@@ -86,9 +86,9 @@ HR lookup hồ sơ nhân viên theo employees.read và lookup IDs để xác đ�
 1. Leave Service xác minh JWT/permission.
 2. Gọi HR authoritative lookup để kiểm tra Employee active và LeaveType active.
 3. Lấy holiday list, tính ngày làm việc (weekday trừ ngày lễ).
-4. Với loại deduct balance, lấy policy authoritative cho từng năm liên quan.
-5. Chia request qua năm thành yearly allocations; ghi snapshot ApproverId/DepartmentId từ HR.
-6. Trong SQL transaction, kiểm tra overlap, kiểm tra quota, reserve Pending, lưu request + allocations + history.
+4. Với loại deduct balance, lấy toàn bộ policy version authoritative cho từng năm liên quan; chọn phiên bản mới nhất có `EffectiveFrom <= ngày tạo đơn` theo UTC+07.
+5. Chia request qua năm thành yearly allocations; mỗi allocation lưu `PolicyVersionId` và `PolicyDaysAtCreation`, đồng thời ghi snapshot ApproverId/DepartmentId từ HR.
+6. Trong SQL transaction, đồng bộ `PolicyDays` từ phiên bản được chọn, kiểm tra overlap/quota, reserve Pending, lưu request + allocations + history.
 7. Trả response cùng balance rows liên quan.
 
 Request có range tối đa 366 ngày; reason bắt buộc, tối đa 1.000 ký tự. Request không có working day bị từ chối.
@@ -104,9 +104,9 @@ Request có range tối đa 366 ngày; reason bắt buộc, tối đa 1.000 ký 
 
 ### Balance hiện tại
 
-Balance key duy nhất là EmployeeId + LeaveTypeId + Year; entitlement/used/pending dùng decimal(6,1), có RowVersion và CHECK constraint ngăn các bộ đếm âm. Balance row được tạo lazy trong flow tạo request cho leave type trừ quota hoặc qua self-sync API theo employee/năm.
+Balance key duy nhất là EmployeeId + LeaveTypeId + Year; các cột lưu là `PolicyDays`, `Used`, `Pending` (decimal(6,1)), có RowVersion và CHECK constraint ngăn bộ đếm âm. `Entitled = max(PolicyDays, Used + Pending)`; `Available = Entitled - Used - Pending`. Balance row được tạo lazy khi tạo đơn trừ quota hoặc khi tự đồng bộ theo employee/năm.
 
-GET `/api/v1/leave-balances/mine` chỉ đọc các rows tồn tại. POST `/api/v1/leave-balances/mine/synchronize` tạo row cho leave type active có `DeductsBalance=true`, yêu cầu đúng một policy cho mỗi loại nghỉ/năm, lấy quota từ HR authoritative catalog và cập nhật Entitled nhưng giữ Used/Pending. Nếu quota mới thấp hơn Used + Pending, transaction `SERIALIZABLE` rollback và trả conflict. Nếu không truyền year, Leave Service lấy business year UTC+07. Luồng tạo request cũng refresh Entitled từ policy authoritative trong transaction trước khi cộng Pending. Self-sync chỉ xử lý caller; chưa có HR bulk reconciliation/worker cho toàn bộ nhân viên.
+GET `/api/v1/leave-balances/mine` và POST `/api/v1/leave-balances/mine/synchronize` đều gọi HR authoritative để lấy policy hiện hành, sau đó cập nhật `PolicyDays` trong transaction `SERIALIZABLE` trước khi trả số dư. Luồng đọc có side effect đồng bộ idempotent; chỉ xử lý caller, chưa có HR bulk reconciliation/worker cho toàn bộ nhân viên. Khi quota giảm dưới Used + Pending, hệ thống vẫn cập nhật PolicyDays; Entitled tạm thời bằng Used + Pending, Available bằng 0. Khi đơn bị từ chối/hủy Pending được trả về, Entitled được tính lại theo PolicyDays và lượng Used + Pending còn lại. Luồng tạo đơn chọn policy version theo ngày tạo request và lưu snapshot version/quota; approve/reject/cancel refresh PolicyDays từ HR trong cùng transaction cập nhật Used/Pending.
 
 ### History hiện tại
 
