@@ -37,7 +37,7 @@ const currentBusinessYear = Number(new Intl.DateTimeFormat('en', {
 const futureYear = currentBusinessYear + 1;
 const annual: LeavePolicy = {
   id: 'annual',
-  year: futureYear,
+  year: currentBusinessYear,
   leaveTypeId: 1,
   policyId: 101,
   typeCode: 'ANNUAL',
@@ -111,15 +111,12 @@ describe('PoliciesPage', () => {
     renderPoliciesPage();
 
     await screen.findByRole('heading', { name: 'Nghỉ phép năm' });
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: 'Năm áp dụng' }),
-      String(currentBusinessYear),
-    );
-
+    expect(screen.getByRole('combobox', { name: 'Lọc theo chính sách' })).toHaveValue('ALL');
     const createButtons = await screen.findAllByRole('button', { name: 'Tạo phiên bản mới' });
     expect(createButtons).toHaveLength(2);
     await user.click(createButtons[0]);
 
+    expect(screen.getByLabelText('Năm áp dụng')).toHaveValue(String(currentBusinessYear));
     expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveAttribute('min');
     expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveValue(
       new Intl.DateTimeFormat('en-CA', {
@@ -131,46 +128,63 @@ describe('PoliciesPage', () => {
     );
   });
 
-  it('opens a new version with an effective date after the latest scheduled version', async () => {
+  it('opens a new current-year version after the latest scheduled version', async () => {
     const user = userEvent.setup();
-    vi.mocked(getPolicies).mockResolvedValue([
-      { ...annual, effectiveFrom: `${futureYear}-02-01` },
-      sick,
-      unpaid,
-    ]);
+    vi.mocked(getPolicies).mockImplementation(async (year, asOfDate) => {
+      if (asOfDate === `${currentBusinessYear}-12-31`) {
+        return [
+          { ...annual, year, effectiveFrom: `${currentBusinessYear}-12-01` },
+          { ...sick, year },
+          { ...unpaid, year },
+        ];
+      }
+      return [{ ...annual, year, effectiveFrom: `${currentBusinessYear}-01-01` }, sick, unpaid];
+    });
     renderPoliciesPage();
 
     await user.click((await screen.findAllByRole('button', { name: 'Tạo phiên bản mới' }))[0]);
 
-    expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveAttribute('min', `${futureYear}-01-01`);
-    expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveValue(`${futureYear}-02-02`);
+    expect(await screen.findByLabelText('Ngày hiệu lực *')).toHaveValue(`${currentBusinessYear}-12-02`);
   });
 
-  it('moves a legacy prior-year effective date to the selected future year start', async () => {
+  it('sets a future policy version to the first day of its policy year', async () => {
     const user = userEvent.setup();
-    vi.mocked(getPolicies).mockResolvedValue([
-      { ...annual, effectiveFrom: `${currentBusinessYear}-11-18` },
-      sick,
-      unpaid,
-    ]);
+    vi.mocked(getPolicies).mockImplementation(async (year) => {
+      if (year === futureYear) {
+        return [
+          { ...annual, year: futureYear, effectiveFrom: undefined },
+          { ...sick, year: futureYear, effectiveFrom: undefined },
+          { ...unpaid, year: futureYear },
+        ];
+      }
+      return policies;
+    });
     renderPoliciesPage();
 
     await user.click((await screen.findAllByRole('button', { name: 'Tạo phiên bản mới' }))[0]);
+    await user.selectOptions(screen.getByLabelText('Năm áp dụng'), String(futureYear));
 
-    expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveAttribute('min', `${futureYear}-01-01`);
+    expect(await screen.findByLabelText('Ngày hiệu lực *')).toHaveAttribute('min', `${futureYear}-01-01`);
     expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveValue(`${futureYear}-01-01`);
   });
 
-  it('disables version creation when the latest version is already effective on year end', async () => {
-    vi.mocked(getPolicies).mockResolvedValue([
-      { ...annual, effectiveFrom: `${futureYear}-12-31` },
-      sick,
-      unpaid,
-    ]);
+  it('does not open a new version when the current year has no later effective date', async () => {
+    const user = userEvent.setup();
+    vi.mocked(getPolicies).mockImplementation(async (year, asOfDate) => {
+      const effectiveFrom = asOfDate === `${currentBusinessYear}-12-31`
+        ? `${currentBusinessYear}-12-31`
+        : `${currentBusinessYear}-01-01`;
+      return [{ ...annual, year, effectiveFrom }, { ...sick, year }, { ...unpaid, year }];
+    });
     renderPoliciesPage();
 
-    const button = await screen.findByRole('button', { name: 'Hết thời gian tạo phiên bản' });
-    expect(button).toBeDisabled();
+    await user.click((await screen.findAllByRole('button', { name: 'Tạo phiên bản mới' }))[0]);
+
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledWith(
+      'Không còn ngày hiệu lực hợp lệ trong năm hiện tại.',
+      'error',
+    ));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('restores a deleted built-in policy', async () => {
@@ -182,7 +196,11 @@ describe('PoliciesPage', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Thêm lại chính sách Nghỉ ốm' }));
 
-    await waitFor(() => expect(restoreBuiltInLeaveType).toHaveBeenCalledWith({ ...sick, isActive: false }));
+    await waitFor(() => expect(restoreBuiltInLeaveType).toHaveBeenCalledWith({
+      ...sick,
+      isActive: false,
+      year: currentBusinessYear,
+    }));
     expect(mocks.notify).toHaveBeenCalledWith('Đã thêm lại chính sách nghỉ.');
   });
 });
