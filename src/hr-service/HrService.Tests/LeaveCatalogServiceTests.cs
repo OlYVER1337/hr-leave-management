@@ -288,7 +288,7 @@ public sealed class LeaveCatalogServiceTests
                     LeaveType = new LeaveType { Id = 4, Code = "ANNUAL", Name = "Annual leave" },
                     Year = 2026,
                     DaysPerYear = 12m,
-                    EffectiveFrom = new DateOnly(2025, 1, 1),
+                    EffectiveFrom = new DateOnly(2026, 1, 1),
                     CreatedAtUtc = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc),
                     Reason = "Initial"
                 },
