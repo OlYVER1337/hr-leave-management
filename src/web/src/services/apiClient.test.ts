@@ -1,4 +1,4 @@
-import axios, { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosError, AxiosHeaders, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios';
 import { describe, expect, it } from 'vitest';
 import { getApiErrorMessage } from './apiClient';
 
@@ -17,7 +17,7 @@ describe('getApiErrorMessage', () => {
       },
       status: 422,
       statusText: 'Unprocessable Entity',
-      headers: {},
+      headers: new AxiosHeaders(),
       config,
     } satisfies AxiosResponse;
 
@@ -35,7 +35,7 @@ describe('getApiErrorMessage', () => {
       data: { title: 'Validation failed', detail: 'Invalid request data', status: 422 },
       status: 422,
       statusText: 'Unprocessable Entity',
-      headers: {},
+      headers: new AxiosHeaders(),
       config,
     } satisfies AxiosResponse;
     const error = new AxiosError('Request failed', 'ERR_BAD_REQUEST', config, undefined, response);
