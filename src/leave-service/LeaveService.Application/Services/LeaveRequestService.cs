@@ -350,27 +350,6 @@ public sealed class LeaveRequestService(
         return requests.Select(item => ToResponse(item.Request, item.Balances)).ToArray();
     }
 
-    public async Task<IReadOnlyList<LeaveBalanceResponse>> GetBalancesAsync(
-        Guid employeeId,
-        int year,
-        CancellationToken cancellationToken = default)
-    {
-        if (year is < 1900 or > 9998)
-        {
-            throw Invalid("year", "Year must be between 1900 and 9998.");
-        }
-
-        var balances = await repository.ListBalancesAsync(employeeId, year, cancellationToken);
-        return balances.Select(balance => new LeaveBalanceResponse(
-            balance.LeaveTypeId,
-            balance.Year,
-            balance.Entitled,
-            balance.Used,
-            balance.Pending,
-            balance.Entitled - balance.Used - balance.Pending,
-            balance.PolicyDays)).ToArray();
-    }
-
     public async Task<LeaveRequestResponse> DecideAsync(
         Guid actorId,
         string authorization,
