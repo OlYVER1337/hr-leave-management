@@ -104,7 +104,7 @@ Giới hạn: API hiện chỉ quản lý assignment cho danh mục Role đượ
 
 Ba loại nghỉ chuẩn là ANNUAL, SICK, UNPAID. Không cho phép loại nghỉ tùy ý; UNPAID không có quota policy. authoritative=true bypass Redis và đọc SQL trực tiếp. Leave Service dùng authoritative read khi tính nghiệp vụ.
 
-Leave Policy được lưu theo phiên bản bất biến, mỗi bản ghi có EffectiveFrom, CreatedAtUtc và Reason. POST tạo phiên bản đầu tiên; PUT thêm một phiên bản mới cho cùng loại nghỉ/năm và không sửa bản ghi cũ. Chỉ năm tương lai mới được tạo/thêm phiên bản; năm hiện tại và quá khứ bị khóa. EffectiveFrom là ngày nghiệp vụ UTC+07:00 không được nằm trong quá khứ; phiên bản policy năm tương lai có thể có hiệu lực từ một ngày trong năm hiện tại. GET hỗ trợ asOfDate để lấy trực tiếp từ HR phiên bản mới nhất có EffectiveFrom không sau ngày chỉ định; có asOfDate thì endpoint tự dùng đường đọc authoritative kể cả khi không truyền authoritative=true.
+Leave Policy được lưu theo phiên bản bất biến, mỗi bản ghi có EffectiveFrom, CreatedAtUtc và Reason. POST tạo phiên bản đầu tiên; PUT thêm một phiên bản mới cho cùng loại nghỉ/năm và không sửa bản ghi cũ. Có thể tạo/thêm phiên bản cho năm hiện tại hoặc năm tương lai; năm đã kết thúc chỉ được xem. EffectiveFrom phải thuộc đúng năm policy đã chọn và không sớm hơn ngày nghiệp vụ hiện tại (UTC+07:00). Vì vậy, policy năm hiện tại có thể bắt đầu từ hôm nay; policy năm tương lai bắt đầu sớm nhất từ ngày 01/01 của chính năm đó. GET hỗ trợ asOfDate để lấy trực tiếp từ HR phiên bản mới nhất có EffectiveFrom không sau ngày chỉ định; có asOfDate thì endpoint tự dùng đường đọc authoritative kể cả khi không truyền authoritative=true.
 
 Body mẫu cho POST/PUT:
 
@@ -112,7 +112,7 @@ Body mẫu cho POST/PUT:
       "leaveTypeId": 1,
       "year": 2027,
       "daysPerYear": 15,
-      "effectiveFrom": "2026-11-18",
+      "effectiveFrom": "2027-01-01",
       "reason": "Điều chỉnh chính sách nghỉ phép"
     }
 
