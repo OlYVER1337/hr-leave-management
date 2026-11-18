@@ -746,28 +746,43 @@ export async function savePolicies(policies: LeavePolicy[]): Promise<void> {
   }
   try {
     const defaultYear = getBusinessYear() + 1;
-    await Promise.all(policies.map(async (policy) => {
-      if (!policy.leaveTypeId) throw new Error(`Missing leaveTypeId for ${policy.typeName}.`);
-      const definition = builtInLeaveTypes.find((type) => type.code === policy.typeCode);
-      if (!definition) throw new Error(`Unsupported leave type: ${policy.typeCode}.`);
-      await hrApi.put(`/api/v1/leave-types/${policy.leaveTypeId}`, {
-        name: definition.name,
-        isPaid: definition.isPaid,
-        deductsBalance: definition.deductsBalance,
-        isActive: policy.isActive,
-      });
-      if (definition.deductsBalance && policy.daysPerYear !== null) {
-        const body = {
-          leaveTypeId: policy.leaveTypeId,
-          year: policy.year ?? defaultYear,
-          daysPerYear: policy.daysPerYear,
-          effectiveFrom: policy.effectiveFrom,
-          reason: policy.reason?.trim() || 'Cập nhật chính sách nghỉ phép',
-        };
-        if (policy.policyId) await hrApi.put(`/api/v1/leave-policies/${policy.policyId}`, body);
-        else await hrApi.post('/api/v1/leave-policies', body);
+
+    // Policy version changes must not update the separate LeaveType resource.
+    // Keeping this request isolated avoids requiring leave-types.update for a
+    // user who is authorized only to manage leave-policy versions.
+    for (const policy of policies) {
+      if (!policy.leaveTypeId) {
+        throw new Error(`Missing leaveTypeId for ${policy.typeName}.`);
       }
-    }));
+
+      const definition = builtInLeaveTypes.find((type) => type.code === policy.typeCode);
+      if (!definition) {
+        throw new Error(`Unsupported leave type: ${policy.typeCode}.`);
+      }
+      if (!definition.deductsBalance || policy.daysPerYear === null) continue;
+
+      const year = policy.year ?? defaultYear;
+      if (!Number.isInteger(year) || year <= getBusinessYear()) {
+        throw new Error('Chỉ có thể thay đổi chính sách của năm tương lai.');
+      }
+      if (!policy.effectiveFrom) {
+        throw new Error('Vui lòng chọn ngày hiệu lực cho phiên bản chính sách.');
+      }
+
+      const body = {
+        leaveTypeId: policy.leaveTypeId,
+        year,
+        daysPerYear: policy.daysPerYear,
+        effectiveFrom: policy.effectiveFrom,
+        reason: policy.reason?.trim() || 'Cập nhật chính sách nghỉ phép',
+      };
+
+      if (policy.policyId) {
+        await hrApi.put(`/api/v1/leave-policies/${policy.policyId}`, body);
+      } else {
+        await hrApi.post('/api/v1/leave-policies', body);
+      }
+    }
   } catch (error) { throw new Error(`Không lưu được chính sách. ${getApiErrorMessage(error)}`); }
 }
 
