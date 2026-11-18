@@ -132,20 +132,17 @@ describe('leave request summary and decisions', () => {
       }],
     });
     mocks.hrGet.mockResolvedValue({
-      data: {
-        leaveTypes: [{
-          id: 1,
-          code: 'ANNUAL',
-          name: 'Annual leave',
-          isPaid: true,
-          deductsBalance: true,
-          isActive: true,
-        }],
-        leavePolicies: [{ id: 12, leaveTypeId: 1, year, daysPerYear: 15 }],
-      },
+      data: [{
+        id: 1,
+        code: 'ANNUAL',
+        name: 'Annual leave',
+        isPaid: true,
+        deductsBalance: true,
+        isActive: true,
+      }],
     });
 
-    // Hàm getBalances phải đồng bộ balance ở Leave Service rồi ghép dữ liệu catalog từ HR.
+    // Hàm getBalances đồng bộ balance ở Leave Service rồi lấy danh sách loại nghỉ từ HR.
     const result = await getBalances(employee);
 
     expect(result).toHaveLength(1);
@@ -156,7 +153,7 @@ describe('leave request summary and decisions', () => {
       pending: 1,
       available: 12,
     });
-    // Chỉ có một POST đến Leave và một GET đến HR; không còn GET balance cũ hoặc request thừa.
+    // Chỉ có một POST đồng bộ balance và một GET danh sách loại nghỉ từ HR.
     expect(mocks.leavePost).toHaveBeenCalledTimes(1);
     expect(mocks.leavePost).toHaveBeenCalledWith(
       '/api/v1/leave-balances/mine/synchronize',
@@ -164,9 +161,7 @@ describe('leave request summary and decisions', () => {
       { params: { year } },
     );
     expect(mocks.hrGet).toHaveBeenCalledTimes(1);
-    expect(mocks.hrGet).toHaveBeenCalledWith('/api/v1/leave-catalog', {
-      params: { year },
-    });
+    expect(mocks.hrGet).toHaveBeenCalledWith('/api/v1/leave-types');
   });
 });
 

@@ -359,7 +359,7 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
         }
     }
 
-    // Quota mới không đủ: balance, leave request và history phải cùng rollback.
+    // PolicyDays giảm xuống dưới Used + Pending thì Available bằng 0; request mới phải rollback vì không còn ngày khả dụng.
     [LeaveSqlFact]
     public async Task CreateAsync_RejectsPolicyBelowUsedAndPendingWithoutPersistingRequest()
     {

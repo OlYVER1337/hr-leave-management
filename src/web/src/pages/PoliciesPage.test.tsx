@@ -92,14 +92,14 @@ describe('PoliciesPage', () => {
     expect(screen.queryByRole('button', { name: 'Thêm loại nghỉ' })).not.toBeInTheDocument();
   });
 
-  it('keeps active policy actions available without a delete action', async () => {
+  it('offers version creation for active policies without a delete action', async () => {
     renderPoliciesPage();
 
-    expect(await screen.findAllByRole('button', { name: 'Sửa chính sách' })).not.toHaveLength(0);
+    expect(await screen.findAllByRole('button', { name: 'Tạo phiên bản mới' })).toHaveLength(3);
     expect(screen.queryByRole('button', { name: /Xóa chính sách/ })).not.toBeInTheDocument();
   });
 
-  it('locks policy editing for the current year', async () => {
+  it('allows new policy versions for the current year', async () => {
     const user = userEvent.setup();
     renderPoliciesPage();
 
@@ -110,10 +110,10 @@ describe('PoliciesPage', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getAllByRole('button', { name: 'Chính sách đã khóa' })).toHaveLength(3);
+      expect(screen.getAllByRole('button', { name: 'Tạo phiên bản mới' })).toHaveLength(3);
     });
-    expect(screen.getAllByRole('button', { name: 'Chính sách đã khóa' }).every(
-      (button) => (button as HTMLButtonElement).disabled,
+    expect(screen.getAllByRole('button', { name: 'Tạo phiên bản mới' }).every(
+      (button) => !(button as HTMLButtonElement).disabled,
     )).toBe(true);
   });
 
