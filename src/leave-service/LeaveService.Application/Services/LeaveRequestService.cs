@@ -367,7 +367,8 @@ public sealed class LeaveRequestService(
             balance.Entitled,
             balance.Used,
             balance.Pending,
-            balance.Entitled - balance.Used - balance.Pending)).ToArray();
+            balance.Entitled - balance.Used - balance.Pending,
+            balance.PolicyDays)).ToArray();
     }
 
     public async Task<LeaveRequestResponse> DecideAsync(
@@ -438,6 +439,11 @@ public sealed class LeaveRequestService(
         if (request is null || request.EmployeeId != employeeId)
         {
             throw new LeaveNotFoundException($"Leave request with id '{requestId}' was not found.");
+        }
+
+        if (request.Status != LeaveRequestStatus.Pending)
+        {
+            throw new LeaveConflictException("Only pending leave requests can be cancelled.");
         }
 
         var currentPolicyDays = request.YearAllocations.Count == 0
@@ -631,7 +637,8 @@ public sealed class LeaveRequestService(
                 balance.Entitled,
                 balance.Used,
                 balance.Pending,
-                balance.Entitled - balance.Used - balance.Pending)).ToArray());
+                balance.Entitled - balance.Used - balance.Pending,
+                balance.PolicyDays)).ToArray());
 }
 
 public sealed record PagedLeaveRequestResponse(IReadOnlyList<LeaveRequestResponse> Items, int TotalCount);

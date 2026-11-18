@@ -22,7 +22,8 @@ public sealed record LeaveBalanceResponse(
     decimal Entitled,
     decimal Used,
     decimal Pending,
-    decimal Available);
+    decimal Available,
+    decimal PolicyDays = 0m);
 
 public sealed record LeaveRequestResponse(
     Guid Id,

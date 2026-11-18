@@ -51,6 +51,7 @@ export interface LeaveBalance {
   code: string;
   name: string;
   entitled: number | null;
+  policyDays?: number;
   used: number;
   pending: number;
   available: number | null;

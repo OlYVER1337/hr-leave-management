@@ -86,7 +86,8 @@ public sealed class LeaveBalanceService(
                 item.Entitled,
                 item.Used,
                 item.Pending,
-                item.Entitled - item.Used - item.Pending))
+                item.Entitled - item.Used - item.Pending,
+                item.PolicyDays))
             .ToArray();
     }
 
