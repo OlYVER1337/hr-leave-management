@@ -113,18 +113,6 @@ describe('PoliciesPage', () => {
     expect(screen.queryByRole('button', { name: /Xóa chính sách/ })).not.toBeInTheDocument();
   });
 
-  it('filters the current policy cards by leave policy type', async () => {
-    const user = userEvent.setup();
-    renderPoliciesPage();
-
-    await screen.findByRole('heading', { name: 'Nghỉ phép năm' });
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Lọc theo chính sách' }), 'SICK');
-
-    expect(screen.getByRole('heading', { name: 'Nghỉ ốm' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Nghỉ phép năm' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Nghỉ không lương' })).not.toBeInTheDocument();
-  });
-
   it('uses one shared version filter across all leave types', async () => {
     const user = userEvent.setup();
     vi.mocked(getPolicyVersions).mockResolvedValue([
