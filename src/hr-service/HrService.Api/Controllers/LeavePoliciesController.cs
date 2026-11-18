@@ -18,7 +18,7 @@ public sealed class LeavePoliciesController(LeaveCatalogService catalogService) 
         [FromQuery] bool authoritative,
         CancellationToken cancellationToken)
     {
-        var policies = authoritative
+        var policies = authoritative || asOfDate.HasValue
             ? await catalogService.GetAuthoritativeLeavePoliciesAsync(year, asOfDate, cancellationToken)
             : await catalogService.GetLeavePoliciesAsync(year, cancellationToken);
         return Ok(policies);
