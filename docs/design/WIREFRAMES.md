@@ -407,6 +407,7 @@ Tab Loại nghỉ & hạn mức:
     │ QUẢN TRỊ  Chính sách nghỉ phép                                             │
     ├────────────────────────────────────────────────────────────────────────────┤
     │ [Loại nghỉ & hạn mức (n)] [Ngày nghỉ lễ (n)]                              │
+    │ Lọc theo chính sách: [Tất cả chính sách ▼]  Phiên bản đang hiệu lực hôm nay│
     ├──────────────────────┬─────────────────────┬───────────────────────────────┤
     │ [Icon] Active        │ [Icon] Active        │ [Icon] Active                 │
     │ Nghỉ phép năm        │ Nghỉ ốm              │ Nghỉ không lương              │
@@ -421,8 +422,8 @@ Tab Loại nghỉ & hạn mức:
     loại tùy ý. Nếu thiếu một loại chuẩn, HR có thể thêm lại loại và hạn mức mặc
     định; loại đã cấu hình chỉ có thể sửa hạn mức.
 
-    Policy edit modal chỉ cho phép sửa số ngày mỗi năm; tên và thuộc tính loại nghỉ
-    được cố định.
+    Modal tạo phiên bản gồm năm áp dụng, số ngày mỗi năm, ngày hiệu lực và lý do.
+    Tên và thuộc tính loại nghỉ được cố định.
 
 Tab Ngày nghỉ lễ:
 
@@ -437,11 +438,13 @@ Tab Ngày nghỉ lễ:
 
 Holiday modal: tên ngày lễ + ngày. Create/edit/delete đã được nối frontend HR API.
 
-Policies có bộ chọn **Năm áp dụng** và mặc định mở năm kế tiếp. HR có thể tạo
-phiên bản cho năm hiện tại và năm tương lai; các năm đã kết thúc chỉ được xem.
-Ngày hiệu lực của năm hiện tại không được trước hôm nay; với năm tương lai,
-ngày hiệu lực sớm nhất là 01/01 của năm được chọn. Backend kiểm tra cùng quy tắc
-nên không thể tạo phiên bản hồi tố hoặc đặt hiệu lực ở sai năm qua API.
+Policies mặc định hiển thị phiên bản đang có hiệu lực tại ngày hiện tại
+(UTC+07:00) và có bộ lọc theo loại nghỉ: ANNUAL, SICK, UNPAID. Năm áp dụng chỉ
+được chọn khi tạo phiên bản trong modal. HR có thể tạo phiên bản cho năm hiện tại
+và năm tương lai; các năm đã kết thúc chỉ được xem. Ngày hiệu lực của năm hiện
+tại không được trước hôm nay; với năm tương lai, ngày hiệu lực sớm nhất là
+01/01 của năm được chọn. Backend kiểm tra cùng quy tắc nên không thể tạo phiên
+bản hồi tố hoặc đặt hiệu lực ở sai năm qua API.
 
 ### 4.11. Hồ sơ của tôi — /profile
 
