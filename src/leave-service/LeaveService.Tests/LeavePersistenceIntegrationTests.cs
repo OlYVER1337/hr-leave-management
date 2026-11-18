@@ -575,7 +575,8 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
             .ToDictionaryAsync(item => item.EmployeeId);
         Assert.Equal(2m, persistedBalances[approvedEmployee].Used);
         Assert.Equal(0m, persistedBalances[approvedEmployee].Pending);
-        Assert.Equal(0m, persistedBalances[rejectedEmployee].Used);
+        // Rejection releases only Pending; historical Used must remain unchanged.
+        Assert.Equal(6m, persistedBalances[rejectedEmployee].Used);
         Assert.Equal(0m, persistedBalances[rejectedEmployee].Pending);
         Assert.Equal(0m, persistedBalances[cancelledEmployee].Used);
         Assert.Equal(0m, persistedBalances[cancelledEmployee].Pending);
