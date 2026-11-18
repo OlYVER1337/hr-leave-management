@@ -6,4 +6,6 @@ public sealed class LeaveRequestYearAllocation
     public LeaveRequest? LeaveRequest { get; set; }
     public int Year { get; set; }
     public decimal Days { get; set; }
+    public int? PolicyVersionId { get; set; }
+    public decimal PolicyDaysAtCreation { get; set; }
 }
