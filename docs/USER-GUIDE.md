@@ -91,8 +91,11 @@ bằng tài khoản có quyền tương ứng.
 3. Vào **Chính sách nghỉ phép** để quản lý ba loại nghỉ cố định:
    `ANNUAL` (nghỉ phép năm), `SICK` (nghỉ ốm), `UNPAID` (nghỉ không lương).
    Màn hình mặc định hiển thị phiên bản đang có hiệu lực tại ngày hiện tại
-   (UTC+07:00); dùng bộ lọc **Lọc theo chính sách** để chọn ANNUAL, SICK hoặc
-   UNPAID thay vì chuyển qua từng năm. Khi tạo phiên bản mới, chọn **Năm áp dụng**
+   (UTC+07:00). Dùng một bộ lọc version chung gồm **Đang có hiệu lực**,
+   **Tất cả phiên bản**, **Version 1**, **Version 2**... Khi chọn một version,
+   cả ANNUAL và SICK đều hiển thị version có cùng số thứ tự riêng của từng loại;
+   nếu loại nghỉ chưa có version tương ứng, màn hình thông báo rõ. UNPAID không
+   quản lý quota nên không có version. Khi tạo phiên bản mới, chọn **Năm áp dụng**
    ngay trong biểu mẫu, sau đó nhập số ngày, **Ngày hiệu lực** và lý do thay đổi.
    Năm hiện tại chỉ nhận ngày hiệu lực từ hôm nay; năm tương lai chỉ nhận ngày
    từ 01/01 của chính năm đó. Không cho đặt hiệu lực hồi tố hoặc sang năm khác.
