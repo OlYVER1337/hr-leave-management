@@ -278,7 +278,7 @@ public sealed class LeaveCatalogServiceTests
     {
         var repository = new Mock<ILeaveCatalogRepository>();
         repository
-            .Setup(item => item.ListLeavePoliciesAsync(2025, It.IsAny<CancellationToken>()))
+            .Setup(item => item.ListLeavePoliciesAsync(2026, It.IsAny<CancellationToken>()))
             .ReturnsAsync(
             [
                 new LeavePolicy
@@ -325,6 +325,47 @@ public sealed class LeaveCatalogServiceTests
         Assert.Equal(11, policy.Id);
         Assert.Equal(15m, policy.DaysPerYear);
         Assert.Equal(new DateOnly(2026, 6, 1), policy.EffectiveFrom);
+    }
+
+    // Phiên bản legacy có EffectiveFrom ở năm trước không được áp dụng cho policy năm tương lai.
+    [Fact]
+    public async Task GetAuthoritativeLeavePoliciesAsync_ExcludesVersionsEffectiveBeforePolicyYear()
+    {
+        var repository = new Mock<ILeaveCatalogRepository>();
+        repository
+            .Setup(item => item.ListLeavePoliciesAsync(2027, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+            [
+                new LeavePolicy
+                {
+                    Id = 20,
+                    LeaveTypeId = 4,
+                    LeaveType = new LeaveType { Id = 4, Code = "ANNUAL", Name = "Annual leave" },
+                    Year = 2027,
+                    DaysPerYear = 12m,
+                    EffectiveFrom = new DateOnly(2026, 11, 18)
+                },
+                new LeavePolicy
+                {
+                    Id = 21,
+                    LeaveTypeId = 4,
+                    LeaveType = new LeaveType { Id = 4, Code = "ANNUAL", Name = "Annual leave" },
+                    Year = 2027,
+                    DaysPerYear = 15m,
+                    EffectiveFrom = new DateOnly(2027, 1, 1)
+                }
+            ]);
+        var service = CreateService(repository, new InMemoryLeaveCatalogCache());
+
+        var beforePolicyYear = await service.GetAuthoritativeLeavePoliciesAsync(
+            2027,
+            new DateOnly(2026, 12, 31));
+        var onPolicyYearStart = await service.GetAuthoritativeLeavePoliciesAsync(
+            2027,
+            new DateOnly(2027, 1, 1));
+
+        Assert.Empty(beforePolicyYear);
+        Assert.Equal(21, Assert.Single(onPolicyYearStart).Id);
     }
 
     // Ngày hiệu lực của policy phải thuộc đúng năm áp dụng và không vượt quá cuối năm.
