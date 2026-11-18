@@ -323,6 +323,41 @@ describe('built-in leave policies', () => {
     });
   });
 
+  it('keeps the legacy policy id but hides an effective date from the previous year', async () => {
+    const year = getVietnamBusinessYear() + 1;
+    mocks.hrGet.mockImplementation(async (path: string) => {
+      if (path === '/api/v1/leave-catalog') {
+        return {
+          data: {
+            leaveTypes: [
+              { id: 1, code: 'ANNUAL', name: 'Annual leave', isPaid: true, deductsBalance: true, isActive: true },
+            ],
+            leavePolicies: [
+              {
+                id: 99,
+                leaveTypeId: 1,
+                year,
+                daysPerYear: 15,
+                effectiveFrom: `${year - 1}-11-18`,
+                createdAtUtc: '2026-11-18T00:00:00Z',
+                reason: 'Legacy version',
+              },
+            ],
+          },
+        };
+      }
+      throw new Error('Unexpected HR API path: ' + path);
+    });
+
+    const annual = (await getPolicies(year)).find((policy) => policy.typeCode === 'ANNUAL');
+
+    expect(annual).toMatchObject({
+      policyId: 99,
+      daysPerYear: 15,
+      effectiveFrom: undefined,
+    });
+  });
+
   // Khôi phục leave type chuẩn phải tạo loại nghỉ trước rồi mới tạo policy mặc định cho năm tương lai.
   it('restores a missing built-in type and creates its default annual policy', async () => {
     const year = getVietnamBusinessYear() + 1;
