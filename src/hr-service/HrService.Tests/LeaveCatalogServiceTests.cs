@@ -387,9 +387,9 @@ public sealed class LeaveCatalogServiceTests
             Times.Never);
     }
 
-    // Không cho chuyển policy sang năm hiện tại hoặc quá khứ.
+    // Không cho đổi năm của policy version; policy luôn thuộc một năm cố định.
     [Fact]
-    public async Task UpdateLeavePolicyAsync_RejectsChangingPolicyToCurrentOrPastYear()
+    public async Task UpdateLeavePolicyAsync_RejectsMovingPolicyToAnotherYear()
     {
         var repository = new Mock<ILeaveCatalogRepository>();
         var unitOfWork = new Mock<IUnitOfWork>();
@@ -415,9 +415,9 @@ public sealed class LeaveCatalogServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    // Không thể né khóa policy bằng cách chuyển một policy năm hiện tại sang năm tương lai.
+    // Policy của năm hiện tại cũng không được chuyển sang năm khác.
     [Fact]
-    public async Task UpdateLeavePolicyAsync_RejectsMovingCurrentYearPolicyIntoFuture()
+    public async Task UpdateLeavePolicyAsync_RejectsMovingCurrentYearPolicyToAnotherYear()
     {
         var repository = new Mock<ILeaveCatalogRepository>();
         var unitOfWork = new Mock<IUnitOfWork>();
@@ -608,7 +608,7 @@ public sealed class LeaveCatalogServiceTests
             .Setup(item => item.GetLeaveTypeForUpdateByIdAsync(4, It.IsAny<CancellationToken>()))
             .ReturnsAsync(leaveType);
         repository
-            .Setup(item => item.ListLeavePoliciesAsync(2026, It.IsAny<CancellationToken>()))
+            .Setup(item => item.ListLeavePoliciesAsync(2025, It.IsAny<CancellationToken>()))
             .ReturnsAsync((IReadOnlyList<LeavePolicy>)[]);
         repository
             .Setup(item => item.Add(It.IsAny<LeavePolicy>()))
@@ -633,7 +633,7 @@ public sealed class LeaveCatalogServiceTests
         Assert.Equal(12m, original.DaysPerYear);
         Assert.Equal(15m, appendedVersion.DaysPerYear);
         Assert.Equal(15m, result.DaysPerYear);
-        Assert.Equal(new DateOnly(2025, 6, 1), result.EffectiveFrom);
+        Assert.Equal(new DateOnly(2025, 7, 1), result.EffectiveFrom);
         Assert.Equal(
             new[] { "add", "save", "remove:hr:catalog:leave-policies" },
             events);
