@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -113,7 +113,7 @@ describe('PoliciesPage', () => {
     expect(screen.queryByRole('button', { name: /Xóa chính sách/ })).not.toBeInTheDocument();
   });
 
-  it('uses one shared version filter across all leave types', async () => {
+  it('shows the current policies by default and opens history for one leave type', async () => {
     const user = userEvent.setup();
     vi.mocked(getPolicyVersions).mockResolvedValue([
       { ...annual, versionNumber: 1 },
@@ -122,15 +122,34 @@ describe('PoliciesPage', () => {
     ]);
     renderPoliciesPage();
 
-    const versionFilter = await screen.findByRole('combobox', { name: 'Lọc theo phiên bản' });
-    expect(versionFilter).toHaveValue('CURRENT');
+    const viewFilter = await screen.findByRole('combobox', { name: 'Hiển thị chính sách' });
+    expect(viewFilter).toHaveValue('CURRENT');
+    expect(screen.getByRole('heading', { name: 'Nghỉ phép năm' })).toBeInTheDocument();
 
-    await user.selectOptions(versionFilter, '2');
+    await user.click(screen.getByRole('button', { name: /Xem lịch sử/ }));
 
-    expect(screen.getByRole('heading', { name: 'Nghỉ phép năm · Version 2' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Nghỉ ốm · Version 2' })).toBeInTheDocument();
-    expect(screen.getByText('Không có Version 2')).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Nghỉ không lương · Version 2' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Lịch sử chính sách · Nghỉ phép năm' })).toBeInTheDocument();
+    expect(screen.getByText('Version 1')).toBeInTheDocument();
+    expect(screen.getByText('Version 2')).toBeInTheDocument();
+  });
+
+  it('shows all versions grouped by leave type when history view is selected', async () => {
+    const user = userEvent.setup();
+    vi.mocked(getPolicyVersions).mockResolvedValue([
+      { ...annual, versionNumber: 1 },
+      { ...annual, id: 'annual-v2', policyId: 202, versionNumber: 2, daysPerYear: 15, effectiveFrom: `${currentBusinessYear}-06-01` },
+      { ...sick, versionNumber: 1 },
+    ]);
+    renderPoliciesPage();
+
+    await user.selectOptions(
+      await screen.findByRole('combobox', { name: 'Hiển thị chính sách' }),
+      'HISTORY',
+    );
+
+    expect(screen.getByText('Version 1')).toBeInTheDocument();
+    expect(screen.getByText('Version 2')).toBeInTheDocument();
+    expect(screen.getByText('UNPAID không áp dụng quota và không có version.')).toBeInTheDocument();
   });
 
   it('allows current-year policy versions from the current business date onward', async () => {
@@ -232,6 +251,25 @@ describe('PoliciesPage', () => {
 
     expect(await screen.findByLabelText('Năm áp dụng')).toHaveValue(String(futureYear));
     expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveValue(`${futureYear}-01-01`);
+  });
+
+  it('submits a policy save only once when the form is submitted repeatedly', async () => {
+    const user = userEvent.setup();
+    let releaseSave: (() => void) | undefined;
+    vi.mocked(savePolicies).mockImplementation(() => new Promise<void>((resolve) => {
+      releaseSave = resolve;
+    }));
+    renderPoliciesPage();
+
+    await user.click((await screen.findAllByRole('button', { name: 'Tạo phiên bản mới' }))[0]);
+    const form = screen.getByRole('dialog').querySelector('form');
+    expect(form).not.toBeNull();
+
+    fireEvent.submit(form!);
+    fireEvent.submit(form!);
+
+    expect(savePolicies).toHaveBeenCalledTimes(1);
+    releaseSave?.();
   });
 
   it('restores a deleted built-in policy', async () => {
