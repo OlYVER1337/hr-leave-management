@@ -323,6 +323,51 @@ describe('built-in leave policies', () => {
     });
   });
 
+  it('resolves the policy version that is effective on the requested date', async () => {
+    const year = getVietnamBusinessYear() + 1;
+    mocks.hrGet.mockResolvedValue({
+      data: {
+        leaveTypes: [
+          { id: 1, code: 'ANNUAL', name: 'Annual leave', isPaid: true, deductsBalance: true, isActive: true },
+        ],
+        leavePolicies: [
+          {
+            id: 11,
+            leaveTypeId: 1,
+            year,
+            daysPerYear: 12,
+            effectiveFrom: `${year}-01-01`,
+            createdAtUtc: `${year}-01-01T00:00:00Z`,
+          },
+          {
+            id: 12,
+            leaveTypeId: 1,
+            year,
+            daysPerYear: 15,
+            effectiveFrom: `${year}-07-01`,
+            createdAtUtc: `${year}-06-20T00:00:00Z`,
+          },
+        ],
+      },
+    });
+
+    const firstHalf = (await getPolicies(year, `${year}-06-30`))
+      .find((policy) => policy.typeCode === 'ANNUAL');
+    const secondHalf = (await getPolicies(year, `${year}-12-31`))
+      .find((policy) => policy.typeCode === 'ANNUAL');
+
+    expect(firstHalf).toMatchObject({
+      policyId: 11,
+      daysPerYear: 12,
+      effectiveFrom: `${year}-01-01`,
+    });
+    expect(secondHalf).toMatchObject({
+      policyId: 12,
+      daysPerYear: 15,
+      effectiveFrom: `${year}-07-01`,
+    });
+  });
+
   it('keeps the legacy policy id but hides an effective date from the previous year', async () => {
     const year = getVietnamBusinessYear() + 1;
     mocks.hrGet.mockImplementation(async (path: string) => {
