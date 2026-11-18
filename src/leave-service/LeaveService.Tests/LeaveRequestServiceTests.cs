@@ -1105,6 +1105,93 @@ public sealed class LeaveRequestServiceTests
                 null),
             Times.Never);
 
+    // Approve/reject lấy policy version có hiệu lực tại ngày xử lý và truyền quota mới vào cùng transaction.
+    [Fact]
+    public async Task DecideAsync_RefreshesCurrentPolicyBeforeTransition()
+    {
+        var actorId = Guid.NewGuid();
+        var employeeId = Guid.NewGuid();
+        var request = new LeaveRequest
+        {
+            Id = Guid.NewGuid(),
+            EmployeeId = employeeId,
+            LeaveTypeId = 4,
+            Status = LeaveRequestStatus.Pending,
+            YearAllocations =
+            [
+                new LeaveRequestYearAllocation
+                {
+                    LeaveRequestId = Guid.NewGuid(),
+                    Year = 2027,
+                    Days = 2m
+                }
+            ]
+        };
+        var updatedRequest = new LeaveRequest
+        {
+            Id = request.Id,
+            EmployeeId = employeeId,
+            LeaveTypeId = 4,
+            Status = LeaveRequestStatus.Rejected
+        };
+        var repository = new Mock<ILeaveRequestRepository>();
+        var hrClient = new Mock<ILeaveHrClient>();
+        repository
+            .Setup(item => item.GetForDecisionAsync(request.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(request);
+        hrClient
+            .Setup(item => item.GetEmployeeAsync(employeeId, "Bearer manager", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new HrEmployeeSnapshot(employeeId, "E1", "Employee", "Employee", true, 1, actorId));
+        hrClient
+            .Setup(item => item.GetLeavePoliciesAsync(2027, "Bearer manager", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                new HrLeavePolicy(51, 4, "ANNUAL", "Annual leave", 2027, 15m, new DateOnly(2026, 1, 1)),
+                new HrLeavePolicy(52, 4, "ANNUAL", "Annual leave", 2027, 8m, new DateOnly(2026, 11, 17)),
+                new HrLeavePolicy(53, 4, "ANNUAL", "Annual leave", 2027, 20m, new DateOnly(2026, 11, 20))
+            ]);
+        repository
+            .Setup(item => item.TransitionAsync(
+                request.Id,
+                actorId,
+                It.IsAny<LeaveAccess>(),
+                LeaveRequestStatus.Rejected,
+                "No coverage",
+                It.IsAny<DateTime>(),
+                (Guid?)actorId,
+                It.IsAny<CancellationToken>(),
+                It.Is<IReadOnlyList<LeaveBalanceEntitlement>>(values =>
+                    values.Count == 1 &&
+                    values[0] == new LeaveBalanceEntitlement(4, 8m, 2027))))
+            .ReturnsAsync((updatedRequest, (IReadOnlyList<LeaveBalance>)[]));
+        var service = new LeaveRequestService(
+            repository.Object,
+            hrClient.Object,
+            new FixedTimeProvider(new DateTimeOffset(2026, 11, 18, 2, 0, 0, TimeSpan.Zero)));
+
+        var result = await service.DecideAsync(
+            actorId,
+            "Bearer manager",
+            request.Id,
+            approve: false,
+            ManagerAccess(),
+            " No coverage ");
+
+        Assert.Equal(LeaveRequestStatus.Rejected, result.Status);
+        repository.Verify(item => item.TransitionAsync(
+            request.Id,
+            actorId,
+            It.IsAny<LeaveAccess>(),
+            LeaveRequestStatus.Rejected,
+            "No coverage",
+            It.IsAny<DateTime>(),
+            (Guid?)actorId,
+            It.IsAny<CancellationToken>(),
+            It.Is<IReadOnlyList<LeaveBalanceEntitlement>>(values =>
+                values.Count == 1 &&
+                values[0] == new LeaveBalanceEntitlement(4, 8m, 2027))),
+            Times.Once);
+    }
+
     // Pending cancellation refreshes the current HR quota and passes it to the balance transaction.
     [Fact]
     public async Task CancelAsync_RecordsEmployeeCancellationAndRefreshesPolicyWhenNeeded()
