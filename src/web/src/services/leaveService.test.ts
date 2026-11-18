@@ -427,15 +427,22 @@ describe('built-in leave policies', () => {
     expect(mocks.hrPut).not.toHaveBeenCalled();
   });
 
-  it('rejects policy changes for the current business year before calling the API', async () => {
+  it('allows policy changes for the current business year from today onward', async () => {
     const year = getVietnamBusinessYear();
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+    mocks.hrPut.mockResolvedValue({ data: {} });
 
-    await expect(savePolicies([{
+    await savePolicies([{
       id: 'type-1',
       policyId: 11,
       leaveTypeId: 1,
       year,
-      effectiveFrom: `${year}-11-18`,
+      effectiveFrom: today,
       typeCode: 'ANNUAL',
       typeName: 'Nghỉ phép năm',
       daysPerYear: 15,
@@ -443,7 +450,32 @@ describe('built-in leave policies', () => {
       deductsBalance: true,
       description: 'Nghỉ phép năm',
       isActive: true,
-    }])).rejects.toThrow('Chỉ có thể thay đổi chính sách của năm tương lai.');
+    }]);
+
+    expect(mocks.hrPut).toHaveBeenCalledWith('/api/v1/leave-policies/11', expect.objectContaining({
+      year,
+      effectiveFrom: today,
+    }));
+    expect(mocks.hrPost).not.toHaveBeenCalled();
+  });
+
+  it('rejects an effective date in the previous year when editing a future policy', async () => {
+    const year = getVietnamBusinessYear() + 1;
+
+    await expect(savePolicies([{
+      id: 'type-1',
+      policyId: 11,
+      leaveTypeId: 1,
+      year,
+      effectiveFrom: `${year - 1}-11-18`,
+      typeCode: 'ANNUAL',
+      typeName: 'Nghỉ phép năm',
+      daysPerYear: 15,
+      paid: true,
+      deductsBalance: true,
+      description: 'Nghỉ phép năm',
+      isActive: true,
+    }])).rejects.toThrow(`Ngày hiệu lực phải nằm trong năm ${year}`);
 
     expect(mocks.hrPut).not.toHaveBeenCalled();
     expect(mocks.hrPost).not.toHaveBeenCalled();
