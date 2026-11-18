@@ -1099,42 +1099,52 @@ public sealed class LeaveRequestServiceTests
                 It.IsAny<CancellationToken>()),
             Times.Never);
 
-    // Cancellation must refresh the current HR policy before changing the balance snapshot.
+    // Pending cancellation validates ownership and delegates the balance release to the repository.
     [Fact]
     public async Task CancelAsync_RecordsEmployeeCancellationAndRefreshesPolicyWhenNeeded()
     {
         var employeeId = Guid.NewGuid();
-        var request = new LeaveRequest
+        var pendingRequest = new LeaveRequest
         {
             Id = Guid.NewGuid(),
+            EmployeeId = employeeId,
+            Status = LeaveRequestStatus.Pending
+        };
+        var cancelledRequest = new LeaveRequest
+        {
+            Id = pendingRequest.Id,
             EmployeeId = employeeId,
             Status = LeaveRequestStatus.Cancelled
         };
         var repository = new Mock<ILeaveRequestRepository>();
         repository
-            .Setup(item => item.GetForDecisionAsync(request.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(request);
+            .Setup(item => item.GetForDecisionAsync(pendingRequest.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(pendingRequest);
         repository
             .Setup(item => item.CancelAsync(
                 employeeId,
-                request.Id,
+                pendingRequest.Id,
                 "Changed plans",
                 It.IsAny<DateTime>(),
                 It.IsAny<CancellationToken>(),
                 null))
-            .ReturnsAsync((request, (IReadOnlyList<LeaveBalance>)[]));
+            .ReturnsAsync((cancelledRequest, (IReadOnlyList<LeaveBalance>)[]));
         var service = new LeaveRequestService(
             repository.Object,
             new Mock<ILeaveHrClient>().Object,
             TimeProvider.System);
 
-        var result = await service.CancelAsync(employeeId, "Bearer employee", request.Id, " Changed plans ");
+        var result = await service.CancelAsync(
+            employeeId,
+            "Bearer employee",
+            pendingRequest.Id,
+            " Changed plans ");
 
         Assert.Equal(LeaveRequestStatus.Cancelled, result.Status);
         repository.Verify(
             item => item.CancelAsync(
                 employeeId,
-                request.Id,
+                pendingRequest.Id,
                 "Changed plans",
                 It.IsAny<DateTime>(),
                 It.IsAny<CancellationToken>(),
