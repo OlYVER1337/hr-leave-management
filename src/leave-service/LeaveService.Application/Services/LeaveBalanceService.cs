@@ -39,10 +39,15 @@ public sealed class LeaveBalanceService(
             .Where(item => item.IsActive && item.DeductsBalance)
             .ToArray();
 
-        var effectiveOn = DateOnly.FromDateTime(
+        var today = DateOnly.FromDateTime(
             timeProvider.GetUtcNow().ToOffset(LeaveRequestService.BusinessOffset).DateTime);
+        var firstPolicyDate = new DateOnly(year, 1, 1);
+        var effectiveOn = today > firstPolicyDate ? today : firstPolicyDate;
         var policiesByType = catalog.LeavePolicies
-            .Where(item => item.Year == year && item.EffectiveFrom <= effectiveOn)
+            .Where(item =>
+                item.Year == year &&
+                item.EffectiveFrom >= firstPolicyDate &&
+                item.EffectiveFrom <= effectiveOn)
             .GroupBy(item => item.LeaveTypeId)
             .ToDictionary(
                 group => group.Key,
