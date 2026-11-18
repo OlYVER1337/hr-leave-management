@@ -52,8 +52,8 @@ public sealed class LeaveReassignmentTests : IClassFixture<LeaveSqlIntegrationFi
                   "Nghỉ ốm",
                   2030,
                   20m,
-                  new DateOnly(2026, 1, 1),
-                  new DateTime(2025, 12, 1, 0, 0, 0, DateTimeKind.Utc),
+                  new DateOnly(2030, 1, 1),
+                  new DateTime(2026, 11, 1, 0, 0, 0, DateTimeKind.Utc),
                   "Reassignment test policy")
           ]);
         return hr;
