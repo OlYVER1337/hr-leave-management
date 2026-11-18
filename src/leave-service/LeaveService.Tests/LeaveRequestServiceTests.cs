@@ -61,6 +61,8 @@ public sealed class LeaveRequestServiceTests
         hrClient
             .Setup(item => item.GetLeavePoliciesAsync(2027, "Bearer token", It.IsAny<CancellationToken>()))
             .ReturnsAsync([
+                // Dữ liệu legacy có EffectiveFrom trước năm policy phải bị bỏ qua.
+                new HrLeavePolicy(99, 4, "ANNUAL", "Annual leave", 2027, 99m, new DateOnly(2026, 11, 18)),
                 new HrLeavePolicy(2, 4, "ANNUAL", "Annual leave", 2027, 15m, new DateOnly(2027, 1, 1)),
                 new HrLeavePolicy(4, 4, "ANNUAL", "Annual leave", 2027, 18m, new DateOnly(2027, 12, 1))
             ]);
