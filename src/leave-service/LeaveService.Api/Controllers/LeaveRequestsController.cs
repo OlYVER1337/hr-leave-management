@@ -39,7 +39,7 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
             return Unauthorized();
         }
 
-        var authorization = Request.Headers.Authorization.ToString();
+        var authorization = Request.Headers["Authorization"].ToString();
         var access = LeaveAccess.FromClaims(User);
 
         var paged = await leaveRequestService.GetVisiblePagedAsync(
