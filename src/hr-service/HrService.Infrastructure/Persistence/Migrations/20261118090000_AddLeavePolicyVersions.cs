@@ -8,8 +8,9 @@ public partial class AddLeavePolicyVersions : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {
-        // This migration must support both fresh databases and databases where
-        // an earlier deployment already added EffectiveFrom and its composite index.
+        // Keep schema changes and data backfill in separate migration commands.
+        // SQL Server compiles a batch before executing it, so an UPDATE in the
+        // same batch cannot reliably reference columns added earlier in that batch.
         migrationBuilder.Sql("""
             IF COL_LENGTH(N'dbo.LeavePolicies', N'EffectiveFrom') IS NULL
             BEGIN
@@ -28,8 +29,10 @@ public partial class AddLeavePolicyVersions : Migration
                 ALTER TABLE [dbo].[LeavePolicies]
                 ADD [Reason] nvarchar(500) NULL;
             END;
+            """);
 
-            -- Backfill only missing values; preserve any existing policy metadata.
+        // This runs after the previous SQL command, when all three columns exist.
+        migrationBuilder.Sql("""
             UPDATE [dbo].[LeavePolicies]
             SET [EffectiveFrom] = COALESCE([EffectiveFrom], CONVERT(date, '20000101')),
                 [CreatedAtUtc] = COALESCE([CreatedAtUtc], SYSUTCDATETIME()),
@@ -37,7 +40,10 @@ public partial class AddLeavePolicyVersions : Migration
             WHERE [EffectiveFrom] IS NULL
                OR [CreatedAtUtc] IS NULL
                OR [Reason] IS NULL;
+            """);
 
+        // All columns now exist and have non-null data.
+        migrationBuilder.Sql("""
             ALTER TABLE [dbo].[LeavePolicies]
             ALTER COLUMN [EffectiveFrom] date NOT NULL;
 
@@ -46,8 +52,10 @@ public partial class AddLeavePolicyVersions : Migration
 
             ALTER TABLE [dbo].[LeavePolicies]
             ALTER COLUMN [Reason] nvarchar(500) NOT NULL;
+            """);
 
-            -- Older schema used (LeaveTypeId, Year); remove it if present.
+        // Normalize the index for both older and partially upgraded schemas.
+        migrationBuilder.Sql("""
             IF EXISTS
             (
                 SELECT 1
@@ -60,7 +68,6 @@ public partial class AddLeavePolicyVersions : Migration
                 ON [dbo].[LeavePolicies];
             END;
 
-            -- Some deployed databases already have the target index.
             IF NOT EXISTS
             (
                 SELECT 1
