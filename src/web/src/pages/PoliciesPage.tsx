@@ -169,17 +169,26 @@ export function PoliciesPage() {
     setSaving(true);
     try {
       await savePolicies([policyModal]);
-      const [currentPolicies, versions] = await Promise.all([
-        getPolicies(currentYear),
-        getPolicyVersions(),
-      ]);
-      setPoliciesState(currentPolicies);
-      setPolicyVersions(versions);
       setPolicyModal(null);
+      setPolicyBaseline(null);
       notify('Đã lưu chính sách nghỉ phép.');
-    }
-    catch (reason) { notify(getApiErrorMessage(reason), 'error'); }
-    finally {
+
+      try {
+        const [currentPolicies, versions] = await Promise.all([
+          getPolicies(currentYear),
+          getPolicyVersions(),
+        ]);
+        setPoliciesState(currentPolicies);
+        setPolicyVersions(versions);
+      } catch (refreshError) {
+        notify(
+          `Đã lưu chính sách nhưng chưa thể tải lại danh sách. ${getApiErrorMessage(refreshError)}`,
+          'error',
+        );
+      }
+    } catch (reason) {
+      notify(getApiErrorMessage(reason), 'error');
+    } finally {
       savePolicyInFlight.current = false;
       setSaving(false);
     }
