@@ -30,9 +30,9 @@ interface LeavePolicyRecord {
   leaveTypeId: number;
   year: number;
   daysPerYear: number;
-  effectiveFrom: string;
-  createdAtUtc: string;
-  reason: string;
+  effectiveFrom?: string;
+  createdAtUtc?: string;
+  reason?: string;
 }
 interface LeaveCatalogRecord {
   leaveTypes: LeaveTypeRecord[];
@@ -636,8 +636,8 @@ export async function getPolicies(year = getBusinessYear() + 1): Promise<LeavePo
       const policy = type && policies
         .filter((candidate) => candidate.leaveTypeId === type.id && candidate.year === year)
         .sort((left, right) =>
-          right.effectiveFrom.localeCompare(left.effectiveFrom) ||
-          right.createdAtUtc.localeCompare(left.createdAtUtc) ||
+          (right.effectiveFrom ?? '').localeCompare(left.effectiveFrom ?? '') ||
+          (right.createdAtUtc ?? '').localeCompare(left.createdAtUtc ?? '') ||
           right.id - left.id)[0];
       return {
         id: type ? `type-${type.id}` : `type-${definition.code}`,

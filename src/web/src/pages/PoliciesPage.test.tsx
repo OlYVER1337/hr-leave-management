@@ -94,10 +94,11 @@ describe('PoliciesPage', () => {
     expect(screen.queryByRole('button', { name: 'Thêm loại nghỉ' })).not.toBeInTheDocument();
   });
 
-  it('offers version creation for active policies without a delete action', async () => {
+  it('offers version creation only for balance-deducting policies', async () => {
     renderPoliciesPage();
 
-    expect(await screen.findAllByRole('button', { name: 'Tạo phiên bản mới' })).toHaveLength(3);
+    expect(await screen.findAllByRole('button', { name: 'Tạo phiên bản mới' })).toHaveLength(2);
+    expect(await screen.findByText('Loại nghỉ này không áp dụng quota.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Xóa chính sách/ })).not.toBeInTheDocument();
   });
 
@@ -112,7 +113,7 @@ describe('PoliciesPage', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getAllByRole('button', { name: 'Chính sách đã khóa' })).toHaveLength(3);
+      expect(screen.getAllByRole('button', { name: 'Chính sách đã khóa' })).toHaveLength(2);
     });
     expect(screen.getAllByRole('button', { name: 'Chính sách đã khóa' }).every(
       (button) => (button as HTMLButtonElement).disabled,
