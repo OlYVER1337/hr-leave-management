@@ -762,8 +762,8 @@ export async function savePolicies(policies: LeavePolicy[]): Promise<void> {
       if (!definition.deductsBalance || policy.daysPerYear === null) continue;
 
       const year = policy.year ?? defaultYear;
-      if (!Number.isInteger(year) || year <= getBusinessYear()) {
-        throw new Error('Chỉ có thể thay đổi chính sách của năm tương lai.');
+      if (!Number.isInteger(year) || year < getBusinessYear()) {
+        throw new Error('Chỉ có thể thay đổi chính sách của năm hiện tại hoặc tương lai.');
       }
       if (!policy.effectiveFrom) {
         throw new Error('Vui lòng chọn ngày hiệu lực cho phiên bản chính sách.');
