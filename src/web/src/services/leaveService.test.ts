@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthUser } from '../types';
-import { decideLeaveRequest, getBalances, getLeaveRequestSummary, getLeaveRequests, getLeaveRequestsPage, getPolicies, restoreBuiltInLeaveType } from './leaveService';
+import { decideLeaveRequest, getBalances, getLeaveRequestSummary, getLeaveRequests, getLeaveRequestsPage, getPolicies, restoreBuiltInLeaveType, savePolicies } from './leaveService';
 
 const mocks = vi.hoisted(() => ({
   hrGet: vi.fn(),
@@ -362,5 +362,90 @@ describe('built-in leave policies', () => {
       year,
       daysPerYear: 10,
     });
+  });
+
+  // Thay đổi quota chỉ gọi Leave Policies API, không chạm tới Leave Types API.
+  it('appends a policy version with PUT without updating the leave type', async () => {
+    const year = getVietnamBusinessYear() + 1;
+    mocks.hrPut.mockResolvedValue({ data: {} });
+
+    await savePolicies([{
+      id: 'type-1',
+      policyId: 11,
+      leaveTypeId: 1,
+      year,
+      effectiveFrom: `${year}-03-01`,
+      reason: 'Điều chỉnh hạn mức',
+      typeCode: 'ANNUAL',
+      typeName: 'Nghỉ phép năm',
+      daysPerYear: 15,
+      paid: true,
+      deductsBalance: true,
+      description: 'Nghỉ phép năm',
+      isActive: true,
+    }]);
+
+    expect(mocks.hrPut).toHaveBeenCalledTimes(1);
+    expect(mocks.hrPut).toHaveBeenCalledWith('/api/v1/leave-policies/11', {
+      leaveTypeId: 1,
+      year,
+      daysPerYear: 15,
+      effectiveFrom: `${year}-03-01`,
+      reason: 'Điều chỉnh hạn mức',
+    });
+    expect(mocks.hrPost).not.toHaveBeenCalled();
+  });
+
+  // Trường hợp loại nghỉ đã được khôi phục nhưng chưa có policy trong năm được chọn.
+  it('creates the first policy for a future year with POST', async () => {
+    const year = getVietnamBusinessYear() + 1;
+    mocks.hrPost.mockResolvedValue({ data: {} });
+
+    await savePolicies([{
+      id: 'type-1',
+      leaveTypeId: 1,
+      year,
+      effectiveFrom: `${year}-01-01`,
+      reason: 'Khởi tạo chính sách',
+      typeCode: 'ANNUAL',
+      typeName: 'Nghỉ phép năm',
+      daysPerYear: 15,
+      paid: true,
+      deductsBalance: true,
+      description: 'Nghỉ phép năm',
+      isActive: true,
+    }]);
+
+    expect(mocks.hrPost).toHaveBeenCalledTimes(1);
+    expect(mocks.hrPost).toHaveBeenCalledWith('/api/v1/leave-policies', {
+      leaveTypeId: 1,
+      year,
+      daysPerYear: 15,
+      effectiveFrom: `${year}-01-01`,
+      reason: 'Khởi tạo chính sách',
+    });
+    expect(mocks.hrPut).not.toHaveBeenCalled();
+  });
+
+  it('rejects policy changes for the current business year before calling the API', async () => {
+    const year = getVietnamBusinessYear();
+
+    await expect(savePolicies([{
+      id: 'type-1',
+      policyId: 11,
+      leaveTypeId: 1,
+      year,
+      effectiveFrom: `${year}-11-18`,
+      typeCode: 'ANNUAL',
+      typeName: 'Nghỉ phép năm',
+      daysPerYear: 15,
+      paid: true,
+      deductsBalance: true,
+      description: 'Nghỉ phép năm',
+      isActive: true,
+    }])).rejects.toThrow('Chỉ có thể thay đổi chính sách của năm tương lai.');
+
+    expect(mocks.hrPut).not.toHaveBeenCalled();
+    expect(mocks.hrPost).not.toHaveBeenCalled();
   });
 });
