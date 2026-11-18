@@ -204,7 +204,7 @@ export function PoliciesPage() {
             !policy.deductsBalance ||
             !policyVersions.some((version) => version.typeCode === policy.typeCode))
           .map((policy) => policy.deductsBalance
-            ? { ...policy, policyId: undefined, versionMissing: true }
+            ? { ...policy, policyId: undefined, effectiveFrom: undefined, reason: undefined, versionMissing: true }
             : policy),
       ]
       : policies.map((currentPolicy) => {
