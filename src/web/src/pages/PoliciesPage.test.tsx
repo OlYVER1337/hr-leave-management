@@ -126,7 +126,7 @@ describe('PoliciesPage', () => {
     expect(viewFilter).toHaveValue('CURRENT');
     expect(screen.getByRole('heading', { name: 'Nghỉ phép năm' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /Xem lịch sử/ }));
+    await user.click(screen.getAllByRole('button', { name: /Xem lịch sử/ })[0]);
 
     expect(await screen.findByRole('dialog', { name: 'Lịch sử chính sách · Nghỉ phép năm' })).toBeInTheDocument();
     expect(screen.getByText('Version 1')).toBeInTheDocument();
@@ -147,7 +147,7 @@ describe('PoliciesPage', () => {
       'HISTORY',
     );
 
-    expect(screen.getByText('Version 1')).toBeInTheDocument();
+    expect(screen.getAllByText('Version 1')).toHaveLength(2);
     expect(screen.getByText('Version 2')).toBeInTheDocument();
     expect(screen.getByText('UNPAID không áp dụng quota và không có version.')).toBeInTheDocument();
   });
@@ -157,7 +157,7 @@ describe('PoliciesPage', () => {
     renderPoliciesPage();
 
     await screen.findByRole('heading', { name: 'Nghỉ phép năm' });
-    expect(screen.getByRole('combobox', { name: 'Lọc theo phiên bản' })).toHaveValue('CURRENT');
+    expect(screen.getByRole('combobox', { name: 'Hiển thị chính sách' })).toHaveValue('CURRENT');
     const createButtons = await screen.findAllByRole('button', { name: 'Tạo phiên bản mới' });
     expect(createButtons).toHaveLength(2);
     await user.click(createButtons[0]);
@@ -270,6 +270,7 @@ describe('PoliciesPage', () => {
 
     expect(savePolicies).toHaveBeenCalledTimes(1);
     releaseSave?.();
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledWith('Đã lưu chính sách nghỉ phép.'));
   });
 
   it('restores a deleted built-in policy', async () => {
