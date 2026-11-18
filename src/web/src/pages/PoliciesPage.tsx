@@ -197,7 +197,16 @@ export function PoliciesPage() {
   const displayedPolicies = selectedVersion === 'CURRENT'
     ? policies
     : selectedVersion === 'ALL'
-      ? [...policyVersions, ...policies.filter((policy) => !policy.deductsBalance)]
+      ? [
+        ...policyVersions,
+        ...policies
+          .filter((policy) =>
+            !policy.deductsBalance ||
+            !policyVersions.some((version) => version.typeCode === policy.typeCode))
+          .map((policy) => policy.deductsBalance
+            ? { ...policy, policyId: undefined, versionMissing: true }
+            : policy),
+      ]
       : policies.map((currentPolicy) => {
         if (!currentPolicy.deductsBalance) return currentPolicy;
         const requestedVersion = Number(selectedVersion);
