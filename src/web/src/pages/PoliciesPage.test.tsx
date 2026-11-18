@@ -116,7 +116,7 @@ describe('PoliciesPage', () => {
     expect(createButtons).toHaveLength(2);
     await user.click(createButtons[0]);
 
-    expect(screen.getByLabelText('Năm áp dụng')).toHaveValue(String(currentBusinessYear));
+    expect(await screen.findByLabelText('Năm áp dụng')).toHaveValue(String(currentBusinessYear));
     expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveAttribute('min');
     expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveValue(
       new Intl.DateTimeFormat('en-CA', {
@@ -152,8 +152,8 @@ describe('PoliciesPage', () => {
     vi.mocked(getPolicies).mockImplementation(async (year) => {
       if (year === futureYear) {
         return [
-          { ...annual, year: futureYear, effectiveFrom: undefined },
-          { ...sick, year: futureYear, effectiveFrom: undefined },
+          { ...annual, year: futureYear, policyId: undefined, effectiveFrom: undefined },
+          { ...sick, year: futureYear, policyId: undefined, effectiveFrom: undefined },
           { ...unpaid, year: futureYear },
         ];
       }
@@ -164,8 +164,8 @@ describe('PoliciesPage', () => {
     await user.click((await screen.findAllByRole('button', { name: 'Tạo phiên bản mới' }))[0]);
     await user.selectOptions(screen.getByLabelText('Năm áp dụng'), String(futureYear));
 
-    expect(await screen.findByLabelText('Ngày hiệu lực *')).toHaveAttribute('min', `${futureYear}-01-01`);
-    expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveValue(`${futureYear}-01-01`);
+    await waitFor(() => expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveValue(`${futureYear}-01-01`));
+    expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveAttribute('min', `${futureYear}-01-01`);
   });
 
   it('does not open a new version when the current year has no later effective date', async () => {
