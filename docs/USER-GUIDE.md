@@ -90,13 +90,13 @@ bằng tài khoản có quyền tương ứng.
    hoặc vô hiệu hóa tài khoản.
 3. Vào **Chính sách nghỉ phép** để quản lý ba loại nghỉ cố định:
    `ANNUAL` (nghỉ phép năm), `SICK` (nghỉ ốm), `UNPAID` (nghỉ không lương).
-   Màn hình mặc định hiển thị phiên bản đang có hiệu lực tại ngày hiện tại
-   (UTC+07:00). Dùng một bộ lọc version chung gồm **Đang có hiệu lực**,
-   **Tất cả phiên bản**, **Version 1**, **Version 2**... Khi chọn một version,
-   cả ANNUAL và SICK đều hiển thị version có cùng số thứ tự riêng của từng loại;
-   nếu loại nghỉ chưa có version tương ứng, màn hình thông báo rõ. UNPAID không
-   quản lý quota nên không có version. Khi tạo phiên bản mới, chọn **Năm áp dụng**
-   ngay trong biểu mẫu, sau đó nhập số ngày, **Ngày hiệu lực** và lý do thay đổi.
+   Màn hình mặc định hiển thị các chính sách đang có hiệu lực tại ngày hiện tại
+   (UTC+07:00). Bộ lọc chung có hai chế độ: **Đang có hiệu lực** và
+   **Tất cả lịch sử**. Chế độ lịch sử nhóm version theo từng loại nghỉ; từ thẻ
+   ANNUAL hoặc SICK có thể mở lịch sử riêng, xem ngày hiệu lực, số ngày, lý do
+   và nhận biết version hiện hành. UNPAID không quản lý quota nên không có version.
+   Khi tạo phiên bản mới, modal hiển thị quota/ngày hiệu lực hiện tại, cho chọn
+   **Năm áp dụng**, số ngày, **Ngày hiệu lực** và lý do thay đổi.
    Năm hiện tại chỉ nhận ngày hiệu lực từ hôm nay; năm tương lai chỉ nhận ngày
    từ 01/01 của chính năm đó. Không cho đặt hiệu lực hồi tố hoặc sang năm khác.
    Với mỗi năm phân bổ, nếu năm đó đã bắt đầu thì đơn dùng phiên bản có hiệu lực
