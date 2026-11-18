@@ -145,7 +145,10 @@ public sealed class DemoDataSeeder(
                 {
                     LeaveType = leaveType,
                     Year = year,
-                    DaysPerYear = seed.DaysPerYear.Value
+                    DaysPerYear = seed.DaysPerYear.Value,
+                    EffectiveFrom = businessToday,
+                    CreatedAtUtc = now.UtcDateTime,
+                    Reason = "Chính sách khởi tạo dữ liệu demo"
                 });
             }
         }

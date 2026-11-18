@@ -65,7 +65,10 @@ public class HrDbContext(DbContextOptions<HrDbContext> options) : DbContext(opti
         b.Entity<LeavePolicy>(e =>
         {
             e.Property(x => x.DaysPerYear).HasPrecision(5, 1);
-            e.HasIndex(x => new { x.LeaveTypeId, x.Year }).IsUnique();
+            e.Property(x => x.EffectiveFrom).HasColumnType("date");
+            e.Property(x => x.CreatedAtUtc).IsRequired();
+            e.Property(x => x.Reason).HasMaxLength(500).IsRequired();
+            e.HasIndex(x => new { x.LeaveTypeId, x.Year, x.EffectiveFrom }).IsUnique();
             e.HasOne(x => x.LeaveType).WithMany(t => t.Policies)
                 .HasForeignKey(x => x.LeaveTypeId).OnDelete(DeleteBehavior.Restrict);
         });

@@ -41,6 +41,15 @@ public sealed class LeavePolicyTimelineTests
     }
 
     [Fact]
+    public void CanAddVersion_AcceptsCurrentYearDateForNextYearPolicy()
+    {
+        Assert.True(LeavePolicyTimeline.CanAddVersion(
+            new DateOnly(2026, 11, 18),
+            new DateOnly(2026, 11, 18),
+            2027));
+    }
+
+    [Fact]
     public void CanAddVersion_RejectsDateOutsidePolicyYear()
     {
         Assert.False(LeavePolicyTimeline.CanAddVersion(new DateOnly(2028, 1, 1), new DateOnly(2027, 1, 10), 2027));

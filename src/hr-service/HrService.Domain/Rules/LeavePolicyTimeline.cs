@@ -27,7 +27,7 @@ public static class LeavePolicyTimeline
 
     // Chỉ thêm phiên bản có hiệu lực từ hôm nay trở đi; không sửa lịch sử.
     public static bool CanAddVersion(DateOnly effectiveFrom, DateOnly today, int policyYear) =>
-        effectiveFrom >= today && effectiveFrom.Year == policyYear;
+        effectiveFrom >= today && effectiveFrom.Year <= policyYear;
 
     // Hai phiên bản của cùng một năm không được cùng ngày hiệu lực.
     public static bool HasSameEffectiveDate(IEnumerable<PolicyVersion> versions, DateOnly effectiveFrom) =>

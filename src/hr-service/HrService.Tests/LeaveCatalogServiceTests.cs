@@ -466,12 +466,21 @@ public sealed class LeaveCatalogServiceTests
         cache.Removed += key => events.Add($"remove:{key}");
         var service = CreateService(repository, cache, unitOfWork);
 
-        var result = await service.CreateLeavePolicyAsync(new LeavePolicyRequest(4, 2026, 12m));
+        var result = await service.CreateLeavePolicyAsync(
+            new LeavePolicyRequest(4, 2026, 12m, new DateOnly(2025, 7, 1), "Initial policy"));
 
         Assert.NotNull(addedPolicy);
         Assert.Equal(4, result.LeaveTypeId);
         Assert.Equal("ANNUAL", result.LeaveTypeCode);
         Assert.Equal(12m, result.DaysPerYear);
+        Assert.Equal(new DateOnly(2025, 7, 1), addedPolicy.EffectiveFrom);
+        Assert.Equal(new DateOnly(2025, 7, 1), result.EffectiveFrom);
+        Assert.Equal(
+            new DateTime(2025, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            addedPolicy.CreatedAtUtc);
+        Assert.Equal(addedPolicy.CreatedAtUtc, result.CreatedAtUtc);
+        Assert.Equal("Initial policy", addedPolicy.Reason);
+        Assert.Equal("Initial policy", result.Reason);
         Assert.Equal(
             new[] { "add", "save", "remove:hr:catalog:leave-policies" },
             events);

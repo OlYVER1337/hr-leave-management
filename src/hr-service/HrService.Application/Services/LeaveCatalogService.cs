@@ -2,6 +2,7 @@ using HrService.Application.Abstractions;
 using HrService.Application.Common;
 using HrService.Application.Dtos;
 using HrService.Domain.Entities;
+using HrService.Domain.Rules;
 
 namespace HrService.Application.Services;
 
@@ -289,7 +290,10 @@ public sealed class LeaveCatalogService(
             LeaveType = leaveType,
             LeaveTypeId = leaveType.Id,
             Year = request.Year,
-            DaysPerYear = request.DaysPerYear
+            DaysPerYear = request.DaysPerYear,
+            EffectiveFrom = effectiveFrom,
+            CreatedAtUtc = timeProvider.GetUtcNow().UtcDateTime,
+            Reason = NormalizePolicyReason(request.Reason, "Khởi tạo chính sách")
         };
         repository.Add(policy);
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -340,11 +344,11 @@ public sealed class LeaveCatalogService(
         var effectiveFrom = request.EffectiveFrom ?? GetBusinessToday();
         EnsurePolicyEffectiveFrom(effectiveFrom, original.Year);
 
-        var versions = await repository.ListLeavePoliciesAsync(original.Year, cancellationToken)
-            ?? Array.Empty<LeavePolicy>();
-        if (versions.Any(item =>
-                item.LeaveTypeId == original.LeaveTypeId &&
-                item.EffectiveFrom == effectiveFrom))
+        var versions = await repository.ListLeavePoliciesAsync(original.Year, cancellationToken);
+        var timeline = versions
+            .Where(item => item.LeaveTypeId == original.LeaveTypeId)
+            .Select(item => new PolicyVersion(item.EffectiveFrom, item.DaysPerYear));
+        if (LeavePolicyTimeline.HasSameEffectiveDate(timeline, effectiveFrom))
         {
             throw new ConflictException(
                 $"A policy version for leave type '{original.LeaveTypeId}' and effective date '{effectiveFrom}' already exists.");
@@ -551,19 +555,22 @@ public sealed class LeaveCatalogService(
 
     private void EnsurePolicyEffectiveFrom(DateOnly effectiveFrom, int policyYear)
     {
-        if (effectiveFrom < GetBusinessToday())
+        var today = GetBusinessToday();
+        if (LeavePolicyTimeline.CanAddVersion(effectiveFrom, today, policyYear))
+        {
+            return;
+        }
+
+        if (effectiveFrom < today)
         {
             throw Problems.Invalid(
                 "effectiveFrom",
                 "A new policy version cannot take effect before the current business date.");
         }
 
-        if (effectiveFrom.Year > policyYear)
-        {
-            throw Problems.Invalid(
-                "effectiveFrom",
-                "A policy version cannot take effect after the end of its policy year.");
-        }
+        throw Problems.Invalid(
+            "effectiveFrom",
+            "A policy version cannot take effect after the end of its policy year.");
     }
 
     private static string NormalizePolicyReason(string? value, string fallback)
