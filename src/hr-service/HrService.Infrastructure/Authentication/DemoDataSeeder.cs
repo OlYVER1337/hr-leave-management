@@ -143,7 +143,8 @@ public sealed class DemoDataSeeder(
                 {
                     LeaveType = leaveType,
                     Year = year,
-                    DaysPerYear = seed.DaysPerYear.Value
+                    DaysPerYear = seed.DaysPerYear.Value,
+                    EffectiveFrom = new DateOnly(year, 1, 1)
                 });
             }
         }

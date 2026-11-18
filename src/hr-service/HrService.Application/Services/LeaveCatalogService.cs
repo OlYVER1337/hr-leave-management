@@ -275,7 +275,8 @@ public sealed class LeaveCatalogService(
             LeaveType = leaveType,
             LeaveTypeId = leaveType.Id,
             Year = request.Year,
-            DaysPerYear = request.DaysPerYear
+            DaysPerYear = request.DaysPerYear,
+            EffectiveFrom = new DateOnly(request.Year, 1, 1)
         };
         repository.Add(policy);
         await unitOfWork.SaveChangesAsync(cancellationToken);
