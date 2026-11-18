@@ -30,7 +30,11 @@ vi.mock('../services/leaveService', () => ({
   savePolicies: mocks.savePolicies,
 }));
 
-const futureYear = new Date().getFullYear() + 1;
+const currentBusinessYear = Number(new Intl.DateTimeFormat('en', {
+  timeZone: 'Asia/Ho_Chi_Minh',
+  year: 'numeric',
+}).format(new Date()));
+const futureYear = currentBusinessYear + 1;
 const annual: LeavePolicy = {
   id: 'annual',
   year: futureYear,
@@ -109,7 +113,7 @@ describe('PoliciesPage', () => {
     await screen.findByRole('heading', { name: 'Nghỉ phép năm' });
     await user.selectOptions(
       screen.getByRole('combobox', { name: 'Năm áp dụng' }),
-      String(new Date().getFullYear()),
+      String(currentBusinessYear),
     );
 
     await waitFor(() => {
