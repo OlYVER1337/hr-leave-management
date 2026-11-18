@@ -437,10 +437,11 @@ Tab Ngày nghỉ lễ:
 
 Holiday modal: tên ngày lễ + ngày. Create/edit/delete đã được nối frontend HR API.
 
-Policies có bộ chọn **Năm áp dụng** và mặc định mở năm kế tiếp. HR có thể xem
-các năm hiện tại/quá khứ nhưng nút thay đổi bị khóa. Chỉ năm tương lai mới cho
-phép thiết lập hoặc sửa hạn mức. Backend cũng thực thi cùng quy tắc nên không
-thể vượt qua giới hạn bằng cách gọi API trực tiếp.
+Policies có bộ chọn **Năm áp dụng** và mặc định mở năm kế tiếp. HR có thể tạo
+phiên bản cho năm hiện tại và năm tương lai; các năm đã kết thúc chỉ được xem.
+Ngày hiệu lực của năm hiện tại không được trước hôm nay; với năm tương lai,
+ngày hiệu lực sớm nhất là 01/01 của năm được chọn. Backend kiểm tra cùng quy tắc
+nên không thể tạo phiên bản hồi tố hoặc đặt hiệu lực ở sai năm qua API.
 
 ### 4.11. Hồ sơ của tôi — /profile
 
