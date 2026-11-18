@@ -681,16 +681,17 @@ export async function getPolicies(
   } catch (error) { throw new Error(`Không tải được loại nghỉ/chính sách. ${getApiErrorMessage(error)}`); }
 }
 
-export async function getPolicyVersions(year = getBusinessYear()): Promise<LeavePolicy[]> {
+export async function getPolicyVersions(year?: number): Promise<LeavePolicy[]> {
   if (DEMO_MODE) {
     const state = loadDemoState();
+    const demoYear = year ?? getBusinessYear();
     return builtInLeaveTypes.flatMap((definition) => {
       const policy = state.policies.find((item) =>
         item.typeCode.toUpperCase() === definition.code);
       if (!policy || !definition.deductsBalance || !policy.isActive) return [];
       return [{
         ...policy,
-        year,
+        year: demoYear,
         versionNumber: 1,
         policyId: policy.policyId,
         daysPerYear: policy.daysPerYear,
@@ -699,11 +700,10 @@ export async function getPolicyVersions(year = getBusinessYear()): Promise<Leave
   }
 
   try {
-    const { data: catalog } = await hrApi.get<LeaveCatalogRecord>('/api/v1/leave-catalog', {
-      params: { year, includeInactive: true },
-    });
-    const firstDayOfPolicyYear = `${year}-01-01`;
-    const lastDayOfPolicyYear = `${year}-12-31`;
+    const params = year === undefined
+      ? { includeInactive: true }
+      : { year, includeInactive: true };
+    const { data: catalog } = await hrApi.get<LeaveCatalogRecord>('/api/v1/leave-catalog', { params });
 
     return builtInLeaveTypes.flatMap((definition) => {
       if (!definition.deductsBalance) return [];
@@ -713,33 +713,43 @@ export async function getPolicyVersions(year = getBusinessYear()): Promise<Leave
       if (!type) return [];
 
       const versions = catalog.leavePolicies
-        .filter((candidate) =>
-          candidate.leaveTypeId === type.id &&
-          candidate.year === year &&
-          Boolean(candidate.effectiveFrom) &&
-          candidate.effectiveFrom! >= firstDayOfPolicyYear &&
-          candidate.effectiveFrom! <= lastDayOfPolicyYear)
+        .filter((candidate) => {
+          if (candidate.leaveTypeId !== type.id || (year !== undefined && candidate.year !== year)) {
+            return false;
+          }
+          const firstDayOfPolicyYear = `${candidate.year}-01-01`;
+          const lastDayOfPolicyYear = `${candidate.year}-12-31`;
+          return Boolean(candidate.effectiveFrom) &&
+            candidate.effectiveFrom! >= firstDayOfPolicyYear &&
+            candidate.effectiveFrom! <= lastDayOfPolicyYear;
+        })
         .sort((left, right) =>
+          left.year - right.year ||
           (left.effectiveFrom ?? '').localeCompare(right.effectiveFrom ?? '') ||
           (left.createdAtUtc ?? '').localeCompare(right.createdAtUtc ?? '') ||
           left.id - right.id);
 
-      return versions.map((version, index): LeavePolicy => ({
-        id: `type-${type.id}-policy-${version.id}`,
-        leaveTypeId: type.id,
-        policyId: version.id,
-        year,
-        versionNumber: index + 1,
-        typeCode: definition.code,
-        typeName: definition.name,
-        daysPerYear: version.daysPerYear,
-        paid: definition.isPaid,
-        deductsBalance: definition.deductsBalance,
-        description: leaveDescription(definition.code),
-        isActive: type.isActive ?? false,
-        effectiveFrom: version.effectiveFrom,
-        reason: version.reason,
-      }));
+      const yearVersionCounters = new Map<number, number>();
+      return versions.map((version): LeavePolicy => {
+        const versionNumber = (yearVersionCounters.get(version.year) ?? 0) + 1;
+        yearVersionCounters.set(version.year, versionNumber);
+        return {
+          id: `type-${type.id}-policy-${version.id}`,
+          leaveTypeId: type.id,
+          policyId: version.id,
+          year: version.year,
+          versionNumber,
+          typeCode: definition.code,
+          typeName: definition.name,
+          daysPerYear: version.daysPerYear,
+          paid: definition.isPaid,
+          deductsBalance: definition.deductsBalance,
+          description: leaveDescription(definition.code),
+          isActive: type.isActive ?? false,
+          effectiveFrom: version.effectiveFrom,
+          reason: version.reason,
+        };
+      });
     });
   } catch (error) {
     throw new Error(`Không tải được lịch sử phiên bản chính sách. ${getApiErrorMessage(error)}`);
