@@ -129,8 +129,8 @@ describe('PoliciesPage', () => {
     await user.click(screen.getAllByRole('button', { name: /Xem lịch sử/ })[0]);
 
     expect(await screen.findByRole('dialog', { name: 'Lịch sử chính sách · Nghỉ phép năm' })).toBeInTheDocument();
-    expect(screen.getByText('Version 1')).toBeInTheDocument();
-    expect(screen.getByText('Version 2')).toBeInTheDocument();
+    expect(screen.getByText(`Năm ${currentBusinessYear} · Version 1`)).toBeInTheDocument();
+    expect(screen.getByText(`Năm ${currentBusinessYear} · Version 2`)).toBeInTheDocument();
   });
 
   it('shows all versions grouped by leave type when history view is selected', async () => {
@@ -147,8 +147,8 @@ describe('PoliciesPage', () => {
       'HISTORY',
     );
 
-    expect(screen.getAllByText('Version 1')).toHaveLength(2);
-    expect(screen.getByText('Version 2')).toBeInTheDocument();
+    expect(screen.getAllByText(`Năm ${currentBusinessYear} · Version 1`)).toHaveLength(2);
+    expect(screen.getByText(`Năm ${currentBusinessYear} · Version 2`)).toBeInTheDocument();
     expect(screen.getByText('UNPAID không áp dụng quota và không có version.')).toBeInTheDocument();
   });
 
