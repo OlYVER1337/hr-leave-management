@@ -487,6 +487,14 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
         var rejectedRequest = await CreateRequestAsync(rejectedEmployee, rejectedManager, 5);
         await using (var context = _fixture.CreateContext())
         {
+            var balance = await context.LeaveBalances.SingleAsync(
+                item => item.EmployeeId == rejectedEmployee &&
+                        item.LeaveTypeId == 2 &&
+                        item.Year == 2026);
+            balance.PolicyDays = 12m;
+            balance.Used = 6m;
+            await context.SaveChangesAsync();
+
             var result = await new LeaveRequestRepository(context).TransitionAsync(
                 rejectedRequest.Id,
                 rejectedManager,
@@ -494,10 +502,15 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
                 LeaveRequestStatus.Rejected,
                 "Not enough coverage",
                 DateTime.UtcNow,
-                verifiedApproverId: rejectedManager);
+                verifiedApproverId: rejectedManager,
+                currentPolicyDays: [new LeaveBalanceEntitlement(2, 8m, 2026)]);
+            var updatedBalance = Assert.Single(result.Balances);
             Assert.Equal(LeaveRequestStatus.Rejected, result.Request.Status);
-            Assert.Equal(0m, result.Balances.Single().Pending);
-            Assert.Equal(0m, result.Balances.Single().Used);
+            Assert.Equal(8m, updatedBalance.PolicyDays);
+            Assert.Equal(8m, updatedBalance.Entitled);
+            Assert.Equal(2m, updatedBalance.Available);
+            Assert.Equal(0m, updatedBalance.Pending);
+            Assert.Equal(6m, updatedBalance.Used);
         }
 
         var cancelledEmployee = Guid.NewGuid();
