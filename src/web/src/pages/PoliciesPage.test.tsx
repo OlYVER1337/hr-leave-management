@@ -106,6 +106,18 @@ describe('PoliciesPage', () => {
     expect(screen.queryByRole('button', { name: /Xóa chính sách/ })).not.toBeInTheDocument();
   });
 
+  it('filters the current policy cards by leave policy type', async () => {
+    const user = userEvent.setup();
+    renderPoliciesPage();
+
+    await screen.findByRole('heading', { name: 'Nghỉ phép năm' });
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Lọc theo chính sách' }), 'SICK');
+
+    expect(screen.getByRole('heading', { name: 'Nghỉ ốm' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Nghỉ phép năm' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Nghỉ không lương' })).not.toBeInTheDocument();
+  });
+
   it('allows current-year policy versions from the current business date onward', async () => {
     const user = userEvent.setup();
     renderPoliciesPage();
@@ -130,10 +142,19 @@ describe('PoliciesPage', () => {
 
   it('opens a new current-year version after the latest scheduled version', async () => {
     const user = userEvent.setup();
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+    const nextDateValue = new Date(`${today}T00:00:00Z`);
+    nextDateValue.setUTCDate(nextDateValue.getUTCDate() + 1);
+    const nextDate = nextDateValue.toISOString().slice(0, 10);
     vi.mocked(getPolicies).mockImplementation(async (year, asOfDate) => {
       if (asOfDate === `${currentBusinessYear}-12-31`) {
         return [
-          { ...annual, year, effectiveFrom: `${currentBusinessYear}-12-01` },
+          { ...annual, year, effectiveFrom: today },
           { ...sick, year },
           { ...unpaid, year },
         ];
@@ -144,7 +165,14 @@ describe('PoliciesPage', () => {
 
     await user.click((await screen.findAllByRole('button', { name: 'Tạo phiên bản mới' }))[0]);
 
-    expect(await screen.findByLabelText('Ngày hiệu lực *')).toHaveValue(`${currentBusinessYear}-12-02`);
+    if (nextDate <= `${currentBusinessYear}-12-31`) {
+      expect(await screen.findByLabelText('Ngày hiệu lực *')).toHaveValue(nextDate);
+    } else {
+      await waitFor(() => expect(mocks.notify).toHaveBeenCalledWith(
+        'Không còn ngày hiệu lực hợp lệ trong năm hiện tại.',
+        'error',
+      ));
+    }
   });
 
   it('sets a future policy version to the first day of its policy year', async () => {
