@@ -72,7 +72,7 @@ public sealed class LeaveRequestService(
                     policyAsOfDate)
                     ?? throw Invalid(
                         "leaveTypeId",
-                        $"No leave policy version is effective for leave type '{leaveType.Id}' in {year} on {createdAtBusinessDate}.");
+                        $"No leave policy version is effective for leave type '{leaveType.Id}' in {year} on {policyAsOfDate}.");
                 allocations.Add(new AnnualLeaveAllocation(year, days, policy.DaysPerYear, policy.Id));
             }
         }
@@ -464,7 +464,7 @@ public sealed class LeaveRequestService(
                 allocation.Year,
                 policyAsOfDate)
                 ?? throw new LeaveConflictException(
-                    $"HR has no effective leave policy for type '{request.LeaveTypeId}' in {allocation.Year} on {effectiveOn}.");
+                    $"HR has no effective leave policy for type '{request.LeaveTypeId}' in {allocation.Year} on {policyAsOfDate}.");
 
             if (policy.DaysPerYear is < 0m or > 366m ||
                 decimal.Round(policy.DaysPerYear, 1) != policy.DaysPerYear)
