@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthUser } from '../types';
-import { decideLeaveRequest, getBalances, getLeaveRequestSummary, getLeaveRequests, getLeaveRequestsPage, getPolicies, restoreBuiltInLeaveType, savePolicies } from './leaveService';
+import { decideLeaveRequest, getBalances, getLeaveRequestSummary, getLeaveRequests, getLeaveRequestsPage, getPolicies, getPolicyVersions, restoreBuiltInLeaveType, savePolicies } from './leaveService';
 
 const mocks = vi.hoisted(() => ({
   hrGet: vi.fn(),
@@ -365,6 +365,41 @@ describe('built-in leave policies', () => {
       policyId: 12,
       daysPerYear: 15,
       effectiveFrom: `${year}-07-01`,
+    });
+  });
+
+  it('returns policy versions ordered by effective date and excludes legacy dates outside the policy year', async () => {
+    const year = getVietnamBusinessYear();
+    mocks.hrGet.mockResolvedValue({
+      data: {
+        leaveTypes: [
+          { id: 1, code: 'ANNUAL', name: 'Annual leave', isPaid: true, deductsBalance: true, isActive: true },
+          { id: 2, code: 'SICK', name: 'Sick leave', isPaid: true, deductsBalance: true, isActive: true },
+          { id: 3, code: 'UNPAID', name: 'Unpaid leave', isPaid: false, deductsBalance: false, isActive: true },
+        ],
+        leavePolicies: [
+          { id: 10, leaveTypeId: 1, year, daysPerYear: 12, effectiveFrom: `${year}-01-01` },
+          { id: 11, leaveTypeId: 1, year, daysPerYear: 15, effectiveFrom: `${year}-06-01` },
+          { id: 12, leaveTypeId: 1, year, daysPerYear: 20, effectiveFrom: `${year - 1}-11-18` },
+          { id: 20, leaveTypeId: 2, year, daysPerYear: 10, effectiveFrom: `${year}-02-01` },
+        ],
+      },
+    });
+
+    const versions = await getPolicyVersions(year);
+
+    expect(versions.map((policy) => ({
+      typeCode: policy.typeCode,
+      versionNumber: policy.versionNumber,
+      policyId: policy.policyId,
+      daysPerYear: policy.daysPerYear,
+    }))).toEqual([
+      { typeCode: 'ANNUAL', versionNumber: 1, policyId: 10, daysPerYear: 12 },
+      { typeCode: 'ANNUAL', versionNumber: 2, policyId: 11, daysPerYear: 15 },
+      { typeCode: 'SICK', versionNumber: 1, policyId: 20, daysPerYear: 10 },
+    ]);
+    expect(mocks.hrGet).toHaveBeenCalledWith('/api/v1/leave-catalog', {
+      params: { year, includeInactive: true },
     });
   });
 
