@@ -201,6 +201,7 @@ describe('PoliciesPage', () => {
 
     if (nextDate <= `${currentBusinessYear}-12-31`) {
       expect(await screen.findByLabelText('Ngày hiệu lực *')).toHaveValue(nextDate);
+      expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveAttribute('min', nextDate);
     } else {
       await waitFor(() => expect(mocks.notify).toHaveBeenCalledWith(
         'Không còn ngày hiệu lực hợp lệ trong năm hiện tại.',
