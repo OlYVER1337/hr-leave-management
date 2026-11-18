@@ -731,7 +731,7 @@ export async function getPolicyVersions(year = getBusinessYear()): Promise<Leave
         paid: definition.isPaid,
         deductsBalance: definition.deductsBalance,
         description: leaveDescription(definition.code),
-        isActive: type.isActive,
+        isActive: type.isActive ?? false,
         effectiveFrom: version.effectiveFrom,
         reason: version.reason,
       }));
