@@ -1089,9 +1089,9 @@ public sealed class LeaveRequestServiceTests
                 It.IsAny<CancellationToken>()),
             Times.Never);
 
-    // Chủ đơn hủy request Pending phải ghi lại trạng thái Cancelled và lịch sử thao tác.
+    // Cancellation must refresh the current HR policy before changing the balance snapshot.
     [Fact]
-    public async Task CancelAsync_RecordsEmployeeCancellation()
+    public async Task CancelAsync_RecordsEmployeeCancellationAndRefreshesPolicyWhenNeeded()
     {
         var employeeId = Guid.NewGuid();
         var request = new LeaveRequest
@@ -1102,19 +1102,23 @@ public sealed class LeaveRequestServiceTests
         };
         var repository = new Mock<ILeaveRequestRepository>();
         repository
+            .Setup(item => item.GetForDecisionAsync(request.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(request);
+        repository
             .Setup(item => item.CancelAsync(
                 employeeId,
                 request.Id,
                 "Changed plans",
                 It.IsAny<DateTime>(),
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                null))
             .ReturnsAsync((request, (IReadOnlyList<LeaveBalance>)[]));
         var service = new LeaveRequestService(
             repository.Object,
             new Mock<ILeaveHrClient>().Object,
             TimeProvider.System);
 
-        var result = await service.CancelAsync(employeeId, request.Id, " Changed plans ");
+        var result = await service.CancelAsync(employeeId, "Bearer employee", request.Id, " Changed plans ");
 
         Assert.Equal(LeaveRequestStatus.Cancelled, result.Status);
         repository.Verify(
@@ -1123,7 +1127,8 @@ public sealed class LeaveRequestServiceTests
                 request.Id,
                 "Changed plans",
                 It.IsAny<DateTime>(),
-                It.IsAny<CancellationToken>()),
+                It.IsAny<CancellationToken>(),
+                null),
             Times.Once);
     }
 
