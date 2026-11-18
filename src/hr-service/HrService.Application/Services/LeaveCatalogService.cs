@@ -259,9 +259,12 @@ public sealed class LeaveCatalogService(
         CancellationToken cancellationToken = default)
     {
         ValidatePolicy(request);
-        EnsureFuturePolicyYear(request.Year);
+        EnsureEditablePolicyYear(request.Year);
 
-        var effectiveFrom = request.EffectiveFrom ?? GetBusinessToday();
+        var today = GetBusinessToday();
+        var firstPolicyDate = new DateOnly(request.Year, 1, 1);
+        var effectiveFrom = request.EffectiveFrom
+            ?? (today > firstPolicyDate ? today : firstPolicyDate);
         EnsurePolicyEffectiveFrom(effectiveFrom, request.Year);
 
         var leaveType = await repository.GetLeaveTypeForUpdateByIdAsync(
@@ -312,7 +315,7 @@ public sealed class LeaveCatalogService(
         if (original.LeaveType is null || !IsBuiltInLeaveType(original.LeaveType.Code))
             throw new NotFoundException($"Leave policy with id '{id}' was not found.");
 
-        EnsureFuturePolicyYear(original.Year);
+        EnsureEditablePolicyYear(original.Year);
         if (request.Year != original.Year)
             throw Problems.Invalid("year", "A policy version cannot be moved to another year.");
 
@@ -542,30 +545,33 @@ public sealed class LeaveCatalogService(
     private DateOnly GetBusinessToday() =>
         DateOnly.FromDateTime(timeProvider.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).DateTime);
 
-    private void EnsureFuturePolicyYear(int year)
+    private void EnsureEditablePolicyYear(int year)
     {
         var currentYear = GetCurrentBusinessYear();
-        if (year <= currentYear)
+        if (year < currentYear)
         {
             throw Problems.Invalid(
                 "year",
-                $"Leave policies can only be created or changed for future years. Current year: {currentYear}.");
+                $"Leave policies can only be created or changed for the current or future years. Current year: {currentYear}.");
         }
     }
 
     private void EnsurePolicyEffectiveFrom(DateOnly effectiveFrom, int policyYear)
     {
         var today = GetBusinessToday();
-        if (LeavePolicyTimeline.CanAddVersion(effectiveFrom, today, policyYear))
+        var firstPolicyDate = new DateOnly(policyYear, 1, 1);
+        var earliestAllowedDate = today > firstPolicyDate ? today : firstPolicyDate;
+
+        if (LeavePolicyTimeline.CanAddVersion(effectiveFrom, earliestAllowedDate, policyYear))
         {
             return;
         }
 
-        if (effectiveFrom < today)
+        if (effectiveFrom < earliestAllowedDate)
         {
             throw Problems.Invalid(
                 "effectiveFrom",
-                "A new policy version cannot take effect before the current business date.");
+                $"A policy version for {policyYear} cannot take effect before {earliestAllowedDate:yyyy-MM-dd}.");
         }
 
         throw Problems.Invalid(
