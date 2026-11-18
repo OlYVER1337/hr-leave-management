@@ -90,16 +90,17 @@ bằng tài khoản có quyền tương ứng.
    hoặc vô hiệu hóa tài khoản.
 3. Vào **Chính sách nghỉ phép** để quản lý ba loại nghỉ cố định:
    `ANNUAL` (nghỉ phép năm), `SICK` (nghỉ ốm), `UNPAID` (nghỉ không lương).
-   Chọn **Năm áp dụng** trước khi xem hạn mức. Có thể tạo/chỉnh sửa phiên bản
-   cho năm hiện tại và các năm tương lai; năm đã kết thúc chỉ được xem. Khi tạo
-   hạn mức đầu tiên hoặc phiên bản mới, nhập số ngày, **Ngày hiệu lực** và lý
-   do thay đổi. Với năm hiện tại, ngày hiệu lực sớm nhất là hôm nay; với năm
-   tương lai, ngày hiệu lực sớm nhất là 01/01 của năm đã chọn. Không cho đặt
-   hiệu lực hồi tố hoặc sang năm khác. Với mỗi năm phân bổ, nếu năm đó đã bắt
-   đầu thì đơn dùng phiên bản có hiệu lực tại ngày gửi đơn; nếu đơn được gửi
-   trước khi năm phân bổ bắt đầu, hệ thống dùng mốc 01/01 của năm đó. Phiên bản
-   đã áp dụng được lưu snapshot, phiên bản cũ không bị ghi đè. Nếu thiếu một
-   loại chuẩn, HR có thể khôi phục loại đó cho năm hiện tại hoặc năm tương lai.
+   Màn hình mặc định hiển thị phiên bản đang có hiệu lực tại ngày hiện tại
+   (UTC+07:00); dùng bộ lọc **Lọc theo chính sách** để chọn ANNUAL, SICK hoặc
+   UNPAID thay vì chuyển qua từng năm. Khi tạo phiên bản mới, chọn **Năm áp dụng**
+   ngay trong biểu mẫu, sau đó nhập số ngày, **Ngày hiệu lực** và lý do thay đổi.
+   Năm hiện tại chỉ nhận ngày hiệu lực từ hôm nay; năm tương lai chỉ nhận ngày
+   từ 01/01 của chính năm đó. Không cho đặt hiệu lực hồi tố hoặc sang năm khác.
+   Với mỗi năm phân bổ, nếu năm đó đã bắt đầu thì đơn dùng phiên bản có hiệu lực
+   tại ngày gửi đơn; nếu đơn được gửi trước khi năm phân bổ bắt đầu, hệ thống
+   dùng mốc 01/01 của năm đó. Phiên bản đã áp dụng được lưu snapshot, phiên bản
+   cũ không bị ghi đè. Nếu thiếu một loại chuẩn, HR có thể khôi phục loại đó
+   cho năm hiện tại hoặc năm tương lai.
    Tab **Ngày nghỉ lễ** dùng để thêm, sửa hoặc xóa ngày lễ.
 4. Dùng **Tất cả đơn nghỉ** để theo dõi các đơn trong tổ chức và
    **Hộp thư phê duyệt** để xử lý đơn chờ.
