@@ -676,6 +676,71 @@ export async function getPolicies(
   } catch (error) { throw new Error(`Không tải được loại nghỉ/chính sách. ${getApiErrorMessage(error)}`); }
 }
 
+export async function getPolicyVersions(year = getBusinessYear()): Promise<LeavePolicy[]> {
+  if (DEMO_MODE) {
+    const state = loadDemoState();
+    return builtInLeaveTypes.flatMap((definition) => {
+      const policy = state.policies.find((item) =>
+        item.typeCode.toUpperCase() === definition.code);
+      if (!policy || !definition.deductsBalance || !policy.isActive) return [];
+      return [{
+        ...policy,
+        year,
+        versionNumber: 1,
+        policyId: policy.policyId,
+        daysPerYear: policy.daysPerYear,
+      }];
+    });
+  }
+
+  try {
+    const { data: catalog } = await hrApi.get<LeaveCatalogRecord>('/api/v1/leave-catalog', {
+      params: { year, includeInactive: true },
+    });
+    const firstDayOfPolicyYear = `${year}-01-01`;
+    const lastDayOfPolicyYear = `${year}-12-31`;
+
+    return builtInLeaveTypes.flatMap((definition) => {
+      if (!definition.deductsBalance) return [];
+      const type = catalog.leaveTypes.find(
+        (candidate) => candidate.code.toUpperCase() === definition.code,
+      );
+      if (!type) return [];
+
+      const versions = catalog.leavePolicies
+        .filter((candidate) =>
+          candidate.leaveTypeId === type.id &&
+          candidate.year === year &&
+          Boolean(candidate.effectiveFrom) &&
+          candidate.effectiveFrom! >= firstDayOfPolicyYear &&
+          candidate.effectiveFrom! <= lastDayOfPolicyYear)
+        .sort((left, right) =>
+          (left.effectiveFrom ?? '').localeCompare(right.effectiveFrom ?? '') ||
+          (left.createdAtUtc ?? '').localeCompare(right.createdAtUtc ?? '') ||
+          left.id - right.id);
+
+      return versions.map((version, index): LeavePolicy => ({
+        id: `type-${type.id}-policy-${version.id}`,
+        leaveTypeId: type.id,
+        policyId: version.id,
+        year,
+        versionNumber: index + 1,
+        typeCode: definition.code,
+        typeName: definition.name,
+        daysPerYear: version.daysPerYear,
+        paid: definition.isPaid,
+        deductsBalance: definition.deductsBalance,
+        description: leaveDescription(definition.code),
+        isActive: type.isActive,
+        effectiveFrom: version.effectiveFrom,
+        reason: version.reason,
+      }));
+    });
+  } catch (error) {
+    throw new Error(`Không tải được lịch sử phiên bản chính sách. ${getApiErrorMessage(error)}`);
+  }
+}
+
 export async function restoreBuiltInLeaveType(policy: LeavePolicy): Promise<void> {
   const definition = builtInLeaveTypes.find((type) => type.code === policy.typeCode);
   if (!definition) throw new Error(`Unsupported built-in leave type: ${policy.typeCode}.`);
