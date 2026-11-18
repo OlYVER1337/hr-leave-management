@@ -61,11 +61,15 @@ public sealed class LeaveRequestService(
                     year,
                     authorization,
                     cancellationToken);
+                var firstPolicyDate = new DateOnly(year, 1, 1);
+                var policyAsOfDate = createdAtBusinessDate > firstPolicyDate
+                    ? createdAtBusinessDate
+                    : firstPolicyDate;
                 var policy = ResolveEffectivePolicy(
                     policies,
                     leaveType.Id,
                     year,
-                    createdAtBusinessDate)
+                    policyAsOfDate)
                     ?? throw Invalid(
                         "leaveTypeId",
                         $"No leave policy version is effective for leave type '{leaveType.Id}' in {year} on {createdAtBusinessDate}.");
@@ -452,11 +456,13 @@ public sealed class LeaveRequestService(
                 allocation.Year,
                 authorization,
                 cancellationToken);
+            var firstPolicyDate = new DateOnly(allocation.Year, 1, 1);
+            var policyAsOfDate = effectiveOn > firstPolicyDate ? effectiveOn : firstPolicyDate;
             var policy = ResolveEffectivePolicy(
                 policies,
                 request.LeaveTypeId,
                 allocation.Year,
-                effectiveOn)
+                policyAsOfDate)
                 ?? throw new LeaveConflictException(
                     $"HR has no effective leave policy for type '{request.LeaveTypeId}' in {allocation.Year} on {effectiveOn}.");
 
@@ -484,6 +490,7 @@ public sealed class LeaveRequestService(
             .Where(item =>
                 item.LeaveTypeId == leaveTypeId &&
                 item.Year == year &&
+                item.EffectiveFrom >= new DateOnly(year, 1, 1) &&
                 item.EffectiveFrom <= effectiveOn)
             .OrderByDescending(item => item.EffectiveFrom)
             .ThenByDescending(item => item.CreatedAtUtc)
