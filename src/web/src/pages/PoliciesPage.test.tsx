@@ -6,6 +6,7 @@ import type { Holiday, LeavePolicy } from '../types';
 import {
   getHolidays,
   getPolicies,
+  getPolicyVersions,
   restoreBuiltInLeaveType,
   saveHolidays,
   savePolicies,
@@ -16,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   notify: vi.fn(),
   getHolidays: vi.fn(),
   getPolicies: vi.fn(),
+  getPolicyVersions: vi.fn(),
   restoreBuiltInLeaveType: vi.fn(),
   saveHolidays: vi.fn(),
   savePolicies: vi.fn(),
@@ -25,6 +27,7 @@ vi.mock('../components/ToastProvider', () => ({ useToast: () => mocks.notify }))
 vi.mock('../services/leaveService', () => ({
   getHolidays: mocks.getHolidays,
   getPolicies: mocks.getPolicies,
+  getPolicyVersions: mocks.getPolicyVersions,
   restoreBuiltInLeaveType: mocks.restoreBuiltInLeaveType,
   saveHolidays: mocks.saveHolidays,
   savePolicies: mocks.savePolicies,
@@ -83,6 +86,10 @@ describe('PoliciesPage', () => {
     vi.clearAllMocks();
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     vi.mocked(getPolicies).mockResolvedValue(policies);
+    vi.mocked(getPolicyVersions).mockResolvedValue([
+      { ...annual, versionNumber: 1 },
+      { ...sick, versionNumber: 1 },
+    ]);
     vi.mocked(getHolidays).mockResolvedValue(holidays);
     vi.mocked(saveHolidays).mockResolvedValue(holidays);
     vi.mocked(savePolicies).mockResolvedValue(undefined);
@@ -118,12 +125,32 @@ describe('PoliciesPage', () => {
     expect(screen.queryByRole('heading', { name: 'Nghỉ không lương' })).not.toBeInTheDocument();
   });
 
+  it('uses one shared version filter across all leave types', async () => {
+    const user = userEvent.setup();
+    vi.mocked(getPolicyVersions).mockResolvedValue([
+      { ...annual, versionNumber: 1 },
+      { ...annual, id: 'annual-v2', policyId: 202, versionNumber: 2, daysPerYear: 15, effectiveFrom: `${currentBusinessYear}-06-01` },
+      { ...sick, versionNumber: 1 },
+    ]);
+    renderPoliciesPage();
+
+    const versionFilter = await screen.findByRole('combobox', { name: 'Lọc theo phiên bản' });
+    expect(versionFilter).toHaveValue('CURRENT');
+
+    await user.selectOptions(versionFilter, '2');
+
+    expect(screen.getByRole('heading', { name: 'Nghỉ phép năm · Version 2' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Nghỉ ốm · Version 2' })).toBeInTheDocument();
+    expect(screen.getByText('Không có Version 2')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Nghỉ không lương · Version 2' })).not.toBeInTheDocument();
+  });
+
   it('allows current-year policy versions from the current business date onward', async () => {
     const user = userEvent.setup();
     renderPoliciesPage();
 
     await screen.findByRole('heading', { name: 'Nghỉ phép năm' });
-    expect(screen.getByRole('combobox', { name: 'Lọc theo chính sách' })).toHaveValue('ALL');
+    expect(screen.getByRole('combobox', { name: 'Lọc theo phiên bản' })).toHaveValue('CURRENT');
     const createButtons = await screen.findAllByRole('button', { name: 'Tạo phiên bản mới' });
     expect(createButtons).toHaveLength(2);
     await user.click(createButtons[0]);
