@@ -443,9 +443,11 @@ Policies mặc định hiển thị các chính sách đang có hiệu lực t�
 (UTC+07:00). Bộ lọc chung gồm hai chế độ: Đang có hiệu lực và Tất cả lịch sử.
 Ở chế độ hiện hành, mỗi thẻ hiển thị quota, ngày hiệu lực và nút Tạo phiên bản
 mới; ANNUAL/SICK có thêm số lượng version và nút Xem lịch sử. Bấm Xem lịch sử
-mở modal riêng của loại nghỉ đó, các version sắp xếp theo ngày hiệu lực mới
-nhất trước, hiển thị số ngày, lý do và trạng thái hiện hành. Ở chế độ Tất cả
-lịch sử, các version được nhóm theo loại nghỉ; phiên bản là bất biến và chỉ đọc.
+mở modal riêng của loại nghỉ đó, các version của mọi năm được sắp xếp theo năm
+và ngày hiệu lực mới nhất trước, hiển thị số ngày, lý do và trạng thái (đang áp
+dụng, đã lên lịch hoặc phiên bản trước). Version được đánh số riêng theo loại
+nghỉ trong từng năm. Ở chế độ Tất cả lịch sử, các version được nhóm theo loại
+nghỉ; phiên bản là bất biến và chỉ đọc.
 UNPAID không áp dụng quota nên không có version. Modal tạo phiên bản hiển thị
 quota và ngày hiệu lực hiện tại, gồm năm áp dụng, số ngày mới, ngày hiệu lực và
 lý do. HR có thể tạo phiên bản cho năm hiện tại và năm tương lai; các năm đã kết
