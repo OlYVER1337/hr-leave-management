@@ -107,7 +107,9 @@ public sealed class DemoDataSeeder(
             new LeaveTypeSeed("SICK", "Nghỉ ốm", IsPaid: true, DeductsBalance: true, DaysPerYear: sickDaysPerYear),
             new LeaveTypeSeed("UNPAID", "Nghỉ không lương", IsPaid: false, DeductsBalance: false, DaysPerYear: null)
         };
-        var year = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime).Year;
+        var now = timeProvider.GetUtcNow();
+        var businessToday = DateOnly.FromDateTime(now.ToOffset(TimeSpan.FromHours(7)).DateTime);
+        var year = businessToday.Year;
 
         foreach (var seed in leaveTypes)
         {
@@ -143,8 +145,7 @@ public sealed class DemoDataSeeder(
                 {
                     LeaveType = leaveType,
                     Year = year,
-                    DaysPerYear = seed.DaysPerYear.Value,
-                    EffectiveFrom = new DateOnly(year, 1, 1)
+                    DaysPerYear = seed.DaysPerYear.Value
                 });
             }
         }

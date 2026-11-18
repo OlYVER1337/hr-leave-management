@@ -518,7 +518,7 @@ Employee mở My Leaves → action chỉ hiển thị với request Pending củ
 | Approval inbox | Leave LeaveRequestsController | GET /api/v1/leave-requests/pending-approval |
 | Approval summary | Leave LeaveRequestsController | GET /api/v1/leave-requests/summary |
 | Approve/reject | Leave LeaveRequestsController | PATCH /{id}/decision |
-| My balance | Leave LeaveBalancesController | POST /api/v1/leave-balances/mine/synchronize?year= để khởi tạo/đồng bộ; GET /api/v1/leave-balances/mine?year= để chỉ đọc |
+| My balance | Leave LeaveBalancesController | GET và POST /api/v1/leave-balances/mine?year= đều đồng bộ PolicyDays hiện hành từ HR; Entitled = max(PolicyDays, Used + Pending) |
 
 Endpoints are relative to each service's API base URL.
 

@@ -126,37 +126,36 @@ describe('leave request summary and decisions', () => {
         leaveTypeId: 1,
         year,
         entitled: 15,
+        policyDays: 15,
         used: 2,
         pending: 1,
         available: 12,
       }],
     });
     mocks.hrGet.mockResolvedValue({
-      data: {
-        leaveTypes: [{
-          id: 1,
-          code: 'ANNUAL',
-          name: 'Annual leave',
-          isPaid: true,
-          deductsBalance: true,
-          isActive: true,
-        }],
-        leavePolicies: [{ id: 12, leaveTypeId: 1, year, daysPerYear: 15 }],
-      },
+      data: [{
+        id: 1,
+        code: 'ANNUAL',
+        name: 'Annual leave',
+        isPaid: true,
+        deductsBalance: true,
+        isActive: true,
+      }],
     });
 
-    // Hàm getBalances phải đồng bộ balance ở Leave Service rồi ghép dữ liệu catalog từ HR.
+    // Hàm getBalances đồng bộ balance ở Leave Service rồi lấy danh sách loại nghỉ từ HR.
     const result = await getBalances(employee);
 
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
       code: 'ANNUAL',
       entitled: 15,
+      policyDays: 15,
       used: 2,
       pending: 1,
       available: 12,
     });
-    // Chỉ có một POST đến Leave và một GET đến HR; không còn GET balance cũ hoặc request thừa.
+    // Chỉ có một POST đồng bộ balance và một GET danh sách loại nghỉ từ HR.
     expect(mocks.leavePost).toHaveBeenCalledTimes(1);
     expect(mocks.leavePost).toHaveBeenCalledWith(
       '/api/v1/leave-balances/mine/synchronize',
@@ -164,9 +163,7 @@ describe('leave request summary and decisions', () => {
       { params: { year } },
     );
     expect(mocks.hrGet).toHaveBeenCalledTimes(1);
-    expect(mocks.hrGet).toHaveBeenCalledWith('/api/v1/leave-catalog', {
-      params: { year },
-    });
+    expect(mocks.hrGet).toHaveBeenCalledWith('/api/v1/leave-types');
   });
 });
 
@@ -281,7 +278,26 @@ describe('built-in leave policies', () => {
               { id: 1, code: 'ANNUAL', name: 'Custom annual', isPaid: true, deductsBalance: true, isActive: true },
               { id: 2, code: 'PARENTAL', name: 'Nghỉ chăm con', isPaid: true, deductsBalance: true, isActive: true },
             ],
-            leavePolicies: [{ id: 12, leaveTypeId: 1, year, daysPerYear: 15 }],
+            leavePolicies: [
+              {
+                id: 11,
+                leaveTypeId: 1,
+                year,
+                daysPerYear: 12,
+                effectiveFrom: `${year}-01-01`,
+                createdAtUtc: `${year}-01-01T00:00:00Z`,
+                reason: 'Phiên bản đầu năm',
+              },
+              {
+                id: 12,
+                leaveTypeId: 1,
+                year,
+                daysPerYear: 15,
+                effectiveFrom: `${year}-06-01`,
+                createdAtUtc: `${year}-05-20T00:00:00Z`,
+                reason: 'Điều chỉnh giữa năm',
+              },
+            ],
           },
         };
       }

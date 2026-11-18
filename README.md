@@ -8,7 +8,7 @@ Backend đã triển khai Dynamic RBAC V1: HR_DB quản lý Roles, Permissions, 
 
 Frontend hiện vẫn dùng Role legacy HR/Manager/Employee cho menu và route guard, chưa có màn hình quản trị Role assignment hoặc Role/Permission catalog. Đây là giới hạn UI, không thay đổi việc backend phải tự kiểm tra quyền cho mọi API.
 
-Leave Service lưu requests, balances, yearly allocations và histories trong Leave_DB. Nhân viên có thể khởi tạo/đồng bộ balance của chính mình theo HR catalog authoritative qua `POST /api/v1/leave-balances/mine/synchronize`; GET balance vẫn chỉ đọc dữ liệu đã tồn tại. Luồng tạo đơn cũng refresh quota trong transaction và bảo toàn Used/Pending. Chưa có API HR bulk reconciliation cho toàn bộ nhân viên. Leave History có ghi nhưng chưa có GET endpoint riêng.
+Leave Service lưu requests, balances, yearly allocations và histories trong Leave_DB. Nhân viên có thể khởi tạo/đồng bộ balance của chính mình theo HR catalog authoritative qua `POST /api/v1/leave-balances/mine/synchronize`; cả GET và POST balance đều đồng bộ PolicyDays hiện hành từ HR trước khi trả dữ liệu. Request lưu PolicyVersionId và PolicyDaysAtCreation theo từng năm; Entitled được tính bằng `max(PolicyDays, Used + Pending)` để giữ nguyên usage lịch sử khi quota giảm. Luồng tạo đơn, duyệt, từ chối và hủy đều refresh quota trong transaction cập nhật Used/Pending. Chưa có API HR bulk reconciliation cho toàn bộ nhân viên. Leave History có ghi nhưng chưa có GET endpoint riêng.
 
 Các khoảng trống và thứ tự hoàn thiện được theo dõi tại [Backlog](docs/planning/BACKLOG.md). Mô tả kiến trúc, database, authorization và API chi tiết nằm trong [docs index](docs/README.md).
 

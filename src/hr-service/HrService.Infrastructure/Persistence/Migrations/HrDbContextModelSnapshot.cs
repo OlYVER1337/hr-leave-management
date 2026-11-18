@@ -182,6 +182,12 @@ namespace HrService.Infrastructure.Persistence.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<decimal>("DaysPerYear")
                         .HasPrecision(5, 1)
                         .HasColumnType("decimal(5,1)");
@@ -189,12 +195,17 @@ namespace HrService.Infrastructure.Persistence.Migrations
                     b.Property<int>("LeaveTypeId")
                         .HasColumnType("int");
 
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<int>("Year")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("LeaveTypeId", "Year")
+                    b.HasIndex("LeaveTypeId", "Year", "EffectiveFrom")
                         .IsUnique();
 
                     b.ToTable("LeavePolicies");

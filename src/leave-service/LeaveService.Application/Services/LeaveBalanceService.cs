@@ -39,28 +39,36 @@ public sealed class LeaveBalanceService(
             .Where(item => item.IsActive && item.DeductsBalance)
             .ToArray();
 
+        var effectiveOn = DateOnly.FromDateTime(
+            timeProvider.GetUtcNow().ToOffset(LeaveRequestService.BusinessOffset).DateTime);
         var policiesByType = catalog.LeavePolicies
-            .Where(item => item.Year == year)
+            .Where(item => item.Year == year && item.EffectiveFrom <= effectiveOn)
             .GroupBy(item => item.LeaveTypeId)
-            .ToDictionary(group => group.Key, group => group.ToArray());
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderByDescending(item => item.EffectiveFrom)
+                    .ThenByDescending(item => item.CreatedAtUtc)
+                    .ThenByDescending(item => item.Id)
+                    .First());
 
         var entitlements = new List<LeaveBalanceEntitlement>(activeDeductingTypes.Length);
         foreach (var leaveType in activeDeductingTypes)
         {
-            if (!policiesByType.TryGetValue(leaveType.Id, out var policies) || policies.Length != 1)
+            if (!policiesByType.TryGetValue(leaveType.Id, out var policy))
             {
                 throw new LeaveConflictException(
-                    $"Exactly one leave policy must exist for active leave type '{leaveType.Code}' in {year}.");
+                    $"No effective leave policy exists for active leave type '{leaveType.Code}' in {year} on {effectiveOn}.");
             }
 
-            var days = policies[0].DaysPerYear;
+            var days = policy.DaysPerYear;
             if (days < 0m || days > 366m || decimal.Round(days, 1) != days)
             {
                 throw new LeaveConflictException(
                     $"The leave policy for '{leaveType.Code}' in {year} has an invalid entitlement.");
             }
 
-            entitlements.Add(new LeaveBalanceEntitlement(leaveType.Id, days));
+            entitlements.Add(new LeaveBalanceEntitlement(leaveType.Id, days, year));
         }
 
         // HR catalog is fetched and validated completely before touching Leave DB.
@@ -78,7 +86,8 @@ public sealed class LeaveBalanceService(
                 item.Entitled,
                 item.Used,
                 item.Pending,
-                item.Entitled - item.Used - item.Pending))
+                item.Entitled - item.Used - item.Pending,
+                item.PolicyDays))
             .ToArray();
     }
 

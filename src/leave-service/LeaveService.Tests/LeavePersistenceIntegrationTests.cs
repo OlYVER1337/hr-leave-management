@@ -91,9 +91,9 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
         }
     }
 
-    // Quota mới thấp hơn Used + Pending: phải conflict và dữ liệu cũ trong SQL không được thay đổi.
+    // HR hạ PolicyDays dưới Used + Pending: Entitled vẫn giữ lịch sử và Available bằng 0.
     [LeaveSqlFact]
-    public async Task SynchronizeBalancesAsync_RejectsQuotaBelowUsedAndPendingWithoutChangingRow()
+    public async Task SynchronizeBalancesAsync_AcceptsQuotaBelowUsedAndPendingWithoutNegativeAvailable()
     {
         var employeeId = Guid.NewGuid();
         await using (var seedContext = _fixture.CreateContext())
@@ -112,20 +112,25 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
 
         await using (var context = _fixture.CreateContext())
         {
-            await Assert.ThrowsAsync<LeaveConflictException>(() =>
-                new LeaveRequestRepository(context).SynchronizeBalancesAsync(
-                    employeeId,
-                    2027,
-                    [new LeaveBalanceEntitlement(2, 7m)]));
+            var result = await new LeaveRequestRepository(context).SynchronizeBalancesAsync(
+                employeeId,
+                2027,
+                [new LeaveBalanceEntitlement(2, 7m, 2027)]);
+
+            var balance = Assert.Single(result);
+            Assert.Equal(7m, balance.PolicyDays);
+            Assert.Equal(8m, balance.Entitled);
+            Assert.Equal(0m, balance.Available);
+            Assert.Equal(5m, balance.Used);
+            Assert.Equal(3m, balance.Pending);
         }
 
-        // Đọc lại bằng context mới sau khi transaction kết thúc để xác nhận dữ liệu thực trong SQL.
         await using var verifyContext = _fixture.CreateContext();
         var saved = await verifyContext.LeaveBalances.SingleAsync(
             item => item.EmployeeId == employeeId && item.LeaveTypeId == 2 && item.Year == 2027);
-        Assert.Equal(12m, saved.Entitled);
-        Assert.Equal(5m, saved.Used);
-        Assert.Equal(3m, saved.Pending);
+        Assert.Equal(7m, saved.PolicyDays);
+        Assert.Equal(8m, saved.Entitled);
+        Assert.Equal(0m, saved.Available);
     }
 
     // Tám tác vụ với DbContext riêng chạy đồng thời; database chỉ được phép có một balance row.
@@ -172,7 +177,7 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
         var repository = new LeaveRequestRepository(context);
         var created = await repository.CreateAsync(
             request,
-            [new AnnualLeaveAllocation(2026, 2m, 3m)],
+            [new AnnualLeaveAllocation(2026, 2m, 3m, 42)],
             new LeaveRequestHistory
             {
                 LeaveRequestId = request.Id,
@@ -183,6 +188,9 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
             });
 
         Assert.Equal(2m, created.Balances.Single().Pending);
+        var savedAllocation = Assert.Single(created.Request.YearAllocations);
+        Assert.Equal(42, savedAllocation.PolicyVersionId);
+        Assert.Equal(3m, savedAllocation.PolicyDaysAtCreation);
         await using (var historyContext = _fixture.CreateContext())
         {
             Assert.Equal(
@@ -351,7 +359,7 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
         }
     }
 
-    // Quota mới không đủ: balance, leave request và history phải cùng rollback.
+    // PolicyDays giảm xuống dưới Used + Pending thì Available bằng 0; request mới phải rollback vì không còn ngày khả dụng.
     [LeaveSqlFact]
     public async Task CreateAsync_RejectsPolicyBelowUsedAndPendingWithoutPersistingRequest()
     {
@@ -479,6 +487,14 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
         var rejectedRequest = await CreateRequestAsync(rejectedEmployee, rejectedManager, 5);
         await using (var context = _fixture.CreateContext())
         {
+            var balance = await context.LeaveBalances.SingleAsync(
+                item => item.EmployeeId == rejectedEmployee &&
+                        item.LeaveTypeId == 2 &&
+                        item.Year == 2026);
+            balance.PolicyDays = 12m;
+            balance.Used = 6m;
+            await context.SaveChangesAsync();
+
             var result = await new LeaveRequestRepository(context).TransitionAsync(
                 rejectedRequest.Id,
                 rejectedManager,
@@ -486,10 +502,15 @@ public sealed class LeavePersistenceIntegrationTests : IClassFixture<LeaveSqlInt
                 LeaveRequestStatus.Rejected,
                 "Not enough coverage",
                 DateTime.UtcNow,
-                verifiedApproverId: rejectedManager);
+                verifiedApproverId: rejectedManager,
+                currentPolicyDays: [new LeaveBalanceEntitlement(2, 8m, 2026)]);
+            var updatedBalance = Assert.Single(result.Balances);
             Assert.Equal(LeaveRequestStatus.Rejected, result.Request.Status);
-            Assert.Equal(0m, result.Balances.Single().Pending);
-            Assert.Equal(0m, result.Balances.Single().Used);
+            Assert.Equal(8m, updatedBalance.PolicyDays);
+            Assert.Equal(8m, updatedBalance.Entitled);
+            Assert.Equal(2m, updatedBalance.Available);
+            Assert.Equal(0m, updatedBalance.Pending);
+            Assert.Equal(6m, updatedBalance.Used);
         }
 
         var cancelledEmployee = Guid.NewGuid();

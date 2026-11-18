@@ -272,7 +272,80 @@ public sealed class LeaveCatalogServiceTests
             Times.Never);
     }
 
-    // Không cho tạo policy cho năm hiện tại hoặc quá khứ; chỉ mở policy tương lai.
+    // asOfDate chỉ trả phiên bản mới nhất đã có hiệu lực và loại bỏ phiên bản được lên lịch cho tương lai.
+    [Fact]
+    public async Task GetAuthoritativeLeavePoliciesAsync_ReturnsLatestVersionEffectiveOnDate()
+    {
+        var repository = new Mock<ILeaveCatalogRepository>();
+        repository
+            .Setup(item => item.ListLeavePoliciesAsync(2026, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+            [
+                new LeavePolicy
+                {
+                    Id = 10,
+                    LeaveTypeId = 4,
+                    LeaveType = new LeaveType { Id = 4, Code = "ANNUAL", Name = "Annual leave" },
+                    Year = 2026,
+                    DaysPerYear = 12m,
+                    EffectiveFrom = new DateOnly(2025, 1, 1),
+                    CreatedAtUtc = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                    Reason = "Initial"
+                },
+                new LeavePolicy
+                {
+                    Id = 11,
+                    LeaveTypeId = 4,
+                    LeaveType = new LeaveType { Id = 4, Code = "ANNUAL", Name = "Annual leave" },
+                    Year = 2026,
+                    DaysPerYear = 15m,
+                    EffectiveFrom = new DateOnly(2026, 6, 1),
+                    CreatedAtUtc = new DateTime(2026, 5, 20, 0, 0, 0, DateTimeKind.Utc),
+                    Reason = "Mid-year update"
+                },
+                new LeavePolicy
+                {
+                    Id = 12,
+                    LeaveTypeId = 4,
+                    LeaveType = new LeaveType { Id = 4, Code = "ANNUAL", Name = "Annual leave" },
+                    Year = 2026,
+                    DaysPerYear = 18m,
+                    EffectiveFrom = new DateOnly(2026, 12, 1),
+                    CreatedAtUtc = new DateTime(2026, 11, 20, 0, 0, 0, DateTimeKind.Utc),
+                    Reason = "Scheduled update"
+                }
+            ]);
+        var service = CreateService(repository, new InMemoryLeaveCatalogCache());
+
+        var result = await service.GetAuthoritativeLeavePoliciesAsync(
+            2026,
+            new DateOnly(2026, 11, 18));
+
+        var policy = Assert.Single(result);
+        Assert.Equal(11, policy.Id);
+        Assert.Equal(15m, policy.DaysPerYear);
+        Assert.Equal(new DateOnly(2026, 6, 1), policy.EffectiveFrom);
+    }
+
+    // EffectiveFrom có thể nằm trong năm trước của policy tương lai, nhưng không được nằm sau năm áp dụng.
+    [Fact]
+    public async Task CreateLeavePolicyAsync_RejectsEffectiveDateAfterPolicyYear()
+    {
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        var service = CreateService(repository, new InMemoryLeaveCatalogCache(), unitOfWork);
+
+        var exception = await Assert.ThrowsAsync<RequestValidationException>(
+            () => service.CreateLeavePolicyAsync(
+                new LeavePolicyRequest(4, 2027, 15m, new DateOnly(2028, 1, 1))));
+
+        Assert.Contains("effectiveFrom", exception.Errors.Keys);
+        repository.Verify(item => item.GetLeaveTypeForUpdateByIdAsync(
+            It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    // Chỉ cho phép tạo policy version cho năm tương lai.
     [Theory]
     [InlineData(2024)]
     [InlineData(2025)]
@@ -297,7 +370,7 @@ public sealed class LeaveCatalogServiceTests
             Times.Never);
     }
 
-    // Không cho chuyển policy sang năm đã bắt đầu hoặc đã qua.
+    // Không cho chuyển policy sang năm hiện tại hoặc quá khứ.
     [Fact]
     public async Task UpdateLeavePolicyAsync_RejectsChangingPolicyToCurrentOrPastYear()
     {
@@ -470,11 +543,11 @@ public sealed class LeaveCatalogServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    // Policy tương lai được cập nhật thành công; invalidation chỉ xảy ra sau SaveChanges.
+    // PUT thêm phiên bản mới, không sửa bản ghi policy cũ; cache chỉ invalidated sau SaveChanges.
     [Fact]
-    public async Task UpdateLeavePolicyAsync_UpdatesFuturePolicyAndInvalidatesCacheAfterSave()
+    public async Task UpdateLeavePolicyAsync_AppendsVersionAndInvalidatesCacheAfterSave()
     {
-        var policy = new LeavePolicy
+        var original = new LeavePolicy
         {
             Id = 9,
             LeaveTypeId = 4,
@@ -501,19 +574,23 @@ public sealed class LeaveCatalogServiceTests
         var cache = new InMemoryLeaveCatalogCache();
         var unitOfWork = new Mock<IUnitOfWork>();
         var events = new List<string>();
+        LeavePolicy? appendedVersion = null;
         repository
             .Setup(item => item.GetLeavePolicyForUpdateByIdAsync(9, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(policy);
+            .ReturnsAsync(original);
         repository
             .Setup(item => item.GetLeaveTypeForUpdateByIdAsync(4, It.IsAny<CancellationToken>()))
             .ReturnsAsync(leaveType);
         repository
-            .Setup(item => item.ExistsLeavePolicyAsync(
-                4,
-                2026,
-                9,
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(false);
+            .Setup(item => item.ListLeavePoliciesAsync(2026, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<LeavePolicy>)[]);
+        repository
+            .Setup(item => item.Add(It.IsAny<LeavePolicy>()))
+            .Callback<LeavePolicy>(version =>
+            {
+                appendedVersion = version;
+                events.Add("add");
+            });
         unitOfWork
             .Setup(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .Callback(() => events.Add("save"))
@@ -525,10 +602,14 @@ public sealed class LeaveCatalogServiceTests
             9,
             new LeavePolicyRequest(4, 2026, 15m));
 
-        Assert.Equal(2026, result.Year);
+        Assert.NotNull(appendedVersion);
+        Assert.NotSame(original, appendedVersion);
+        Assert.Equal(12m, original.DaysPerYear);
+        Assert.Equal(15m, appendedVersion.DaysPerYear);
         Assert.Equal(15m, result.DaysPerYear);
+        Assert.Equal(new DateOnly(2025, 6, 1), result.EffectiveFrom);
         Assert.Equal(
-            new[] { "save", "remove:hr:catalog:leave-policies" },
+            new[] { "add", "save", "remove:hr:catalog:leave-policies" },
             events);
     }
 

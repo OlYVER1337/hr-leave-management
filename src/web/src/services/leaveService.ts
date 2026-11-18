@@ -25,7 +25,15 @@ interface LeaveTypeRecord {
   deductsBalance: boolean;
   isActive?: boolean;
 }
-interface LeavePolicyRecord { id: number; leaveTypeId: number; year: number; daysPerYear: number; }
+interface LeavePolicyRecord {
+  id: number;
+  leaveTypeId: number;
+  year: number;
+  daysPerYear: number;
+  effectiveFrom?: string;
+  createdAtUtc?: string;
+  reason?: string;
+}
 interface LeaveCatalogRecord {
   leaveTypes: LeaveTypeRecord[];
   leavePolicies: LeavePolicyRecord[];
@@ -39,6 +47,7 @@ interface LeaveBalanceRecord {
   leaveTypeId: number;
   year: number;
   entitled: number;
+  policyDays: number;
   used: number;
   pending: number;
   available: number;
@@ -498,22 +507,21 @@ export async function getBalances(user: AuthUser): Promise<LeaveBalance[]> {
   }
   try {
     const year = getBusinessYear();
-    const [{ data: response }, { data: catalog }] = await Promise.all([
+    const [{ data: response }, { data: types }] = await Promise.all([
       leaveApi.post<LeaveBalanceRecord[]>('/api/v1/leave-balances/mine/synchronize', null, { params: { year } }),
-      hrApi.get<LeaveCatalogRecord>('/api/v1/leave-catalog', { params: { year } }),
+      hrApi.get<LeaveTypeRecord[]>('/api/v1/leave-types'),
     ]);
-    const { leaveTypes: types, leavePolicies: policies } = catalog;
     return types.map((type) => {
       const balance = response.find((item) => item.leaveTypeId === type.id);
-      const policy = policies.find((item) => item.leaveTypeId === type.id);
       const code = type.code.toUpperCase();
-      const entitled = type.deductsBalance ? (balance?.entitled ?? policy?.daysPerYear ?? 0) : null;
+      const entitled = type.deductsBalance ? (balance?.entitled ?? 0) : null;
       const used = balance?.used ?? 0;
       const pending = balance?.pending ?? 0;
       return {
         code,
         name: getLocalizedLeaveTypeName(type.code, type.name),
         entitled,
+        policyDays: type.deductsBalance ? (balance?.policyDays ?? entitled ?? 0) : undefined,
         used,
         pending,
         available: type.deductsBalance ? (balance?.available ?? Math.max(0, (entitled ?? 0) - used - pending)) : null,
@@ -625,11 +633,18 @@ export async function getPolicies(year = getBusinessYear() + 1): Promise<LeavePo
     const { leaveTypes: types, leavePolicies: policies } = catalog;
     return builtInLeaveTypes.map((definition) => {
       const type = types.find((candidate) => candidate.code.toUpperCase() === definition.code);
-      const policy = type && policies.find((candidate) => candidate.leaveTypeId === type.id && candidate.year === year);
+      const policy = type && policies
+        .filter((candidate) => candidate.leaveTypeId === type.id && candidate.year === year)
+        .sort((left, right) =>
+          (right.effectiveFrom ?? '').localeCompare(left.effectiveFrom ?? '') ||
+          (right.createdAtUtc ?? '').localeCompare(left.createdAtUtc ?? '') ||
+          right.id - left.id)[0];
       return {
         id: type ? `type-${type.id}` : `type-${definition.code}`,
         leaveTypeId: type?.id,
         policyId: policy?.id,
+        effectiveFrom: policy?.effectiveFrom,
+        reason: policy?.reason,
         year,
         typeCode: definition.code,
         typeName: definition.name,
@@ -742,7 +757,13 @@ export async function savePolicies(policies: LeavePolicy[]): Promise<void> {
         isActive: policy.isActive,
       });
       if (definition.deductsBalance && policy.daysPerYear !== null) {
-        const body = { leaveTypeId: policy.leaveTypeId, year: policy.year ?? defaultYear, daysPerYear: policy.daysPerYear };
+        const body = {
+          leaveTypeId: policy.leaveTypeId,
+          year: policy.year ?? defaultYear,
+          daysPerYear: policy.daysPerYear,
+          effectiveFrom: policy.effectiveFrom,
+          reason: policy.reason?.trim() || 'Cập nhật chính sách nghỉ phép',
+        };
         if (policy.policyId) await hrApi.put(`/api/v1/leave-policies/${policy.policyId}`, body);
         else await hrApi.post('/api/v1/leave-policies', body);
       }

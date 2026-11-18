@@ -34,7 +34,7 @@ public sealed class LeaveBalanceServiceTests
                 2027,
                 It.Is<IReadOnlyList<LeaveBalanceEntitlement>>(values =>
                     values.Count == 1 &&
-                    values[0] == new LeaveBalanceEntitlement(1, 15m)),
+                    values[0] == new LeaveBalanceEntitlement(1, 15m, 2027)),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync((Guid _, int year, IReadOnlyList<LeaveBalanceEntitlement> values, CancellationToken _) =>
                 (IReadOnlyList<LeaveBalance>)[new LeaveBalance
@@ -49,7 +49,7 @@ public sealed class LeaveBalanceServiceTests
         var result = await service.SynchronizeMineAsync(employeeId, 2027, "Bearer token");
 
         var balance = Assert.Single(result);
-        Assert.Equal(new LeaveBalanceResponse(1, 2027, 15m, 0m, 0m, 15m), balance);
+        Assert.Equal(new LeaveBalanceResponse(1, 2027, 15m, 0m, 0m, 15m, 15m), balance);
         hrClient.Verify(item => item.GetLeaveCatalogAsync(
             2027, "Bearer token", It.IsAny<CancellationToken>()), Times.Once);
         repository.Verify(item => item.SynchronizeBalancesAsync(
@@ -140,30 +140,67 @@ public sealed class LeaveBalanceServiceTests
             2027, "Bearer token", It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    // Một leave type có hai policy cùng năm là dữ liệu không nhất quán; không được ghi balance.
+    // Có nhiều phiên bản trong năm thì chọn bản mới nhất đã có hiệu lực theo ngày hiện tại.
     [Fact]
-    public async Task SynchronizeMineAsync_RejectsDuplicatePoliciesBeforeWriting()
+    public async Task SynchronizeMineAsync_UsesLatestEffectivePolicyVersion()
     {
         var employeeId = Guid.NewGuid();
         var repository = new Mock<ILeaveRequestRepository>();
         var hrClient = new Mock<ILeaveHrClient>();
+        var latestEffectiveDate = new DateOnly(2026, 11, 18);
         hrClient.Setup(item => item.GetLeaveCatalogAsync(2027, "Bearer token", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new HrLeaveCatalog(
                 [new HrLeaveType(1, "ANNUAL", "Annual", true, true, true)],
                 [
-                    new HrLeavePolicy(1, 1, "ANNUAL", "Annual", 2027, 15m),
-                    new HrLeavePolicy(2, 1, "ANNUAL", "Annual", 2027, 16m)
+                    new HrLeavePolicy(11, 1, "ANNUAL", "Annual", 2027, 15m, new DateOnly(2026, 1, 1)),
+                    new HrLeavePolicy(12, 1, "ANNUAL", "Annual", 2027, 16m, latestEffectiveDate)
                 ]));
-        var service = new LeaveBalanceService(repository.Object, hrClient.Object, TimeProvider.System);
+        repository.Setup(item => item.SynchronizeBalancesAsync(
+                employeeId,
+                2027,
+                It.Is<IReadOnlyList<LeaveBalanceEntitlement>>(values =>
+                    values.Count == 1 && values[0] == new LeaveBalanceEntitlement(1, 16m, 2027)),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid _, int year, IReadOnlyList<LeaveBalanceEntitlement> values, CancellationToken _) =>
+                (IReadOnlyList<LeaveBalance>)[new LeaveBalance
+                {
+                    EmployeeId = employeeId,
+                    LeaveTypeId = values[0].LeaveTypeId,
+                    Year = year,
+                    PolicyDays = values[0].Entitled
+                }]);
+        var timeProvider = new FixedTimeProvider(
+            new DateTimeOffset(2026, 11, 18, 2, 0, 0, TimeSpan.Zero));
+        var service = new LeaveBalanceService(repository.Object, hrClient.Object, timeProvider);
 
-        await Assert.ThrowsAsync<LeaveConflictException>(() =>
-            service.SynchronizeMineAsync(employeeId, 2027, "Bearer token"));
+        var result = Assert.Single(await service.SynchronizeMineAsync(employeeId, 2027, "Bearer token"));
 
+        Assert.Equal(16m, result.Entitled);
+        Assert.Equal(16m, result.Available);
         repository.Verify(item => item.SynchronizeBalancesAsync(
-            It.IsAny<Guid>(),
-            It.IsAny<int>(),
+            employeeId,
+            2027,
             It.IsAny<IReadOnlyList<LeaveBalanceEntitlement>>(),
-            It.IsAny<CancellationToken>()), Times.Never);
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public void LeaveBalance_DerivesEntitledWithoutNegativeAvailableWhenPolicyIsReduced()
+    {
+        var balance = new LeaveBalance
+        {
+            PolicyDays = 8m,
+            Used = 6m,
+            Pending = 4m
+        };
+
+        Assert.Equal(10m, balance.Entitled);
+        Assert.Equal(0m, balance.Available);
+
+        balance.Pending = 0m;
+
+        Assert.Equal(8m, balance.Entitled);
+        Assert.Equal(2m, balance.Available);
     }
 
     // Leave type active nhưng thiếu policy cho năm yêu cầu: phải báo conflict trước khi gọi repository.

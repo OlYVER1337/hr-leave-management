@@ -94,9 +94,9 @@ Giới hạn: API hiện chỉ quản lý assignment cho danh mục Role đượ
 | GET /api/v1/leave-types[/{id}] | Authenticated | Đọc loại nghỉ; includeInactive=true cần leave-types.update:All |
 | POST /api/v1/leave-types | leave-types.create:All | Tạo/khôi phục loại nghỉ chuẩn |
 | PUT /api/v1/leave-types/{id} | leave-types.update:All | Cập nhật trạng thái active của loại nghỉ chuẩn |
-| GET /api/v1/leave-policies[/{id}] | Authenticated | Đọc policy; hỗ trợ year và authoritative=true |
-| POST /api/v1/leave-policies | leave-policies.create:All | Tạo policy cho loại nghỉ chuẩn trừ balance |
-| PUT /api/v1/leave-policies/{id} | leave-policies.update:All | Cập nhật policy |
+| GET /api/v1/leave-policies[/{id}] | Authenticated | Đọc các phiên bản; GET list hỗ trợ year, asOfDate và authoritative=true |
+| POST /api/v1/leave-policies | leave-policies.create:All | Tạo phiên bản policy đầu tiên cho loại nghỉ chuẩn trừ balance |
+| PUT /api/v1/leave-policies/{id} | leave-policies.update:All | Thêm phiên bản policy mới; không sửa phiên bản cũ |
 | GET /api/v1/holidays[/{id}] | Authenticated | Đọc ngày lễ |
 | POST /api/v1/holidays | holidays.create:All | Thêm ngày lễ |
 | PUT /api/v1/holidays/{id} | holidays.update:All | Cập nhật ngày lễ |
@@ -104,7 +104,19 @@ Giới hạn: API hiện chỉ quản lý assignment cho danh mục Role đượ
 
 Ba loại nghỉ chuẩn là ANNUAL, SICK, UNPAID. Không cho phép loại nghỉ tùy ý; UNPAID không có quota policy. authoritative=true bypass Redis và đọc SQL trực tiếp. Leave Service dùng authoritative read khi tính nghiệp vụ.
 
-Leave Policy chỉ được tạo/thay đổi với năm lớn hơn năm hiện tại theo UTC+07:00. Policy năm hiện tại/quá khứ chỉ đọc. Update kiểm tra cả năm đang lưu và năm yêu cầu để không thể chuyển policy cũ sang năm tương lai nhằm né khóa.
+Leave Policy được lưu theo phiên bản bất biến, mỗi bản ghi có EffectiveFrom, CreatedAtUtc và Reason. POST tạo phiên bản đầu tiên; PUT thêm một phiên bản mới cho cùng loại nghỉ/năm và không sửa bản ghi cũ. Chỉ năm tương lai mới được tạo/thêm phiên bản; năm hiện tại và quá khứ bị khóa. EffectiveFrom là ngày nghiệp vụ UTC+07:00 không được nằm trong quá khứ; phiên bản policy năm tương lai có thể có hiệu lực từ một ngày trong năm hiện tại. GET hỗ trợ asOfDate để lấy trực tiếp từ HR phiên bản mới nhất có EffectiveFrom không sau ngày chỉ định; có asOfDate thì endpoint tự dùng đường đọc authoritative kể cả khi không truyền authoritative=true.
+
+Body mẫu cho POST/PUT:
+
+    {
+      "leaveTypeId": 1,
+      "year": 2027,
+      "daysPerYear": 15,
+      "effectiveFrom": "2026-11-18",
+      "reason": "Điều chỉnh chính sách nghỉ phép"
+    }
+
+`reason` không bắt buộc (tối đa 500 ký tự); nếu bỏ trống HR Service gán lý do mặc định. Trong balance response, `policyDays` là quota HR hiện hành, `entitled` là hạn mức được bảo toàn theo Used + Pending, còn `available` luôn không âm.
 
 ## 3. Leave Service
 
@@ -119,7 +131,7 @@ Leave Policy chỉ được tạo/thay đổi với năm lớn hơn năm hiện 
 | GET /api/v1/leave-requests/summary | leaves.decide:Team/All | Pending theo decide scope; Approved/Total theo read scope, null nếu thiếu leaves.read |
 | PATCH /api/v1/leave-requests/{id}/decision | leaves.decide:Team/All | decision=approve/reject và note tùy chọn |
 | POST /api/v1/leave-requests/{id}/cancel | leaves.cancel:Self | Chủ đơn hủy khi Pending |
-| GET /api/v1/leave-balances/mine?year=2026 | leaves.read:Self/All | Đọc các balance rows hiện có của caller |
+| GET /api/v1/leave-balances/mine?year=2026 | leaves.read:Self/All | Đồng bộ PolicyDays hiện hành từ HR rồi trả balance của caller |
 | POST /api/v1/leave-balances/mine/synchronize?year=2026 | leaves.read:Self/All | Khởi tạo/đồng bộ balance của caller; vẫn chỉ tác động dữ liệu của chính caller |
 
 Ví dụ quyết định:
@@ -138,12 +150,13 @@ Trạng thái LeaveRequestStatus: 0 Pending, 1 Approved, 2 Rejected, 3 Cancelled
 ### 3.1. Quy tắc nghiệp vụ
 
 - Employee phải active; leave type phải active.
-- Balance GET chỉ đọc dữ liệu hiện có. Nhân viên tự khởi tạo/đồng bộ balance năm của mình qua POST `/api/v1/leave-balances/mine/synchronize`; Leave Service lấy catalog authoritative từ HR qua HTTP, không truy cập HR_DB trực tiếp.
-- Đồng bộ balance chỉ tạo row cho leave type đang active và `DeductsBalance = true`; cập nhật `Entitled` nhưng giữ nguyên `Used`/`Pending`. Nếu quota mới thấp hơn `Used + Pending`, thao tác trả conflict và rollback.
-- Luồng tạo đơn cũng cập nhật `Entitled` từ policy authoritative trong cùng transaction trước khi cộng `Pending`, kể cả khi nhân viên chưa mở màn hình số dư.
+- GET balance và POST synchronize đều lấy catalog authoritative từ HR qua HTTP trước khi đọc/cập nhật số dư; Leave Service không truy cập HR_DB trực tiếp.
+- Balance lưu `PolicyDays`, `Used`, `Pending`; `Entitled = max(PolicyDays, Used + Pending)`, `Available = Entitled - Used - Pending`. Khi HR hạ quota xuống thấp hơn tổng Used + Pending, PolicyDays vẫn được cập nhật; Entitled tạm thời bằng Used + Pending để không tạo số dư âm.
+- Luồng tạo đơn chọn policy version có EffectiveFrom mới nhất nhưng không sau ngày tạo đơn UTC+07:00. Mỗi yearly allocation lưu PolicyVersionId và PolicyDaysAtCreation để truy vết; request cũ không bị đổi policy đã áp dụng.
+- Khi duyệt, từ chối hoặc hủy đơn, Leave lấy policy hiện hành từ HR và cập nhật PolicyDays trong cùng transaction với Used/Pending. Nếu HR unavailable, thao tác cần refresh fail closed.
 - EndDate không trước StartDate; range tối đa 366 ngày; reason bắt buộc, tối đa 1.000 ký tự.
 - Backend tính ngày làm việc: thứ Hai–thứ Sáu, bỏ holidays từ HR; request không có ngày làm việc bị từ chối.
-- Request trừ balance được chia allocation theo từng năm; policy authoritative lấy từ HR.
+- Request trừ balance được chia allocation theo từng năm; mỗi allocation lưu ID phiên bản policy được áp dụng lúc tạo đơn.
 - Không cho request Pending/Approved chồng ngày của cùng nhân viên.
 - Create reserve Pending; Approve chuyển Pending sang Used; Reject/Cancel giải phóng Pending.
 - Create/decision/cancel và balance/history cùng transaction; RowVersion, unique index, Serializable transaction và retry bảo vệ cạnh tranh.
@@ -151,7 +164,7 @@ Trạng thái LeaveRequestStatus: 0 Pending, 1 Approved, 2 Rejected, 3 Cancelled
 - Với Team scope, Leave gọi HR để lấy membership hiện tại; khi quyết định đơn, xác minh Employee còn active và ManagerId vẫn là actor. HR unavailable thì fail closed, trả 503.
 - Leave Service không truy cập HR_DB trực tiếp.
 
-Balance row được tạo khi nhân viên gọi POST `/api/v1/leave-balances/mine/synchronize` hoặc khi tạo request thuộc leave type trừ quota. GET `/api/v1/leave-balances/mine` chỉ đọc rows đã tồn tại. Self-sync tạo row cho loại nghỉ active/deducting và cập nhật Entitled theo HR catalog authoritative; CreateAsync cũng refresh quota trong transaction.
+Balance row được tạo khi nhân viên gọi POST `/api/v1/leave-balances/mine/synchronize`, GET `/api/v1/leave-balances/mine` hoặc tạo request thuộc leave type trừ quota. GET và POST đều đồng bộ PolicyDays từ HR authoritative trước khi trả số dư; CreateAsync, decision và cancel refresh quota trong transaction cập nhật balance.
 
 History ghi Created/Approved/Rejected/Cancelled nhưng hiện chưa có GET API riêng để đọc history.
 

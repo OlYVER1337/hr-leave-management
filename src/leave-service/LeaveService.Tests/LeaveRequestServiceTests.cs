@@ -54,10 +54,16 @@ public sealed class LeaveRequestServiceTests
             .ReturnsAsync([new HrHoliday(1, new DateOnly(2027, 1, 1), "New Year")]);
         hrClient
             .Setup(item => item.GetLeavePoliciesAsync(2026, "Bearer token", It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new HrLeavePolicy(1, 4, "ANNUAL", "Annual leave", 2026, 12m)]);
+            .ReturnsAsync([
+                new HrLeavePolicy(1, 4, "ANNUAL", "Annual leave", 2026, 12m, new DateOnly(2026, 1, 1)),
+                new HrLeavePolicy(3, 4, "ANNUAL", "Annual leave", 2026, 13m, new DateOnly(2026, 10, 28))
+            ]);
         hrClient
             .Setup(item => item.GetLeavePoliciesAsync(2027, "Bearer token", It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new HrLeavePolicy(2, 4, "ANNUAL", "Annual leave", 2027, 15m)]);
+            .ReturnsAsync([
+                new HrLeavePolicy(2, 4, "ANNUAL", "Annual leave", 2027, 15m, new DateOnly(2026, 1, 1)),
+                new HrLeavePolicy(4, 4, "ANNUAL", "Annual leave", 2027, 18m, new DateOnly(2026, 12, 1))
+            ]);
         var service = new LeaveRequestService(
             repository.Object,
             hrClient.Object,
@@ -82,7 +88,11 @@ public sealed class LeaveRequestServiceTests
                 It.Is<IReadOnlyList<AnnualLeaveAllocation>>(allocations =>
                     allocations.Count == 2 &&
                     allocations[0].Days == 1m &&
-                    allocations[1].Days == 1m),
+                    allocations[0].Entitled == 12m &&
+                    allocations[0].PolicyVersionId == 1 &&
+                    allocations[1].Days == 1m &&
+                    allocations[1].Entitled == 15m &&
+                    allocations[1].PolicyVersionId == 2),
                 It.IsAny<LeaveRequestHistory>(),
                 It.IsAny<CancellationToken>()),
             Times.Once);
@@ -284,7 +294,8 @@ public sealed class LeaveRequestServiceTests
                 "Reviewed",
                 It.IsAny<DateTime>(),
                 (Guid?)actorId,
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                null))
             .ReturnsAsync(() =>
             {
                 request.Status = expectedStatus;
@@ -314,7 +325,8 @@ public sealed class LeaveRequestServiceTests
                 "Reviewed",
                 It.IsAny<DateTime>(),
                 (Guid?)actorId,
-                It.IsAny<CancellationToken>()),
+                It.IsAny<CancellationToken>(),
+                null),
             Times.Once);
         hrClient.Verify(
             item => item.GetEmployeeAsync(employeeId, "Bearer manager", It.IsAny<CancellationToken>()),
@@ -403,7 +415,8 @@ public sealed class LeaveRequestServiceTests
                 null,
                 It.IsAny<DateTime>(),
                 (Guid?)newManagerId,
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                null))
             .ReturnsAsync(() =>
             {
                 request.Status = LeaveRequestStatus.Approved;
@@ -901,7 +914,8 @@ public sealed class LeaveRequestServiceTests
                 null,
                 It.IsAny<DateTime>(),
                 (Guid?)null,
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                null))
             .ReturnsAsync(() =>
             {
                 request.Status = LeaveRequestStatus.Approved;
@@ -922,7 +936,8 @@ public sealed class LeaveRequestServiceTests
             null,
             It.IsAny<DateTime>(),
             (Guid?)null,
-            It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<CancellationToken>(),
+            null), Times.Once);
         hrClient.VerifyNoOtherCalls();
     }
 
@@ -1086,44 +1101,170 @@ public sealed class LeaveRequestServiceTests
                 It.IsAny<string?>(),
                 It.IsAny<DateTime>(),
                 It.IsAny<Guid?>(),
-                It.IsAny<CancellationToken>()),
+                It.IsAny<CancellationToken>(),
+                null),
             Times.Never);
 
-    // Chủ đơn hủy request Pending phải ghi lại trạng thái Cancelled và lịch sử thao tác.
+    // Approve/reject lấy policy version có hiệu lực tại ngày xử lý và truyền quota mới vào cùng transaction.
     [Fact]
-    public async Task CancelAsync_RecordsEmployeeCancellation()
+    public async Task DecideAsync_RefreshesCurrentPolicyBeforeTransition()
     {
+        var actorId = Guid.NewGuid();
         var employeeId = Guid.NewGuid();
         var request = new LeaveRequest
         {
             Id = Guid.NewGuid(),
             EmployeeId = employeeId,
+            LeaveTypeId = 4,
+            Status = LeaveRequestStatus.Pending,
+            YearAllocations =
+            [
+                new LeaveRequestYearAllocation
+                {
+                    LeaveRequestId = Guid.NewGuid(),
+                    Year = 2027,
+                    Days = 2m
+                }
+            ]
+        };
+        var updatedRequest = new LeaveRequest
+        {
+            Id = request.Id,
+            EmployeeId = employeeId,
+            LeaveTypeId = 4,
+            Status = LeaveRequestStatus.Rejected
+        };
+        var repository = new Mock<ILeaveRequestRepository>();
+        var hrClient = new Mock<ILeaveHrClient>();
+        repository
+            .Setup(item => item.GetForDecisionAsync(request.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(request);
+        hrClient
+            .Setup(item => item.GetEmployeeAsync(employeeId, "Bearer manager", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new HrEmployeeSnapshot(employeeId, "E1", "Employee", "Employee", true, 1, actorId));
+        hrClient
+            .Setup(item => item.GetLeavePoliciesAsync(2027, "Bearer manager", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                new HrLeavePolicy(51, 4, "ANNUAL", "Annual leave", 2027, 15m, new DateOnly(2026, 1, 1)),
+                new HrLeavePolicy(52, 4, "ANNUAL", "Annual leave", 2027, 8m, new DateOnly(2026, 11, 17)),
+                new HrLeavePolicy(53, 4, "ANNUAL", "Annual leave", 2027, 20m, new DateOnly(2026, 11, 20))
+            ]);
+        repository
+            .Setup(item => item.TransitionAsync(
+                request.Id,
+                actorId,
+                It.IsAny<LeaveAccess>(),
+                LeaveRequestStatus.Rejected,
+                "No coverage",
+                It.IsAny<DateTime>(),
+                (Guid?)actorId,
+                It.IsAny<CancellationToken>(),
+                It.Is<IReadOnlyList<LeaveBalanceEntitlement>>(values =>
+                    values.Count == 1 &&
+                    values[0] == new LeaveBalanceEntitlement(4, 8m, 2027))))
+            .ReturnsAsync((updatedRequest, (IReadOnlyList<LeaveBalance>)[]));
+        var service = new LeaveRequestService(
+            repository.Object,
+            hrClient.Object,
+            new FixedTimeProvider(new DateTimeOffset(2026, 11, 18, 2, 0, 0, TimeSpan.Zero)));
+
+        var result = await service.DecideAsync(
+            actorId,
+            "Bearer manager",
+            request.Id,
+            approve: false,
+            ManagerAccess(),
+            " No coverage ");
+
+        Assert.Equal(LeaveRequestStatus.Rejected, result.Status);
+        repository.Verify(item => item.TransitionAsync(
+            request.Id,
+            actorId,
+            It.IsAny<LeaveAccess>(),
+            LeaveRequestStatus.Rejected,
+            "No coverage",
+            It.IsAny<DateTime>(),
+            (Guid?)actorId,
+            It.IsAny<CancellationToken>(),
+            It.Is<IReadOnlyList<LeaveBalanceEntitlement>>(values =>
+                values.Count == 1 &&
+                values[0] == new LeaveBalanceEntitlement(4, 8m, 2027))),
+            Times.Once);
+    }
+
+    // Pending cancellation refreshes the current HR quota and passes it to the balance transaction.
+    [Fact]
+    public async Task CancelAsync_RecordsEmployeeCancellationAndRefreshesPolicyWhenNeeded()
+    {
+        var employeeId = Guid.NewGuid();
+        var pendingRequest = new LeaveRequest
+        {
+            Id = Guid.NewGuid(),
+            EmployeeId = employeeId,
+            LeaveTypeId = 4,
+            Status = LeaveRequestStatus.Pending,
+            YearAllocations =
+            [
+                new LeaveRequestYearAllocation
+                {
+                    LeaveRequestId = Guid.NewGuid(),
+                    Year = 2027,
+                    Days = 2m
+                }
+            ]
+        };
+        var cancelledRequest = new LeaveRequest
+        {
+            Id = pendingRequest.Id,
+            EmployeeId = employeeId,
+            LeaveTypeId = 4,
             Status = LeaveRequestStatus.Cancelled
         };
         var repository = new Mock<ILeaveRequestRepository>();
+        var hrClient = new Mock<ILeaveHrClient>();
+        repository
+            .Setup(item => item.GetForDecisionAsync(pendingRequest.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(pendingRequest);
+        hrClient
+            .Setup(item => item.GetLeavePoliciesAsync(2027, "Bearer employee", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                new HrLeavePolicy(41, 4, "ANNUAL", "Annual leave", 2027, 12m, new DateOnly(2026, 1, 1)),
+                new HrLeavePolicy(42, 4, "ANNUAL", "Annual leave", 2027, 8m, new DateOnly(2026, 11, 17)),
+                new HrLeavePolicy(43, 4, "ANNUAL", "Annual leave", 2027, 20m, new DateOnly(2026, 11, 20))
+            ]);
         repository
             .Setup(item => item.CancelAsync(
                 employeeId,
-                request.Id,
+                pendingRequest.Id,
                 "Changed plans",
                 It.IsAny<DateTime>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync((request, (IReadOnlyList<LeaveBalance>)[]));
+                It.IsAny<CancellationToken>(),
+                It.Is<IReadOnlyList<LeaveBalanceEntitlement>>(values =>
+                    values.Count == 1 &&
+                    values[0] == new LeaveBalanceEntitlement(4, 8m, 2027))))
+            .ReturnsAsync((cancelledRequest, (IReadOnlyList<LeaveBalance>)[]));
         var service = new LeaveRequestService(
             repository.Object,
-            new Mock<ILeaveHrClient>().Object,
-            TimeProvider.System);
+            hrClient.Object,
+            new FixedTimeProvider(new DateTimeOffset(2026, 11, 18, 2, 0, 0, TimeSpan.Zero)));
 
-        var result = await service.CancelAsync(employeeId, request.Id, " Changed plans ");
+        var result = await service.CancelAsync(
+            employeeId,
+            "Bearer employee",
+            pendingRequest.Id,
+            " Changed plans ");
 
         Assert.Equal(LeaveRequestStatus.Cancelled, result.Status);
         repository.Verify(
             item => item.CancelAsync(
                 employeeId,
-                request.Id,
+                pendingRequest.Id,
                 "Changed plans",
                 It.IsAny<DateTime>(),
-                It.IsAny<CancellationToken>()),
+                It.IsAny<CancellationToken>(),
+                It.Is<IReadOnlyList<LeaveBalanceEntitlement>>(values =>
+                    values.Count == 1 &&
+                    values[0] == new LeaveBalanceEntitlement(4, 8m, 2027))),
             Times.Once);
     }
 

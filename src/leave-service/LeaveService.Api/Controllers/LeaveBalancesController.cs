@@ -11,9 +11,7 @@ namespace LeaveService.Api.Controllers;
 [Authorize]
 [Route("api/v1/leave-balances")]
 public sealed class LeaveBalancesController(
-    LeaveRequestService leaveRequestService,
-    LeaveBalanceService leaveBalanceService,
-    TimeProvider timeProvider) : ControllerBase
+    LeaveBalanceService leaveBalanceService) : ControllerBase
 {
     [HttpGet("mine")]
     [Authorize(Policy = LeavePermissionPolicies.LeavesReadSelfOrAll)]
@@ -23,15 +21,17 @@ public sealed class LeaveBalancesController(
     {
         var employeeIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier)
             ?? User.FindFirstValue("sub");
-        if (!Guid.TryParse(employeeIdValue, out var employeeId))
+        var authorization = Request.Headers["Authorization"].ToString();
+        if (!Guid.TryParse(employeeIdValue, out var employeeId) ||
+            string.IsNullOrWhiteSpace(authorization))
         {
             return Unauthorized();
         }
 
-        var balances = await leaveRequestService.GetBalancesAsync(
+        var balances = await leaveBalanceService.SynchronizeMineAsync(
             employeeId,
-            year ?? DateOnly.FromDateTime(
-                timeProvider.GetUtcNow().ToOffset(LeaveRequestService.BusinessOffset).DateTime).Year,
+            year,
+            authorization,
             cancellationToken);
         return Ok(balances);
     }

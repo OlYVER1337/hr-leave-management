@@ -31,7 +31,9 @@ public sealed record LeaveCatalogResponse(
 public sealed record LeavePolicyRequest(
     int LeaveTypeId,
     int Year,
-    decimal DaysPerYear);
+    decimal DaysPerYear,
+    DateOnly? EffectiveFrom = null,
+    string? Reason = null);
 
 public sealed record LeavePolicyResponse(
     int Id,
@@ -39,7 +41,10 @@ public sealed record LeavePolicyResponse(
     string LeaveTypeCode,
     string LeaveTypeName,
     int Year,
-    decimal DaysPerYear);
+    decimal DaysPerYear,
+    DateOnly EffectiveFrom = default,
+    DateTime CreatedAtUtc = default,
+    string Reason = "");
 
 public sealed record HolidayRequest(DateOnly HolidayDate, string Name);
 

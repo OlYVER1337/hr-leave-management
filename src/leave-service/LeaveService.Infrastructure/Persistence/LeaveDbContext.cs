@@ -16,10 +16,10 @@ public sealed class LeaveDbContext(DbContextOptions<LeaveDbContext> options) : D
         {
             entity.HasIndex(item => new { item.EmployeeId, item.LeaveTypeId, item.Year })
                 .IsUnique();
-            entity.Property(item => item.Entitled).HasPrecision(6, 1);
+            entity.Property(item => item.PolicyDays).HasPrecision(6, 1);
             entity.ToTable(table =>
             {
-                table.HasCheckConstraint("CK_LeaveBalances_Entitled_NonNegative", "[Entitled] >= 0");
+                table.HasCheckConstraint("CK_LeaveBalances_PolicyDays_NonNegative", "[PolicyDays] >= 0");
                 table.HasCheckConstraint("CK_LeaveBalances_Used_NonNegative", "[Used] >= 0");
                 table.HasCheckConstraint("CK_LeaveBalances_Pending_NonNegative", "[Pending] >= 0");
             });
@@ -54,6 +54,7 @@ public sealed class LeaveDbContext(DbContextOptions<LeaveDbContext> options) : D
         {
             entity.HasKey(item => new { item.LeaveRequestId, item.Year });
             entity.Property(item => item.Days).HasPrecision(6, 1);
+            entity.Property(item => item.PolicyDaysAtCreation).HasPrecision(6, 1);
             entity.HasOne(item => item.LeaveRequest)
                 .WithMany(item => item.YearAllocations)
                 .HasForeignKey(item => item.LeaveRequestId)

@@ -94,14 +94,16 @@ public interface ILeaveRequestRepository
         string? note,
         DateTime decidedAtUtc,
         Guid? verifiedApproverId = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        IReadOnlyList<LeaveBalanceEntitlement>? currentPolicyDays = null);
 
     Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> CancelAsync(
         Guid employeeId,
         Guid requestId,
         string? note,
         DateTime cancelledAtUtc,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        IReadOnlyList<LeaveBalanceEntitlement>? currentPolicyDays = null);
 
     Task<IReadOnlyList<LeaveBalance>> ListBalancesAsync(
         Guid employeeId,

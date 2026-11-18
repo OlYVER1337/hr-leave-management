@@ -30,11 +30,16 @@ vi.mock('../services/leaveService', () => ({
   savePolicies: mocks.savePolicies,
 }));
 
-const futureYear = new Date().getFullYear() + 1;
+const currentBusinessYear = Number(new Intl.DateTimeFormat('en', {
+  timeZone: 'Asia/Ho_Chi_Minh',
+  year: 'numeric',
+}).format(new Date()));
+const futureYear = currentBusinessYear + 1;
 const annual: LeavePolicy = {
   id: 'annual',
   year: futureYear,
   leaveTypeId: 1,
+  policyId: 101,
   typeCode: 'ANNUAL',
   typeName: 'Nghỉ phép năm',
   daysPerYear: 12,
@@ -47,6 +52,7 @@ const sick: LeavePolicy = {
   ...annual,
   id: 'sick',
   leaveTypeId: 2,
+  policyId: 102,
   typeCode: 'SICK',
   typeName: 'Nghỉ ốm',
   daysPerYear: 10,
@@ -92,25 +98,26 @@ describe('PoliciesPage', () => {
     expect(screen.queryByRole('button', { name: 'Thêm loại nghỉ' })).not.toBeInTheDocument();
   });
 
-  it('keeps active policy actions available without a delete action', async () => {
+  it('offers version creation only for balance-deducting policies', async () => {
     renderPoliciesPage();
 
-    expect(await screen.findAllByRole('button', { name: 'Sửa chính sách' })).not.toHaveLength(0);
+    expect(await screen.findAllByRole('button', { name: 'Tạo phiên bản mới' })).toHaveLength(2);
+    expect(await screen.findByText('Loại nghỉ này không áp dụng quota.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Xóa chính sách/ })).not.toBeInTheDocument();
   });
 
-  it('locks policy editing for the current year', async () => {
+  it('locks policy versions for the current year', async () => {
     const user = userEvent.setup();
     renderPoliciesPage();
 
     await screen.findByRole('heading', { name: 'Nghỉ phép năm' });
     await user.selectOptions(
       screen.getByRole('combobox', { name: 'Năm áp dụng' }),
-      String(new Date().getFullYear()),
+      String(currentBusinessYear),
     );
 
     await waitFor(() => {
-      expect(screen.getAllByRole('button', { name: 'Chính sách đã khóa' })).toHaveLength(3);
+      expect(screen.getAllByRole('button', { name: 'Chính sách đã khóa' })).toHaveLength(2);
     });
     expect(screen.getAllByRole('button', { name: 'Chính sách đã khóa' }).every(
       (button) => (button as HTMLButtonElement).disabled,

@@ -1,7 +1,7 @@
 # Kịch bản demo, kết quả kiểm thử và checklist nghiệm thu
 
 
-> **Cập nhật trạng thái 17/11/2026:** Các kết quả test/demo ghi theo ngày bên dưới vẫn là bằng chứng lịch sử. Lượt chạy local mới nhất do người dùng cung cấp ngày 17/11 ghi nhận Leave 118/118 và HR 132/132 tests pass, 0 failed, 0 skipped. Output không kèm `git rev-parse HEAD` và chưa được lưu thành TRX mới; vì vậy chưa gắn kết quả với SHA bất biến. Stored TRX trong repository vẫn là evidence cũ ngày 05/11 (HR 57 passed/1 skipped; Leave 19 passed/6 skipped). Chưa có kết quả Web test/build mới sau thay đổi balance-sync.
+> **Cập nhật trạng thái 18/11/2026:** Kết quả local ngày 17/11 do người dùng cung cấp (Leave 118/118; HR 132/132; 0 failed/0 skipped) là bằng chứng lịch sử trên source trước thay đổi policy versioning. HEAD hiện tại đã thay đổi model/migration/service/API/UI/test; chưa có CI workflow phù hợp trong repository và chưa có kết quả backend/Web test/build cho SHA hiện tại. Stored TRX trong repository vẫn là evidence cũ ngày 05/11 (HR 57 passed/1 skipped; Leave 19 passed/6 skipped).
 
 
 ## 1. Kết quả kiểm thử hồi quy và tích hợp
@@ -266,8 +266,9 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
 | [x] | Dựng môi trường | Compose chạy Web, HR, Leave, SQL Server, Redis; healthcheck đạt | [README chạy hệ thống](../README.md), kiểm tra `hrbench` 03/11 |
 | [x] | Dynamic RBAC và data scope | HR/Leave API kiểm tra permission + Self/Team/All; React vẫn dùng Role legacy cho menu/route guard; refresh token bị thu hồi khi deactivate | HR/Leave authorization tests, `PermissionAuthorization`, `LeavePermissionAuthorization`, `App.tsx`; access JWT còn hiệu lực đến expiry |
 | [x] | Quản trị nhân sự | HR tạo/sửa nhân viên, phòng ban và quản lý trực tiếp | `/employees`, `/departments`; HR tests |
-| [x] | Chính sách nghỉ | HR quản lý loại chuẩn, hạn mức năm và ngày lễ | `/policies`; [Redis report](../performance/redis-performance.md) |
-| [x] | Số dư cá nhân | GET đọc số dư hiện có; POST self-synchronize tạo/cập nhật balance theo HR authoritative catalog và giữ Used/Pending | `LeaveBalanceServiceTests`, `LeavePersistenceIntegrationTests`, `LeaveBalancesController`; test command output ngày 17/11 |
+| [x] | Chính sách nghỉ cơ bản | HR quản lý loại chuẩn, hạn mức năm và ngày lễ | `/policies`; [Redis report](../performance/redis-performance.md) |
+| [ ] | Phiên bản policy | Request chọn phiên bản theo EffectiveFrom; phiên bản cũ không bị ghi đè; chỉ năm tương lai được thay đổi | HR `LeaveCatalogServiceTests`, Leave `LeaveRequestServiceTests`; test mới chưa chạy trên HEAD hiện tại |
+| [ ] | Số dư cá nhân | GET và POST self-synchronize đều đồng bộ PolicyDays từ HR authoritative; Entitled được suy ra để không âm khi quota giảm | `LeaveBalanceServiceTests`, `LeavePersistenceIntegrationTests`, `LeaveBalancesController`; test đã cập nhật nhưng chưa chạy trên HEAD hiện tại |
 | [x] | Tạo đơn hợp lệ | Ngày kết thúc không trước ngày bắt đầu; chỉ tính ngày làm việc; tạo trạng thái Pending | `RequestLeavePage`; Leave tests; demo API |
 | [x] | Đơn không hợp lệ | Đơn trùng ngày, ngày không hợp lệ, số dư thiếu và tổng ngày bằng 0 bị từ chối | Leave service tests |
 | [x] | Hủy đơn | Employee chỉ hủy đơn Pending của mình; số dư và lịch sử cập nhật cùng giao dịch | Leave persistence integration tests |
@@ -333,7 +334,7 @@ Chi tiết: dynamic-authorization-benchmark-results.md. Muốn sign-off hiệu n
 
 ### 7.4. Các gap còn mở
 
-- Leave Balance đã có self-sync theo employee/năm qua `POST /api/v1/leave-balances/mine/synchronize`; GET vẫn read-only. Chưa có API/worker bulk reconciliation cho tất cả nhân viên sau khi HR đổi policy.
+- Leave Balance GET và POST đều đồng bộ PolicyDays hiện hành từ HR trước khi trả balance. Entitled = max(PolicyDays, Used + Pending); quota giảm dưới lượng đã dùng/đang chờ không làm số dư âm. Policy version được chọn theo ngày tạo đơn và snapshot ở từng yearly allocation. Các thay đổi ngày 18/11 chưa được chạy test/build trên HEAD hiện tại. Chưa có API/worker bulk reconciliation cho tất cả nhân viên sau khi HR đổi policy.
 - Leave request date validation, balance default year và HR policy year đều dùng business timezone UTC+07; frontend `leaveService.ts` dùng `Asia/Ho_Chi_Minh`. Cần rà soát các màn hình frontend còn lại ở ranh giới ngày/năm.
 - Employee lookup cần thống nhất active-state behavior giữa lookup by ID/batch và Team listing.
 - Leave History có ghi nhưng chưa có GET endpoint.

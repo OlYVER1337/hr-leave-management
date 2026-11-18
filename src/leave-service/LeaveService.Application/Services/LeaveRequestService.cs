@@ -20,7 +20,9 @@ public sealed class LeaveRequestService(
         CreateLeaveRequest request,
         CancellationToken cancellationToken = default)
     {
-        ValidateRequest(request, BusinessToday());
+        var createdAt = timeProvider.GetUtcNow();
+        var createdAtBusinessDate = DateOnly.FromDateTime(createdAt.ToOffset(BusinessOffset).DateTime);
+        ValidateRequest(request, createdAtBusinessDate);
         var employee = await hrClient.GetEmployeeAsync(
             employeeId,
             authorization,
@@ -59,16 +61,20 @@ public sealed class LeaveRequestService(
                     year,
                     authorization,
                     cancellationToken);
-                var policy = policies.FirstOrDefault(item => item.LeaveTypeId == leaveType.Id)
+                var policy = ResolveEffectivePolicy(
+                    policies,
+                    leaveType.Id,
+                    year,
+                    createdAtBusinessDate)
                     ?? throw Invalid(
                         "leaveTypeId",
-                        $"No leave policy is configured for leave type '{leaveType.Id}' in {year}.");
-                allocations.Add(new AnnualLeaveAllocation(year, days, policy.DaysPerYear));
+                        $"No leave policy version is effective for leave type '{leaveType.Id}' in {year} on {createdAtBusinessDate}.");
+                allocations.Add(new AnnualLeaveAllocation(year, days, policy.DaysPerYear, policy.Id));
             }
         }
 
         var totalDays = daysByYear.Values.Sum();
-        var createdAtUtc = timeProvider.GetUtcNow().UtcDateTime;
+        var createdAtUtc = createdAt.UtcDateTime;
         var entity = new LeaveRequest
         {
             EmployeeId = employee.Id,
@@ -344,26 +350,6 @@ public sealed class LeaveRequestService(
         return requests.Select(item => ToResponse(item.Request, item.Balances)).ToArray();
     }
 
-    public async Task<IReadOnlyList<LeaveBalanceResponse>> GetBalancesAsync(
-        Guid employeeId,
-        int year,
-        CancellationToken cancellationToken = default)
-    {
-        if (year is < 1900 or > 9998)
-        {
-            throw Invalid("year", "Year must be between 1900 and 9998.");
-        }
-
-        var balances = await repository.ListBalancesAsync(employeeId, year, cancellationToken);
-        return balances.Select(balance => new LeaveBalanceResponse(
-            balance.LeaveTypeId,
-            balance.Year,
-            balance.Entitled,
-            balance.Used,
-            balance.Pending,
-            balance.Entitled - balance.Used - balance.Pending)).ToArray();
-    }
-
     public async Task<LeaveRequestResponse> DecideAsync(
         Guid actorId,
         string authorization,
@@ -403,6 +389,10 @@ public sealed class LeaveRequestService(
         }
 
         ValidateNote(note);
+        IReadOnlyList<LeaveBalanceEntitlement>? currentPolicyDays = request.YearAllocations.Count == 0
+            ? null
+            : await GetCurrentPolicyDaysAsync(request, authorization, cancellationToken);
+
         var result = await repository.TransitionAsync(
             requestId,
             actorId,
@@ -411,25 +401,94 @@ public sealed class LeaveRequestService(
             NormalizeNote(note),
             timeProvider.GetUtcNow().UtcDateTime,
             verifiedApproverId,
-            cancellationToken);
+            cancellationToken,
+            currentPolicyDays);
         return ToResponse(result.Request, result.Balances);
     }
 
     public async Task<LeaveRequestResponse> CancelAsync(
         Guid employeeId,
+        string authorization,
         Guid requestId,
         string? note,
         CancellationToken cancellationToken = default)
     {
         ValidateNote(note);
+        var request = await repository.GetForDecisionAsync(requestId, cancellationToken);
+        if (request is null || request.EmployeeId != employeeId)
+        {
+            throw new LeaveNotFoundException($"Leave request with id '{requestId}' was not found.");
+        }
+
+        if (request.Status != LeaveRequestStatus.Pending)
+        {
+            throw new LeaveConflictException("Only pending leave requests can be cancelled.");
+        }
+
+        var currentPolicyDays = request.YearAllocations.Count == 0
+            ? null
+            : await GetCurrentPolicyDaysAsync(request, authorization, cancellationToken);
+
         var result = await repository.CancelAsync(
             employeeId,
             requestId,
             NormalizeNote(note),
             timeProvider.GetUtcNow().UtcDateTime,
-            cancellationToken);
+            cancellationToken,
+            currentPolicyDays);
         return ToResponse(result.Request, result.Balances);
     }
+
+    private async Task<IReadOnlyList<LeaveBalanceEntitlement>> GetCurrentPolicyDaysAsync(
+        LeaveRequest request,
+        string authorization,
+        CancellationToken cancellationToken)
+    {
+        var effectiveOn = BusinessToday();
+        var result = new List<LeaveBalanceEntitlement>(request.YearAllocations.Count);
+        foreach (var allocation in request.YearAllocations.OrderBy(item => item.Year))
+        {
+            var policies = await hrClient.GetLeavePoliciesAsync(
+                allocation.Year,
+                authorization,
+                cancellationToken);
+            var policy = ResolveEffectivePolicy(
+                policies,
+                request.LeaveTypeId,
+                allocation.Year,
+                effectiveOn)
+                ?? throw new LeaveConflictException(
+                    $"HR has no effective leave policy for type '{request.LeaveTypeId}' in {allocation.Year} on {effectiveOn}.");
+
+            if (policy.DaysPerYear is < 0m or > 366m ||
+                decimal.Round(policy.DaysPerYear, 1) != policy.DaysPerYear)
+            {
+                throw new LeaveConflictException("HR returned an invalid leave-policy entitlement.");
+            }
+
+            result.Add(new LeaveBalanceEntitlement(
+                request.LeaveTypeId,
+                policy.DaysPerYear,
+                allocation.Year));
+        }
+
+        return result;
+    }
+
+    private static HrLeavePolicy? ResolveEffectivePolicy(
+        IReadOnlyList<HrLeavePolicy> policies,
+        int leaveTypeId,
+        int year,
+        DateOnly effectiveOn) =>
+        policies
+            .Where(item =>
+                item.LeaveTypeId == leaveTypeId &&
+                item.Year == year &&
+                item.EffectiveFrom <= effectiveOn)
+            .OrderByDescending(item => item.EffectiveFrom)
+            .ThenByDescending(item => item.CreatedAtUtc)
+            .ThenByDescending(item => item.Id)
+            .FirstOrDefault();
 
     private static LeaveRequestStatus? ParseStatusFilter(string? status)
     {
@@ -557,7 +616,8 @@ public sealed class LeaveRequestService(
                 balance.Entitled,
                 balance.Used,
                 balance.Pending,
-                balance.Entitled - balance.Used - balance.Pending)).ToArray());
+                balance.Entitled - balance.Used - balance.Pending,
+                balance.PolicyDays)).ToArray());
 }
 
 public sealed record PagedLeaveRequestResponse(IReadOnlyList<LeaveRequestResponse> Items, int TotalCount);
