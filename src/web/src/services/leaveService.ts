@@ -769,6 +769,17 @@ export async function savePolicies(policies: LeavePolicy[]): Promise<void> {
         throw new Error('Vui lòng chọn ngày hiệu lực cho phiên bản chính sách.');
       }
 
+      const firstDayOfPolicyYear = `${year}-01-01`;
+      const earliestAllowedDate = getBusinessDate() > firstDayOfPolicyYear
+        ? getBusinessDate()
+        : firstDayOfPolicyYear;
+      if (policy.effectiveFrom < earliestAllowedDate ||
+          policy.effectiveFrom > `${year}-12-31`) {
+        throw new Error(
+          `Ngày hiệu lực phải nằm trong năm ${year} và không trước ${earliestAllowedDate}.`,
+        );
+      }
+
       const body = {
         leaveTypeId: policy.leaveTypeId,
         year,
