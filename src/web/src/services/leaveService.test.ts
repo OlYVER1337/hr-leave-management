@@ -403,7 +403,7 @@ describe('built-in leave policies', () => {
     });
   });
 
-  it('keeps the legacy policy id but hides an effective date from the previous year', async () => {
+  it('does not display a legacy prior-year policy as current but keeps it available for appending', async () => {
     const year = getVietnamBusinessYear() + 1;
     mocks.hrGet.mockImplementation(async (path: string) => {
       if (path === '/api/v1/leave-catalog') {
@@ -429,9 +429,16 @@ describe('built-in leave policies', () => {
       throw new Error('Unexpected HR API path: ' + path);
     });
 
-    const annual = (await getPolicies(year)).find((policy) => policy.typeCode === 'ANNUAL');
+    const currentAnnual = (await getPolicies(year)).find((policy) => policy.typeCode === 'ANNUAL');
+    expect(currentAnnual).toMatchObject({
+      policyId: undefined,
+      daysPerYear: null,
+      effectiveFrom: undefined,
+    });
 
-    expect(annual).toMatchObject({
+    const appendTarget = (await getPolicies(year, `${year}-12-31`, true))
+      .find((policy) => policy.typeCode === 'ANNUAL');
+    expect(appendTarget).toMatchObject({
       policyId: 99,
       daysPerYear: 15,
       effectiveFrom: undefined,
