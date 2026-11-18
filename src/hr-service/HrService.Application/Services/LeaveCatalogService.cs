@@ -594,7 +594,7 @@ public sealed class LeaveCatalogService(
 
         if (request.EffectiveFrom == DateOnly.MinValue)
             errors.Add("effectiveFrom", "Effective date must be a valid calendar date.");
-        if (request.Reason?.Trim().Length > 500)
+        if (!string.IsNullOrWhiteSpace(request.Reason) && request.Reason.Trim().Length > 500)
             errors.Add("reason", "Reason cannot exceed 500 characters.");
         errors.ThrowIfAny();
     }
