@@ -260,7 +260,7 @@ export function PoliciesPage() {
         return <section className="panel policy-history-group" key={policy.typeCode}>
           <div className="panel-header">
             <div><h2>{policy.typeName}</h2><p>{policy.description}</p></div>
-            <button className="button button-secondary" onClick={() => setHistoryTypeCode(policy.typeCode)}>Xem lịch sử ({versions.length})</button>
+            {policy.deductsBalance && <button className="button button-secondary" onClick={() => setHistoryTypeCode(policy.typeCode)}>Xem lịch sử ({versions.length})</button>}
           </div>
           {policy.deductsBalance
             ? versions.length
