@@ -679,7 +679,7 @@ export async function getPolicies(
 export async function restoreBuiltInLeaveType(policy: LeavePolicy): Promise<void> {
   const definition = builtInLeaveTypes.find((type) => type.code === policy.typeCode);
   if (!definition) throw new Error(`Unsupported built-in leave type: ${policy.typeCode}.`);
-  const year = policy.year ?? getBusinessYear() + 1;
+  const year = policy.year ?? getBusinessYear();
   if (DEMO_MODE) {
     updateDemoState((state) => {
       const existing = state.policies.find((item) => item.typeCode === policy.typeCode);
