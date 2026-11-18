@@ -245,13 +245,15 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
         CancellationToken cancellationToken)
     {
         var employeeId = GetCurrentEmployeeId();
-        if (!employeeId.HasValue)
+        var authorization = Request.Headers.Authorization.ToString();
+        if (!employeeId.HasValue || string.IsNullOrWhiteSpace(authorization))
         {
             return Unauthorized();
         }
 
         var cancelled = await leaveRequestService.CancelAsync(
             employeeId.Value,
+            authorization,
             id,
             request.Note,
             cancellationToken);

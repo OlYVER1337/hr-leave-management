@@ -51,23 +51,14 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
                     EmployeeId = request.EmployeeId,
                     LeaveTypeId = request.LeaveTypeId,
                     Year = allocation.Year,
-                    Entitled = allocation.Entitled
+                    PolicyDays = allocation.Entitled
                 };
                 context.LeaveBalances.Add(balance);
             }
             else
             {
-                var committedAndPending = balance.Used + balance.Pending;
-                if (allocation.Entitled < committedAndPending)
-                {
-                    throw new LeaveConflictException(
-                        $"The current HR entitlement for {allocation.Year} ({allocation.Entitled:0.0}) " +
-                        $"is below Used + Pending ({committedAndPending:0.0}).");
-                }
-
-                // The create flow already fetched the authoritative HR policy for this year.
-                // Reconcile the balance in the same transaction before reserving new days.
-                balance.Entitled = allocation.Entitled;
+                // Lower policy days do not invalidate existing usage or pending reservations.
+                balance.PolicyDays = allocation.Entitled;
             }
 
             var available = balance.Entitled - balance.Used - balance.Pending;
@@ -88,7 +79,9 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
             {
                 LeaveRequestId = request.Id,
                 Year = allocation.Year,
-                Days = allocation.Days
+                Days = allocation.Days,
+                PolicyVersionId = allocation.PolicyVersionId,
+                PolicyDaysAtCreation = allocation.Entitled
             });
         }
 
@@ -117,7 +110,8 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
         string? note,
         DateTime decidedAtUtc,
         Guid? verifiedApproverId = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyList<LeaveBalanceEntitlement>? currentPolicyDays = null)
     {
         if (status is not (LeaveRequestStatus.Approved or LeaveRequestStatus.Rejected))
         {
@@ -126,7 +120,7 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
 
         return ExecuteWithRetryAsync(
             () => TransitionOnceAsync(
-                requestId, actorId, access, status, note, decidedAtUtc, verifiedApproverId, cancellationToken),
+                requestId, actorId, access, status, note, decidedAtUtc, verifiedApproverId, currentPolicyDays, cancellationToken),
             "Leave request changed concurrently; retry the decision.",
             cancellationToken);
     }
@@ -136,9 +130,10 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
         Guid requestId,
         string? note,
         DateTime cancelledAtUtc,
-        CancellationToken cancellationToken = default) =>
+        CancellationToken cancellationToken = default,
+        IReadOnlyList<LeaveBalanceEntitlement>? currentPolicyDays = null) =>
         ExecuteWithRetryAsync(
-            () => CancelOnceAsync(employeeId, requestId, note, cancelledAtUtc, cancellationToken),
+            () => CancelOnceAsync(employeeId, requestId, note, cancelledAtUtc, currentPolicyDays, cancellationToken),
             "Leave request changed concurrently; retry the cancellation.",
             cancellationToken);
 
@@ -593,6 +588,7 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
         CancellationToken cancellationToken = default) =>
         context.LeaveRequests
             .AsNoTracking()
+            .Include(item => item.YearAllocations)
             .SingleOrDefaultAsync(item => item.Id == requestId, cancellationToken);
 
     private async Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> TransitionOnceAsync(
@@ -603,6 +599,7 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
         string? note,
         DateTime decidedAtUtc,
         Guid? verifiedApproverId,
+        IReadOnlyList<LeaveBalanceEntitlement>? currentPolicyDays,
         CancellationToken cancellationToken)
     {
         await using var transaction = await context.Database.BeginTransactionAsync(
@@ -631,6 +628,7 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
         var balances = await UpdateBalancesAsync(
             request,
             approve: status == LeaveRequestStatus.Approved,
+            currentPolicyDays,
             cancellationToken);
         var previousStatus = request.Status;
         request.Status = status;
@@ -656,6 +654,7 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
         Guid requestId,
         string? note,
         DateTime cancelledAtUtc,
+        IReadOnlyList<LeaveBalanceEntitlement>? currentPolicyDays,
         CancellationToken cancellationToken = default)
     {
         await using var transaction = await context.Database.BeginTransactionAsync(
@@ -669,7 +668,7 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
             ?? throw new LeaveNotFoundException($"Leave request with id '{requestId}' was not found.");
         EnsurePending(request);
 
-        var balances = await UpdateBalancesAsync(request, approve: false, cancellationToken);
+        var balances = await UpdateBalancesAsync(request, approve: false, currentPolicyDays, cancellationToken);
         var previousStatus = request.Status;
         request.Status = LeaveRequestStatus.Cancelled;
         request.DecidedAtUtc = cancelledAtUtc;
@@ -741,7 +740,7 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
                     EmployeeId = employeeId,
                     LeaveTypeId = entitlement.LeaveTypeId,
                     Year = year,
-                    Entitled = entitlement.Entitled
+                    PolicyDays = entitlement.Entitled
                 };
                 context.LeaveBalances.Add(balance);
                 balances.Add(balance);
@@ -749,16 +748,8 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
                 continue;
             }
 
-            var committedAndPending = balance.Used + balance.Pending;
-            if (entitlement.Entitled < committedAndPending)
-            {
-                throw new LeaveConflictException(
-                    $"The new entitlement for leave type '{entitlement.LeaveTypeId}' in {year} " +
-                    $"({entitlement.Entitled:0.0}) is below Used + Pending ({committedAndPending:0.0}).");
-            }
-
-            // Only the policy-derived entitlement changes; historical usage is preserved.
-            balance.Entitled = entitlement.Entitled;
+            // The policy snapshot can be lower than historical usage; Entitled is derived.
+            balance.PolicyDays = entitlement.Entitled;
         }
 
         await context.SaveChangesAsync(cancellationToken);
@@ -772,6 +763,7 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
     private async Task<IReadOnlyList<LeaveBalance>> UpdateBalancesAsync(
         LeaveRequest request,
         bool approve,
+        IReadOnlyList<LeaveBalanceEntitlement>? currentPolicyDays,
         CancellationToken cancellationToken)
     {
         var balances = new List<LeaveBalance>();
@@ -784,6 +776,26 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
                 cancellationToken)
                 ?? throw new InvalidOperationException(
                     $"Leave balance for {allocation.Year} is missing for request '{request.Id}'.");
+
+            if (currentPolicyDays is not null)
+            {
+                var policy = currentPolicyDays.SingleOrDefault(item =>
+                    item.Year == allocation.Year &&
+                    item.LeaveTypeId == request.LeaveTypeId);
+                if (policy is null)
+                {
+                    throw new LeaveConflictException(
+                        $"The current policy snapshot is missing for leave type '{request.LeaveTypeId}' in {allocation.Year}.");
+                }
+
+                if (policy.Entitled < 0m || policy.Entitled > 366m ||
+                    decimal.Round(policy.Entitled, 1) != policy.Entitled)
+                {
+                    throw new LeaveConflictException("The current policy snapshot is invalid.");
+                }
+
+                balance.PolicyDays = policy.Entitled;
+            }
 
             if (balance.Pending < allocation.Days)
             {
