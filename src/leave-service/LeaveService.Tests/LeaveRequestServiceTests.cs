@@ -54,10 +54,16 @@ public sealed class LeaveRequestServiceTests
             .ReturnsAsync([new HrHoliday(1, new DateOnly(2027, 1, 1), "New Year")]);
         hrClient
             .Setup(item => item.GetLeavePoliciesAsync(2026, "Bearer token", It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new HrLeavePolicy(1, 4, "ANNUAL", "Annual leave", 2026, 12m)]);
+            .ReturnsAsync([
+                new HrLeavePolicy(1, 4, "ANNUAL", "Annual leave", 2026, 12m, new DateOnly(2026, 1, 1)),
+                new HrLeavePolicy(3, 4, "ANNUAL", "Annual leave", 2026, 13m, new DateOnly(2026, 10, 28))
+            ]);
         hrClient
             .Setup(item => item.GetLeavePoliciesAsync(2027, "Bearer token", It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new HrLeavePolicy(2, 4, "ANNUAL", "Annual leave", 2027, 15m)]);
+            .ReturnsAsync([
+                new HrLeavePolicy(2, 4, "ANNUAL", "Annual leave", 2027, 15m, new DateOnly(2026, 1, 1)),
+                new HrLeavePolicy(4, 4, "ANNUAL", "Annual leave", 2027, 18m, new DateOnly(2026, 12, 1))
+            ]);
         var service = new LeaveRequestService(
             repository.Object,
             hrClient.Object,
@@ -82,7 +88,11 @@ public sealed class LeaveRequestServiceTests
                 It.Is<IReadOnlyList<AnnualLeaveAllocation>>(allocations =>
                     allocations.Count == 2 &&
                     allocations[0].Days == 1m &&
-                    allocations[1].Days == 1m),
+                    allocations[0].Entitled == 12m &&
+                    allocations[0].PolicyVersionId == 1 &&
+                    allocations[1].Days == 1m &&
+                    allocations[1].Entitled == 15m &&
+                    allocations[1].PolicyVersionId == 2),
                 It.IsAny<LeaveRequestHistory>(),
                 It.IsAny<CancellationToken>()),
             Times.Once);
