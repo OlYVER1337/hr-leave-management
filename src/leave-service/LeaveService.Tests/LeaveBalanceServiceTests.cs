@@ -147,12 +147,12 @@ public sealed class LeaveBalanceServiceTests
         var employeeId = Guid.NewGuid();
         var repository = new Mock<ILeaveRequestRepository>();
         var hrClient = new Mock<ILeaveHrClient>();
-        var latestEffectiveDate = new DateOnly(2026, 11, 18);
+        var latestEffectiveDate = new DateOnly(2027, 11, 18);
         hrClient.Setup(item => item.GetLeaveCatalogAsync(2027, "Bearer token", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new HrLeaveCatalog(
                 [new HrLeaveType(1, "ANNUAL", "Annual", true, true, true)],
                 [
-                    new HrLeavePolicy(11, 1, "ANNUAL", "Annual", 2027, 15m, new DateOnly(2026, 1, 1)),
+                    new HrLeavePolicy(11, 1, "ANNUAL", "Annual", 2027, 15m, new DateOnly(2027, 1, 1)),
                     new HrLeavePolicy(12, 1, "ANNUAL", "Annual", 2027, 16m, latestEffectiveDate)
                 ]));
         repository.Setup(item => item.SynchronizeBalancesAsync(
@@ -170,7 +170,7 @@ public sealed class LeaveBalanceServiceTests
                     PolicyDays = values[0].Entitled
                 }]);
         var timeProvider = new FixedTimeProvider(
-            new DateTimeOffset(2026, 11, 18, 2, 0, 0, TimeSpan.Zero));
+            new DateTimeOffset(2027, 11, 18, 2, 0, 0, TimeSpan.Zero));
         var service = new LeaveBalanceService(repository.Object, hrClient.Object, timeProvider);
 
         var result = Assert.Single(await service.SynchronizeMineAsync(employeeId, 2027, "Bearer token"));
