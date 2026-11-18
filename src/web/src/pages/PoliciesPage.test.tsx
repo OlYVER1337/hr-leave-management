@@ -109,7 +109,7 @@ describe('PoliciesPage', () => {
     renderPoliciesPage();
 
     expect(await screen.findAllByRole('button', { name: 'Tạo phiên bản mới' })).toHaveLength(2);
-    expect(await screen.findByText('Loại nghỉ này không áp dụng quota.')).toBeInTheDocument();
+    expect(await screen.findByText('Loại nghỉ này không quản lý version quota.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Xóa chính sách/ })).not.toBeInTheDocument();
   });
 
