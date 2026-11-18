@@ -294,7 +294,8 @@ public sealed class LeaveRequestServiceTests
                 "Reviewed",
                 It.IsAny<DateTime>(),
                 (Guid?)actorId,
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                null))
             .ReturnsAsync(() =>
             {
                 request.Status = expectedStatus;
@@ -324,7 +325,8 @@ public sealed class LeaveRequestServiceTests
                 "Reviewed",
                 It.IsAny<DateTime>(),
                 (Guid?)actorId,
-                It.IsAny<CancellationToken>()),
+                It.IsAny<CancellationToken>(),
+                null),
             Times.Once);
         hrClient.Verify(
             item => item.GetEmployeeAsync(employeeId, "Bearer manager", It.IsAny<CancellationToken>()),
@@ -413,7 +415,8 @@ public sealed class LeaveRequestServiceTests
                 null,
                 It.IsAny<DateTime>(),
                 (Guid?)newManagerId,
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                null))
             .ReturnsAsync(() =>
             {
                 request.Status = LeaveRequestStatus.Approved;
@@ -911,7 +914,8 @@ public sealed class LeaveRequestServiceTests
                 null,
                 It.IsAny<DateTime>(),
                 (Guid?)null,
-                It.IsAny<CancellationToken>()))
+                It.IsAny<CancellationToken>(),
+                null))
             .ReturnsAsync(() =>
             {
                 request.Status = LeaveRequestStatus.Approved;
@@ -932,7 +936,8 @@ public sealed class LeaveRequestServiceTests
             null,
             It.IsAny<DateTime>(),
             (Guid?)null,
-            It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<CancellationToken>(),
+            null), Times.Once);
         hrClient.VerifyNoOtherCalls();
     }
 
@@ -1096,7 +1101,8 @@ public sealed class LeaveRequestServiceTests
                 It.IsAny<string?>(),
                 It.IsAny<DateTime>(),
                 It.IsAny<Guid?>(),
-                It.IsAny<CancellationToken>()),
+                It.IsAny<CancellationToken>(),
+                null),
             Times.Never);
 
     // Pending cancellation refreshes the current HR quota and passes it to the balance transaction.
