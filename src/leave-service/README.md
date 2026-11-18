@@ -51,24 +51,26 @@ Body quyết định:
 
 | Method / route | Permission + scope | Mô tả |
 |---|---|---|
-| `GET /leave-balances/mine?year=2026` | `leaves.read:Self/All` | Chỉ đọc các balance row hiện có của caller |
+| `GET /leave-balances/mine?year=2026` | `leaves.read:Self/All` | Đồng bộ PolicyDays hiện hành từ HR rồi trả balance của caller |
 | `POST /leave-balances/mine/synchronize?year=2026` | `leaves.read:Self/All` | Khởi tạo/đồng bộ balance của caller từ HR catalog authoritative |
 
-GET balance không tạo dữ liệu. POST synchronize chỉ tác động EmployeeId lấy từ JWT
-của người gọi, kể cả khi caller có scope All; nếu bỏ `year`, service dùng business
-year UTC+07.
+GET balance và POST synchronize đều chỉ tác động EmployeeId lấy từ JWT của
+người gọi, kể cả khi caller có scope All; nếu bỏ `year`, service dùng business
+year UTC+07. Cả hai luồng lấy policy authoritative từ HR qua HTTP trước khi
+trả số dư; Leave Service không truy cập HR_DB trực tiếp.
 
-Luồng synchronize chỉ tạo/cập nhật balance cho leave type đang active và
-`DeductsBalance=true`. Mỗi loại nghỉ cần đúng một policy cho năm được đồng bộ;
-quota phải nằm trong khoảng hợp lệ của HR. Giao dịch dùng isolation
-`SERIALIZABLE`, tạo row còn thiếu, cập nhật `Entitled` nhưng bảo toàn `Used` và
-`Pending`. Nếu quota mới thấp hơn `Used + Pending`, toàn bộ thao tác rollback
-và trả `409 Conflict`. Gọi lại nhiều lần là idempotent.
+Balance lưu `PolicyDays`, `Used`, `Pending`; `Entitled` được tính bằng
+`max(PolicyDays, Used + Pending)`, còn `Available = Entitled - Used - Pending`.
+Quota mới thấp hơn tổng Used + Pending không gây conflict: PolicyDays được cập
+nhật, còn Entitled tạm thời đủ để bao phủ số ngày đã dùng và đang chờ. Giao dịch
+dùng isolation `SERIALIZABLE`, RowVersion, retry và idempotent synchronization.
 
-Luồng `POST /leave-requests` cũng đọc policy authoritative và refresh
-`Entitled` trong transaction trước khi giữ thêm ngày `Pending`; người dùng không
-cần mở màn hình số dư trước khi tạo đơn. Hiện chưa có API/worker bulk
-reconciliation để đồng bộ balance cho toàn bộ nhân viên khi HR thay đổi policy.
+Khi tạo đơn, Leave chọn phiên bản mới nhất có `EffectiveFrom` không sau ngày
+tạo đơn theo UTC+07; từng yearly allocation lưu `PolicyVersionId` và
+`PolicyDaysAtCreation`. Khi duyệt, từ chối hoặc hủy, Leave lấy policy hiện hành
+từ HR và cập nhật PolicyDays trong cùng transaction với Used/Pending. Nếu HR
+không khả dụng, thao tác cần refresh fail closed. Hiện chưa có API/worker bulk
+reconciliation để chủ động đồng bộ balance cho toàn bộ nhân viên.
 
 ## Quy tắc nghiệp vụ
 
@@ -76,7 +78,7 @@ reconciliation để đồng bộ balance cho toàn bộ nhân viên khi HR thay
 - Backend tính ngày làm việc từ thứ Hai đến thứ Sáu, loại trừ holidays do HR quản lý.
 - Request phải có ít nhất một ngày làm việc; ngày kết thúc không trước ngày bắt đầu.
 - Khoảng ngày tối đa 366 ngày; lý do bắt buộc, tối đa 1.000 ký tự.
-- Request qua nhiều năm được chia thành yearly allocation và dùng policy của từng năm.
+- Request qua nhiều năm được chia thành yearly allocation; mỗi allocation lưu phiên bản policy đã áp dụng theo ngày tạo request.
 - Không cho các đơn Pending/Approved của cùng nhân viên chồng ngày.
 - Create giữ chỗ bằng cách tăng `Pending`; Approve chuyển `Pending` sang `Used`;
   Reject/Cancel giải phóng `Pending`.
