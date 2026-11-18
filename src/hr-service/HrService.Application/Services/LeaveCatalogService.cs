@@ -229,7 +229,9 @@ public sealed class LeaveCatalogService(
         }
 
         return policies
-            .Where(policy => policy.EffectiveFrom <= asOfDate.Value)
+            .Where(policy =>
+                policy.EffectiveFrom >= new DateOnly(policy.Year, 1, 1) &&
+                policy.EffectiveFrom <= asOfDate.Value)
             .GroupBy(policy => new { policy.LeaveTypeId, policy.Year })
             .Select(group => group
                 .OrderByDescending(policy => policy.EffectiveFrom)
