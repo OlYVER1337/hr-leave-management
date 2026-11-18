@@ -8,73 +8,71 @@ public partial class AddLeavePolicyVersions : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {
-        migrationBuilder.AddColumn<DateOnly>(
-            name: "EffectiveFrom",
-            table: "LeavePolicies",
-            type: "date",
-            nullable: true);
-
-        migrationBuilder.AddColumn<DateTime>(
-            name: "CreatedAtUtc",
-            table: "LeavePolicies",
-            type: "datetime2",
-            nullable: true);
-
-        migrationBuilder.AddColumn<string>(
-            name: "Reason",
-            table: "LeavePolicies",
-            type: "nvarchar(500)",
-            maxLength: 500,
-            nullable: true);
-
-        // Legacy policies become the first version and must remain applicable to
-        // requests created before this migration, including future-year leave requests.
+        // This migration must support both fresh databases and databases where
+        // an earlier deployment already added EffectiveFrom and its composite index.
         migrationBuilder.Sql("""
-            UPDATE [LeavePolicies]
-            SET [EffectiveFrom] = CONVERT(date, '20000101'),
-                [CreatedAtUtc] = SYSUTCDATETIME(),
-                [Reason] = N'Phiên bản được chuyển đổi từ chính sách hiện hữu'
-            WHERE [EffectiveFrom] IS NULL;
+            IF COL_LENGTH(N'dbo.LeavePolicies', N'EffectiveFrom') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[LeavePolicies]
+                ADD [EffectiveFrom] date NULL;
+            END;
+
+            IF COL_LENGTH(N'dbo.LeavePolicies', N'CreatedAtUtc') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[LeavePolicies]
+                ADD [CreatedAtUtc] datetime2 NULL;
+            END;
+
+            IF COL_LENGTH(N'dbo.LeavePolicies', N'Reason') IS NULL
+            BEGIN
+                ALTER TABLE [dbo].[LeavePolicies]
+                ADD [Reason] nvarchar(500) NULL;
+            END;
+
+            -- Backfill only missing values; preserve any existing policy metadata.
+            UPDATE [dbo].[LeavePolicies]
+            SET [EffectiveFrom] = COALESCE([EffectiveFrom], CONVERT(date, '20000101')),
+                [CreatedAtUtc] = COALESCE([CreatedAtUtc], SYSUTCDATETIME()),
+                [Reason] = COALESCE([Reason], N'Phiên bản được chuyển đổi từ chính sách hiện hữu')
+            WHERE [EffectiveFrom] IS NULL
+               OR [CreatedAtUtc] IS NULL
+               OR [Reason] IS NULL;
+
+            ALTER TABLE [dbo].[LeavePolicies]
+            ALTER COLUMN [EffectiveFrom] date NOT NULL;
+
+            ALTER TABLE [dbo].[LeavePolicies]
+            ALTER COLUMN [CreatedAtUtc] datetime2 NOT NULL;
+
+            ALTER TABLE [dbo].[LeavePolicies]
+            ALTER COLUMN [Reason] nvarchar(500) NOT NULL;
+
+            -- Older schema used (LeaveTypeId, Year); remove it if present.
+            IF EXISTS
+            (
+                SELECT 1
+                FROM sys.indexes
+                WHERE [object_id] = OBJECT_ID(N'dbo.LeavePolicies')
+                  AND [name] = N'IX_LeavePolicies_LeaveTypeId_Year'
+            )
+            BEGIN
+                DROP INDEX [IX_LeavePolicies_LeaveTypeId_Year]
+                ON [dbo].[LeavePolicies];
+            END;
+
+            -- Some deployed databases already have the target index.
+            IF NOT EXISTS
+            (
+                SELECT 1
+                FROM sys.indexes
+                WHERE [object_id] = OBJECT_ID(N'dbo.LeavePolicies')
+                  AND [name] = N'IX_LeavePolicies_LeaveTypeId_Year_EffectiveFrom'
+            )
+            BEGIN
+                CREATE UNIQUE INDEX [IX_LeavePolicies_LeaveTypeId_Year_EffectiveFrom]
+                ON [dbo].[LeavePolicies] ([LeaveTypeId], [Year], [EffectiveFrom]);
+            END;
             """);
-
-        migrationBuilder.AlterColumn<DateOnly>(
-            name: "EffectiveFrom",
-            table: "LeavePolicies",
-            type: "date",
-            nullable: false,
-            oldClrType: typeof(DateOnly),
-            oldType: "date",
-            oldNullable: true);
-
-        migrationBuilder.AlterColumn<DateTime>(
-            name: "CreatedAtUtc",
-            table: "LeavePolicies",
-            type: "datetime2",
-            nullable: false,
-            oldClrType: typeof(DateTime),
-            oldType: "datetime2",
-            oldNullable: true);
-
-        migrationBuilder.AlterColumn<string>(
-            name: "Reason",
-            table: "LeavePolicies",
-            type: "nvarchar(500)",
-            maxLength: 500,
-            nullable: false,
-            oldClrType: typeof(string),
-            oldType: "nvarchar(500)",
-            oldMaxLength: 500,
-            oldNullable: true);
-
-        migrationBuilder.DropIndex(
-            name: "IX_LeavePolicies_LeaveTypeId_Year",
-            table: "LeavePolicies");
-
-        migrationBuilder.CreateIndex(
-            name: "IX_LeavePolicies_LeaveTypeId_Year_EffectiveFrom",
-            table: "LeavePolicies",
-            columns: new[] { "LeaveTypeId", "Year", "EffectiveFrom" },
-            unique: true);
     }
 
     protected override void Down(MigrationBuilder migrationBuilder)
