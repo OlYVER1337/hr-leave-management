@@ -278,7 +278,26 @@ describe('built-in leave policies', () => {
               { id: 1, code: 'ANNUAL', name: 'Custom annual', isPaid: true, deductsBalance: true, isActive: true },
               { id: 2, code: 'PARENTAL', name: 'Nghỉ chăm con', isPaid: true, deductsBalance: true, isActive: true },
             ],
-            leavePolicies: [{ id: 12, leaveTypeId: 1, year, daysPerYear: 15 }],
+            leavePolicies: [
+              {
+                id: 11,
+                leaveTypeId: 1,
+                year,
+                daysPerYear: 12,
+                effectiveFrom: `${year}-01-01`,
+                createdAtUtc: `${year}-01-01T00:00:00Z`,
+                reason: 'Phiên bản đầu năm',
+              },
+              {
+                id: 12,
+                leaveTypeId: 1,
+                year,
+                daysPerYear: 15,
+                effectiveFrom: `${year}-06-01`,
+                createdAtUtc: `${year}-05-20T00:00:00Z`,
+                reason: 'Điều chỉnh giữa năm',
+              },
+            ],
           },
         };
       }
