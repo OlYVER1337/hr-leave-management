@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { CalendarDays, CheckCircle2, Edit3, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { PageHeader, EmptyState, formatDate } from '../components/ui';
 import { Modal } from '../components/Modal';
@@ -41,7 +41,10 @@ export function PoliciesPage() {
   const policyYearOptions = Array.from({ length: 8 }, (_, index) => currentYear + index);
   const notify = useToast();
   const [tab, setTab] = useState<'policies' | 'holidays'>('policies');
-  const [selectedVersion, setSelectedVersion] = useState('CURRENT');
+  const [viewMode, setViewMode] = useState<'CURRENT' | 'HISTORY'>('CURRENT');
+  const [historyTypeCode, setHistoryTypeCode] = useState<string | null>(null);
+  const [policyBaseline, setPolicyBaseline] = useState<LeavePolicy | null>(null);
+  const savePolicyInFlight = useRef(false);
   const [policies, setPoliciesState] = useState<LeavePolicy[]>([]);
   const [policyVersions, setPolicyVersions] = useState<LeavePolicy[]>([]);
   const [holidays, setHolidaysState] = useState<Holiday[]>([]);
@@ -94,6 +97,7 @@ export function PoliciesPage() {
         notify('Không còn ngày hiệu lực hợp lệ trong năm được chọn.', 'error');
         return;
       }
+      setPolicyBaseline(latestPolicy.policyId ? latestPolicy : null);
       setPolicyModal({
         ...latestPolicy,
         year: targetYear,
@@ -123,6 +127,7 @@ export function PoliciesPage() {
         currentBusinessDate,
         year,
       );
+      setPolicyBaseline(targetPolicy.policyId ? targetPolicy : null);
       setPolicyModal({
         ...targetPolicy,
         year,
@@ -140,7 +145,10 @@ export function PoliciesPage() {
   }
 
   async function updatePolicy(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (!policyModal) return; setSaving(true);
+    event.preventDefault();
+    if (!policyModal || savePolicyInFlight.current) return;
+    savePolicyInFlight.current = true;
+    setSaving(true);
     try {
       await savePolicies([policyModal]);
       const [currentPolicies, versions] = await Promise.all([
@@ -153,7 +161,10 @@ export function PoliciesPage() {
       notify('Đã lưu chính sách nghỉ phép.');
     }
     catch (reason) { notify(getApiErrorMessage(reason), 'error'); }
-    finally { setSaving(false); }
+    finally {
+      savePolicyInFlight.current = false;
+      setSaving(false);
+    }
   }
   async function restorePolicy(policy: LeavePolicy) {
     setSaving(true);
@@ -189,62 +200,55 @@ export function PoliciesPage() {
     catch (reason) { notify(getApiErrorMessage(reason), 'error'); }
   }
 
-  const versionNumbers = [...new Set(policyVersions
-    .map((policy) => policy.versionNumber)
-    .filter((value): value is number => value !== undefined))]
-    .sort((left, right) => left - right);
-
-  const displayedPolicies = selectedVersion === 'CURRENT'
-    ? policies
-    : selectedVersion === 'ALL'
-      ? [
-        ...policyVersions,
-        ...policies
-          .filter((policy) =>
-            !policy.deductsBalance ||
-            !policyVersions.some((version) => version.typeCode === policy.typeCode))
-          .map((policy) => policy.deductsBalance
-            ? { ...policy, policyId: undefined, effectiveFrom: undefined, reason: undefined, versionMissing: true }
-            : policy),
-      ]
-      : policies.map((currentPolicy) => {
-        if (!currentPolicy.deductsBalance) return currentPolicy;
-        const requestedVersion = Number(selectedVersion);
-        return policyVersions.find((version) =>
-          version.typeCode === currentPolicy.typeCode &&
-          version.versionNumber === requestedVersion)
-          ?? {
-            ...currentPolicy,
-            id: `${currentPolicy.id}-missing-version-${requestedVersion}`,
-            policyId: undefined,
-            effectiveFrom: undefined,
-            reason: undefined,
-            versionNumber: requestedVersion,
-            versionMissing: true,
-          };
-      });
+  const historyPolicy = historyTypeCode
+    ? policies.find((policy) => policy.typeCode === historyTypeCode) ?? null
+    : null;
+  const historyVersions = historyTypeCode
+    ? policyVersions.filter((version) => version.typeCode === historyTypeCode)
+    : [];
 
   return <div className="page-stack">
     <PageHeader eyebrow="QUẢN TRỊ" title="Chính sách nghỉ phép" description="Quản lý ba loại nghỉ cố định, hạn mức phép và ngày nghỉ lễ của tổ chức." actions={tab === 'holidays' ? <button className="button button-primary" onClick={openCreateHoliday}><Plus size={17} /> Thêm ngày lễ</button> : undefined} />
     {error && <div className="inline-alert alert-warning">{error}</div>}
     {tab === 'policies' && <div className="policy-year-toolbar" style={{ display: 'flex', alignItems: 'end', gap: 14, flexWrap: 'wrap' }}>
       <div className="field-group" style={{ width: 240 }}>
-        <label htmlFor="policy-version-filter">Lọc theo phiên bản</label>
-        <select id="policy-version-filter" value={selectedVersion} onChange={(event) => setSelectedVersion(event.target.value)}>
+        <label htmlFor="policy-view-filter">Hiển thị chính sách</label>
+        <select id="policy-view-filter" value={viewMode} onChange={(event) => setViewMode(event.target.value as 'CURRENT' | 'HISTORY')}>
           <option value="CURRENT">Đang có hiệu lực</option>
-          <option value="ALL">Tất cả phiên bản</option>
-          {versionNumbers.map((version) => <option key={version} value={String(version)}>Version {version}</option>)}
+          <option value="HISTORY">Tất cả lịch sử</option>
         </select>
       </div>
-      <span style={{ color: '#23845b', fontSize: 11, paddingBottom: 10 }}>
-        Đang hiển thị phiên bản có hiệu lực trong năm {currentYear}. Năm áp dụng của phiên bản mới được chọn trong biểu mẫu.
+      <span style={{ color: '#64748b', fontSize: 11, paddingBottom: 10 }}>
+        {viewMode === 'CURRENT'
+          ? `Chính sách đang áp dụng trong năm ${currentYear}.`
+          : `Lịch sử phiên bản của từng loại nghỉ trong năm ${currentYear}; các phiên bản chỉ đọc.`}
       </span>
     </div>}
     <div className="policy-tabs"><button className={tab === 'policies' ? 'active' : ''} onClick={() => setTab('policies')}><ShieldCheck size={17} /> Loại nghỉ & hạn mức <span>{policies.length}</span></button><button className={tab === 'holidays' ? 'active' : ''} onClick={() => setTab('holidays')}><CalendarDays size={17} /> Ngày nghỉ lễ <span>{holidays.length}</span></button></div>
-    {loading ? <div className="table-loading"><span /> Đang tải chính sách…</div> : tab === 'policies' ? <section className="policy-card-grid">{displayedPolicies.map((policy) => <article className="panel policy-card" key={policy.id}><div className="policy-card-top"><span className={`policy-icon policy-${policy.typeCode.toLowerCase()}`}><ShieldCheck size={20} /></span><span className={`employee-status ${policy.isActive ? 'employee-active' : 'employee-inactive'}`}><i />{!policy.isActive ? 'Loại nghỉ tạm khóa' : policy.versionMissing ? (policy.versionNumber ? `Không có Version ${policy.versionNumber}` : 'Chưa có phiên bản') : !policy.deductsBalance ? 'Không áp dụng version' : policy.policyId ? 'Đang cấu hình' : 'Chưa cấu hình hạn mức năm'}</span></div><h2>{policy.typeName}{policy.versionNumber ? ` · Version ${policy.versionNumber}` : ''}</h2><p className="policy-description">{policy.description}</p><div className="policy-entitlement"><strong>{policy.versionMissing ? '—' : policy.daysPerYear === null ? 'Không giới hạn' : policy.daysPerYear}</strong><span>{policy.versionMissing ? 'Không có hạn mức ở phiên bản này' : policy.daysPerYear === null ? 'Không có hạn mức năm cố định' : 'ngày mỗi năm'}</span></div>{policy.effectiveFrom && <p className="policy-description">Hiệu lực từ {formatDate(policy.effectiveFrom)}</p>}{policy.reason && <p className="policy-description">Lý do: {policy.reason}</p>}<div className="policy-properties"><span><i className={policy.paid ? 'property-yes' : 'property-no'} />{policy.paid ? 'Nghỉ hưởng lương' : 'Nghỉ không lương'}</span><span><i className={policy.deductsBalance ? 'property-yes' : 'property-no'} />{policy.deductsBalance ? 'Trừ vào số dư phép' : 'Không trừ số dư phép'}</span></div>{policy.isActive ? (policy.deductsBalance ? <button className="button button-secondary button-full" onClick={() => void openCreatePolicy(policy)} disabled={saving || loadingPolicyYear || !policy.leaveTypeId} title="Tạo phiên bản cho năm hiện tại hoặc tương lai.">{policy.policyId ? <Edit3 size={15} /> : <Plus size={15} />}{policy.policyId ? ' Tạo phiên bản mới' : ' Thiết lập hạn mức'}</button> : <p className="policy-description">Loại nghỉ này không áp dụng quota.</p>) : <button className="button button-primary button-full" aria-label={`Thêm lại chính sách ${policy.typeName}`} onClick={() => void restorePolicy(policy)} disabled={saving}><Plus size={15} /> Thêm lại chính sách</button>}</article>)}</section> : <section className="panel holiday-panel"><div className="panel-header"><div><h2>Lịch nghỉ lễ</h2><p>Ngày lễ không được tính vào số ngày làm việc khi tạo đơn nghỉ.</p></div><span className="holiday-count"><CalendarDays size={15} /> {holidays.length} ngày</span></div>{holidays.length === 0 ? <EmptyState title="Chưa cấu hình ngày lễ" description="Thêm ngày nghỉ lễ cho năm sắp tới." /> : <div className="table-scroll"><table className="data-table"><thead><tr><th>Ngày lễ</th><th>Ngày</th><th>Thứ</th><th /></tr></thead><tbody>{[...holidays].sort((a, b) => a.date.localeCompare(b.date)).map((holiday) => <tr key={holiday.id}><td><div className="holiday-name-cell"><span><CalendarDays size={17} /></span><strong>{holiday.name}</strong></div></td><td>{formatDate(holiday.date)}</td><td>{new Intl.DateTimeFormat('vi-VN', { weekday: 'long' }).format(new Date(`${holiday.date}T12:00:00`))}</td><td><div className="row-actions"><button className="icon-button" aria-label={`Sửa ${holiday.name}`} onClick={() => openEditHoliday(holiday)}><Edit3 size={16} /></button><button className="icon-button danger-icon" aria-label={`Xóa ${holiday.name}`} onClick={() => void deleteHoliday(holiday)}><Trash2 size={16} /></button></div></td></tr>)}</tbody></table></div>}</section>}
+    {loading ? <div className="table-loading"><span /> Đang tải chính sách…</div> : tab === 'policies' ? viewMode === 'CURRENT' ? <section className="policy-card-grid">{policies.map((policy) => <article className="panel policy-card" key={policy.id}><div className="policy-card-top"><span className={`policy-icon policy-${policy.typeCode.toLowerCase()}`}><ShieldCheck size={20} /></span><span className={`employee-status ${policy.isActive ? 'employee-active' : 'employee-inactive'}`}><i />{!policy.isActive ? 'Loại nghỉ tạm khóa' : policy.deductsBalance && !policy.policyId ? 'Chưa cấu hình hạn mức năm' : 'Đang áp dụng'}</span></div><h2>{policy.typeName}</h2><p className="policy-description">{policy.description}</p><div className="policy-entitlement"><strong>{policy.daysPerYear === null ? 'Không giới hạn' : policy.daysPerYear}</strong><span>{policy.daysPerYear === null ? 'Không có hạn mức năm cố định' : 'ngày mỗi năm'}</span></div>{policy.effectiveFrom && <p className="policy-description">Hiệu lực từ {formatDate(policy.effectiveFrom)}</p>}{policy.reason && <p className="policy-description">Lý do: {policy.reason}</p>}<div className="policy-properties"><span><i className={policy.paid ? 'property-yes' : 'property-no'} />{policy.paid ? 'Nghỉ hưởng lương' : 'Nghỉ không lương'}</span><span><i className={policy.deductsBalance ? 'property-yes' : 'property-no'} />{policy.deductsBalance ? 'Trừ vào số dư phép' : 'Không trừ số dư phép'}</span></div>{policy.deductsBalance && policy.isActive && <div className="policy-actions"><button className="button button-secondary button-full" onClick={() => void openCreatePolicy(policy)} disabled={saving || loadingPolicyYear || !policy.leaveTypeId}><Edit3 size={15} /> {policy.policyId ? 'Tạo phiên bản mới' : 'Thiết lập hạn mức'}</button><button className="button button-ghost button-full" onClick={() => setHistoryTypeCode(policy.typeCode)}>{policyVersions.filter((version) => version.typeCode === policy.typeCode).length} phiên bản · Xem lịch sử</button></div>}{!policy.isActive && <button className="button button-primary button-full" aria-label={`Thêm lại chính sách ${policy.typeName}`} onClick={() => void restorePolicy(policy)} disabled={saving}><Plus size={15} /> Thêm lại chính sách</button>}{!policy.deductsBalance && <p className="policy-description">Loại nghỉ này không quản lý version quota.</p>}</article>)}</section> : <section className="policy-history-groups">{policies.map((policy) => {
+        const versions = policyVersions.filter((version) => version.typeCode === policy.typeCode);
+        return <section className="panel policy-history-group" key={policy.typeCode}>
+          <div className="panel-header">
+            <div><h2>{policy.typeName}</h2><p>{policy.description}</p></div>
+            <button className="button button-secondary" onClick={() => setHistoryTypeCode(policy.typeCode)}>Xem lịch sử ({versions.length})</button>
+          </div>
+          {policy.deductsBalance
+            ? versions.length
+              ? <div className="policy-card-grid">{versions.map((version) => <article className="policy-version-card" key={version.policyId}>
+                  <div className="policy-card-top"><strong>Version {version.versionNumber}</strong><span className="employee-status">{version.policyId === policy.policyId ? 'Đang áp dụng' : 'Lịch sử'}</span></div>
+                  <div className="policy-entitlement"><strong>{version.daysPerYear}</strong><span>ngày mỗi năm</span></div>
+                  <p className="policy-description">Hiệu lực từ {version.effectiveFrom ? formatDate(version.effectiveFrom) : 'Chưa xác định'}</p>
+                  {version.reason && <p className="policy-description">Lý do: {version.reason}</p>}
+                </article>)}</div>
+              : <EmptyState title="Chưa có phiên bản" description="Loại nghỉ này chưa có lịch sử chính sách trong năm." />
+            : <p className="policy-description">UNPAID không áp dụng quota và không có version.</p>}
+        </section>;
+      })}</section> : <section className="panel holiday-panel"><div className="panel-header"><div><h2>Lịch nghỉ lễ</h2><p>Ngày lễ không được tính vào số ngày làm việc khi tạo đơn nghỉ.</p></div><span className="holiday-count"><CalendarDays size={15} /> {holidays.length} ngày</span></div>{holidays.length === 0 ? <EmptyState title="Chưa cấu hình ngày lễ" description="Thêm ngày nghỉ lễ cho năm sắp tới." /> : <div className="table-scroll"><table className="data-table"><thead><tr><th>Ngày lễ</th><th>Ngày</th><th>Thứ</th><th /></tr></thead><tbody>{[...holidays].sort((a, b) => a.date.localeCompare(b.date)).map((holiday) => <tr key={holiday.id}><td><div className="holiday-name-cell"><span><CalendarDays size={17} /></span><strong>{holiday.name}</strong></div></td><td>{formatDate(holiday.date)}</td><td>{new Intl.DateTimeFormat('vi-VN', { weekday: 'long' }).format(new Date(`${holiday.date}T12:00:00`))}</td><td><div className="row-actions"><button className="icon-button" aria-label={`Sửa ${holiday.name}`} onClick={() => openEditHoliday(holiday)}><Edit3 size={16} /></button><button className="icon-button danger-icon" aria-label={`Xóa ${holiday.name}`} onClick={() => void deleteHoliday(holiday)}><Trash2 size={16} /></button></div></td></tr>)}</tbody></table></div>}</section>}
     <div className="policy-reminder"><CheckCircle2 size={18} /><p><strong>Chính sách cần được theo dõi.</strong> {DEMO_MODE ? 'Ứng dụng đang ở chế độ demo; thay đổi được lưu cục bộ trong trình duyệt.' : 'HR Service là nguồn dữ liệu chính sách; mỗi lần lưu tạo một phiên bản mới, giữ nguyên phiên bản cũ và làm mới bộ nhớ đệm liên quan.'}</p></div>
 
-    {policyModal && <Modal title={`Tạo phiên bản ${policyModal.typeName}`} description={`Phiên bản mới cho năm ${policyModal.year}; phiên bản trước vẫn được lưu trong lịch sử.`} onClose={() => setPolicyModal(null)}><form className="modal-form" onSubmit={updatePolicy}>{policyModal.deductsBalance ? <><div className="field-group"><label htmlFor="policy-year">Năm áp dụng</label><select id="policy-year" value={policyModal.year ?? currentYear} onChange={(event) => void changePolicyYear(Number(event.target.value))} disabled={saving || loadingPolicyYear}>{policyYearOptions.map((year) => <option key={year} value={year}>{year}</option>)}</select></div><div className="field-group"><label htmlFor="policy-days">Số ngày mỗi năm</label><input id="policy-days" type="number" min={0} max={366} step="0.1" required value={policyModal.daysPerYear ?? ''} onChange={(event) => setPolicyModal({ ...policyModal, daysPerYear: event.target.value === '' ? null : Number(event.target.value) })} /></div><div className="field-group"><label htmlFor="policy-effective-from">Ngày hiệu lực *</label><input id="policy-effective-from" type="date" min={policyModal.year === currentYear ? currentBusinessDate : `${policyModal.year}-01-01`} max={`${policyModal.year}-12-31`} required value={policyModal.effectiveFrom ?? ''} onChange={(event) => setPolicyModal({ ...policyModal, effectiveFrom: event.target.value })} disabled={saving || loadingPolicyYear} /></div><div className="field-group"><label htmlFor="policy-reason">Lý do thay đổi</label><input id="policy-reason" type="text" maxLength={500} value={policyModal.reason ?? ''} onChange={(event) => setPolicyModal({ ...policyModal, reason: event.target.value })} placeholder="Ví dụ: Điều chỉnh chính sách nghỉ phép" /></div></> : <p>Loại nghỉ này không áp dụng hạn mức ngày phép năm.</p>}<div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setPolicyModal(null)}>Hủy</button><button className="button button-primary" type="submit" disabled={saving || loadingPolicyYear || !policyModal.effectiveFrom}>{saving || loadingPolicyYear ? 'Đang xử lý…' : 'Lưu chính sách'}</button></div></form></Modal>}
+    {historyPolicy && <Modal title={`Lịch sử chính sách · ${historyPolicy.typeName}`} description={`Các phiên bản của năm ${currentYear} được sắp xếp theo ngày hiệu lực.`} onClose={() => setHistoryTypeCode(null)}><div className="policy-version-list">{historyVersions.length ? [...historyVersions].sort((a, b) => (b.effectiveFrom ?? '').localeCompare(a.effectiveFrom ?? '')).map((version) => <article className="policy-version-row" key={version.policyId}><div><div className="policy-card-top"><strong>Version {version.versionNumber}</strong><span className="employee-status">{version.policyId === historyPolicy.policyId ? 'Đang áp dụng' : 'Lịch sử'}</span></div><div className="policy-entitlement"><strong>{version.daysPerYear}</strong><span>ngày mỗi năm</span></div><p className="policy-description">Hiệu lực từ {version.effectiveFrom ? formatDate(version.effectiveFrom) : 'Chưa xác định'}</p>{version.reason && <p className="policy-description">Lý do: {version.reason}</p>}</div></article>) : <EmptyState title="Chưa có lịch sử phiên bản" description="Chính sách chưa có version nào trong năm này." />}</div></Modal>}
+
+    {policyModal && <Modal title={`Tạo phiên bản ${policyModal.typeName}`} description={`Phiên bản mới cho năm ${policyModal.year}; phiên bản trước vẫn được lưu trong lịch sử.`} onClose={() => { if (!saving) { setPolicyModal(null); setPolicyBaseline(null); } }}><form className="modal-form" onSubmit={updatePolicy}>{policyModal.deductsBalance ? <>{policyBaseline && <div className="policy-baseline"><strong>Chính sách hiện tại trong năm {policyModal.year}</strong><div>{policyBaseline.daysPerYear} ngày/năm</div><p className="policy-description">Hiệu lực từ {policyBaseline.effectiveFrom ? formatDate(policyBaseline.effectiveFrom) : 'Chưa xác định'}</p></div>}<div className="field-group"><label htmlFor="policy-year">Năm áp dụng</label><select id="policy-year" value={policyModal.year ?? currentYear} onChange={(event) => void changePolicyYear(Number(event.target.value))} disabled={saving || loadingPolicyYear}>{policyYearOptions.map((year) => <option key={year} value={year}>{year}</option>)}</select></div><div className="field-group"><label htmlFor="policy-days">Số ngày mỗi năm</label><input id="policy-days" type="number" min={0} max={366} step="0.1" required value={policyModal.daysPerYear ?? ''} onChange={(event) => setPolicyModal({ ...policyModal, daysPerYear: event.target.value === '' ? null : Number(event.target.value) })} /></div><div className="field-group"><label htmlFor="policy-effective-from">Ngày hiệu lực *</label><input id="policy-effective-from" type="date" lang="vi-VN" min={policyBaseline?.effectiveFrom && policyBaseline.effectiveFrom > (policyModal.year === currentYear ? currentBusinessDate : `${policyModal.year}-01-01`) ? policyBaseline.effectiveFrom : policyModal.year === currentYear ? currentBusinessDate : `${policyModal.year}-01-01`} max={`${policyModal.year}-12-31`} required value={policyModal.effectiveFrom ?? ''} onChange={(event) => setPolicyModal({ ...policyModal, effectiveFrom: event.target.value })} disabled={saving || loadingPolicyYear} /><p className="field-hint">Ngày đã chọn: {policyModal.effectiveFrom ? formatDate(policyModal.effectiveFrom) : 'Chưa chọn'} · Ngày mới phải sau phiên bản trước và không hồi tố.</p></div><div className="field-group"><label htmlFor="policy-reason">Lý do thay đổi</label><input id="policy-reason" type="text" maxLength={500} value={policyModal.reason ?? ''} onChange={(event) => setPolicyModal({ ...policyModal, reason: event.target.value })} placeholder="Ví dụ: Điều chỉnh chính sách nghỉ phép" /></div></> : <p>Loại nghỉ này không áp dụng hạn mức ngày phép năm.</p>}<div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setPolicyModal(null)}>Hủy</button><button className="button button-primary" type="submit" disabled={saving || loadingPolicyYear || !policyModal.effectiveFrom}>{saving || loadingPolicyYear ? 'Đang lưu…' : 'Lưu chính sách'}</button></div></form></Modal>}
     {holidayModal && <Modal title={holidayForm.name ? 'Sửa ngày nghỉ lễ' : 'Thêm ngày nghỉ lễ'} description="Ngày lễ được loại trừ khi tính số ngày làm việc." onClose={() => setHolidayModal(null)}><form className="modal-form" onSubmit={saveHoliday}><div className="field-group"><label htmlFor="holiday-name">Tên ngày lễ *</label><input id="holiday-name" required maxLength={120} value={holidayForm.name} onChange={(event) => setHolidayForm({ ...holidayForm, name: event.target.value })} placeholder="Ví dụ: Ngày Giải phóng miền Nam" /></div><div className="field-group"><label htmlFor="holiday-date">Ngày *</label><input id="holiday-date" type="date" required value={holidayForm.date} onChange={(event) => setHolidayForm({ ...holidayForm, date: event.target.value })} /></div><div className="modal-actions"><button type="button" className="button button-secondary" onClick={() => setHolidayModal(null)}>Hủy</button><button className="button button-primary" type="submit" disabled={saving}>{saving ? 'Đang lưu…' : 'Lưu ngày lễ'}</button></div></form></Modal>}
   </div>;
 }
