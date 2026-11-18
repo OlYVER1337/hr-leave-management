@@ -25,7 +25,7 @@ public sealed class LeaveBalanceServiceTests
                 new HrLeaveType(3, "UNPAID", "Unpaid", false, false, true)
             ],
             [
-                new HrLeavePolicy(11, 1, "ANNUAL", "Annual", 2027, 15m)
+                new HrLeavePolicy(11, 1, "ANNUAL", "Annual", 2027, 15m, new DateOnly(2027, 1, 1))
             ]);
         hrClient.Setup(item => item.GetLeaveCatalogAsync(2027, "Bearer token", It.IsAny<CancellationToken>()))
             .ReturnsAsync(catalog);
@@ -69,7 +69,7 @@ public sealed class LeaveBalanceServiceTests
         hrClient.Setup(item => item.GetLeaveCatalogAsync(2027, "Bearer token", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new HrLeaveCatalog(
                 [new HrLeaveType(1, "ANNUAL", "Annual", true, true, true)],
-                [new HrLeavePolicy(11, 1, "ANNUAL", "Annual", 2027, 366m)]));
+                [new HrLeavePolicy(11, 1, "ANNUAL", "Annual", 2027, 366m, new DateOnly(2027, 1, 1))]));
         repository.Setup(item => item.SynchronizeBalancesAsync(
                 employeeId,
                 2027,
@@ -104,7 +104,7 @@ public sealed class LeaveBalanceServiceTests
         hrClient.Setup(item => item.GetLeaveCatalogAsync(2027, "Bearer token", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new HrLeaveCatalog(
                 [new HrLeaveType(1, "ANNUAL", "Annual", true, true, true)],
-                [new HrLeavePolicy(11, 1, "ANNUAL", "Annual", 2027, days)]));
+                [new HrLeavePolicy(11, 1, "ANNUAL", "Annual", 2027, days, new DateOnly(2027, 1, 1))]));
         var service = new LeaveBalanceService(repository.Object, hrClient.Object, TimeProvider.System);
 
         await Assert.ThrowsAsync<LeaveConflictException>(() =>
