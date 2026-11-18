@@ -96,7 +96,9 @@ bằng tài khoản có quyền tương ứng.
    ANNUAL hoặc SICK có thể mở lịch sử riêng, xem ngày hiệu lực, số ngày, lý do
    và nhận biết version hiện hành. UNPAID không quản lý quota nên không có version.
    Khi tạo phiên bản mới, modal hiển thị quota/ngày hiệu lực hiện tại, cho chọn
-   **Năm áp dụng**, số ngày, **Ngày hiệu lực** và lý do thay đổi.
+   **Năm áp dụng**, số ngày, **Ngày hiệu lực** và lý do thay đổi. Lịch sử
+   bao gồm mọi năm; số thứ tự version được đánh lại riêng cho từng loại nghỉ
+   trong từng năm.
    Năm hiện tại chỉ nhận ngày hiệu lực từ hôm nay; năm tương lai chỉ nhận ngày
    từ 01/01 của chính năm đó. Không cho đặt hiệu lực hồi tố hoặc sang năm khác.
    Với mỗi năm phân bổ, nếu năm đó đã bắt đầu thì đơn dùng phiên bản có hiệu lực
