@@ -600,6 +600,7 @@ export async function decideLeaveRequest(id: string, decision: 'approve' | 'reje
 export async function getPolicies(
   year = getBusinessYear(),
   asOfDate = year === getBusinessYear() ? getBusinessDate() : `${year}-12-31`,
+  includeLegacyFallback = false,
 ): Promise<LeavePolicy[]> {
   if (DEMO_MODE) {
     const savedPolicies = new Map(
@@ -651,8 +652,10 @@ export async function getPolicies(
         candidate.effectiveFrom! <= asOfDate)
         // Keep a legacy row available for appending a valid version, but do not
         // expose its prior-year EffectiveFrom as the current policy date.
-        ?? candidates.find((candidate) =>
-          !candidate.effectiveFrom || candidate.effectiveFrom < firstDayOfPolicyYear);
+        ?? (includeLegacyFallback
+          ? candidates.find((candidate) =>
+            !candidate.effectiveFrom || candidate.effectiveFrom < firstDayOfPolicyYear)
+          : undefined);
       return {
         id: type ? `type-${type.id}` : `type-${definition.code}`,
         leaveTypeId: type?.id,
@@ -666,7 +669,9 @@ export async function getPolicies(
         year,
         typeCode: definition.code,
         typeName: definition.name,
-        daysPerYear: definition.deductsBalance ? policy?.daysPerYear ?? definition.defaultDays : null,
+        daysPerYear: definition.deductsBalance
+          ? policy?.daysPerYear ?? (type?.isActive ? null : definition.defaultDays)
+          : null,
         paid: definition.isPaid,
         deductsBalance: definition.deductsBalance,
         description: leaveDescription(definition.code),
