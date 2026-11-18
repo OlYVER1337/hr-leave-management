@@ -90,14 +90,15 @@ bằng tài khoản có quyền tương ứng.
    hoặc vô hiệu hóa tài khoản.
 3. Vào **Chính sách nghỉ phép** để quản lý ba loại nghỉ cố định:
    `ANNUAL` (nghỉ phép năm), `SICK` (nghỉ ốm), `UNPAID` (nghỉ không lương).
-   Chọn **Năm áp dụng** trước khi xem hạn mức. Chỉ các năm tương lai mới được
-   tạo hoặc chỉnh sửa; năm hiện tại và các năm trước chỉ có thể xem. Khi tạo
+   Chọn **Năm áp dụng** trước khi xem hạn mức. Có thể tạo/chỉnh sửa phiên bản
+   cho năm hiện tại và các năm tương lai; năm đã kết thúc chỉ được xem. Khi tạo
    hạn mức đầu tiên hoặc phiên bản mới, nhập số ngày, **Ngày hiệu lực** và lý
-   do thay đổi. Ngày hiệu lực có thể là bất kỳ ngày nghiệp vụ nào từ hôm nay
-   trở đi; request tạo trước ngày này dùng phiên bản cũ, request tạo từ ngày
-   này trở đi dùng phiên bản mới. Phiên bản cũ được giữ lại, không bị ghi đè.
-   Nếu thiếu một loại chuẩn, HR có thể khôi phục loại đó khi đang làm việc với
-   năm tương lai. Tab **Ngày nghỉ lễ** dùng để thêm, sửa hoặc xóa ngày lễ.
+   do thay đổi. Với năm hiện tại, ngày hiệu lực sớm nhất là hôm nay; với năm
+   tương lai, ngày hiệu lực sớm nhất là 01/01 của năm đã chọn. Không cho đặt
+   hiệu lực hồi tố hoặc sang năm khác. Request tạo trước ngày hiệu lực dùng
+   phiên bản cũ; request tạo từ ngày đó trở đi dùng phiên bản mới. Phiên bản
+   cũ được giữ lại, không bị ghi đè. Nếu thiếu một loại chuẩn, HR có thể khôi
+   phục loại đó cho năm hiện tại hoặc năm tương lai. Tab **Ngày nghỉ lễ** dùng để thêm, sửa hoặc xóa ngày lễ.
 4. Dùng **Tất cả đơn nghỉ** để theo dõi các đơn trong tổ chức và
    **Hộp thư phê duyệt** để xử lý đơn chờ.
 
