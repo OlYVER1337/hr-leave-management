@@ -20,7 +20,7 @@ export function PoliciesPage() {
   const notify = useToast();
   const [tab, setTab] = useState<'policies' | 'holidays'>('policies');
   const [selectedYear, setSelectedYear] = useState(currentYear + 1);
-  const canEditSelectedYear = selectedYear >= currentYear;
+  const canEditSelectedYear = selectedYear > currentYear;
   const [policies, setPoliciesState] = useState<LeavePolicy[]>([]);
   const [holidays, setHolidaysState] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,7 +94,7 @@ export function PoliciesPage() {
         </select>
       </div>
       <span style={{ color: canEditSelectedYear ? '#23845b' : '#9a6b22', fontSize: 11, paddingBottom: 10 }}>
-        {canEditSelectedYear ? 'Có thể tạo phiên bản mới cho năm hiện tại hoặc tương lai; phiên bản cũ được giữ nguyên.' : 'Chính sách của năm đã kết thúc chỉ được xem.'}
+        {canEditSelectedYear ? 'Chỉ có thể tạo phiên bản mới cho năm tương lai; phiên bản cũ được giữ nguyên.' : 'Chính sách của năm đã kết thúc chỉ được xem.'}
       </span>
     </div>}
     <div className="policy-tabs"><button className={tab === 'policies' ? 'active' : ''} onClick={() => setTab('policies')}><ShieldCheck size={17} /> Loại nghỉ & hạn mức <span>{policies.length}</span></button><button className={tab === 'holidays' ? 'active' : ''} onClick={() => setTab('holidays')}><CalendarDays size={17} /> Ngày nghỉ lễ <span>{holidays.length}</span></button></div>

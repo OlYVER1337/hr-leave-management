@@ -104,7 +104,7 @@ Giới hạn: API hiện chỉ quản lý assignment cho danh mục Role đượ
 
 Ba loại nghỉ chuẩn là ANNUAL, SICK, UNPAID. Không cho phép loại nghỉ tùy ý; UNPAID không có quota policy. authoritative=true bypass Redis và đọc SQL trực tiếp. Leave Service dùng authoritative read khi tính nghiệp vụ.
 
-Leave Policy được lưu theo phiên bản bất biến, mỗi bản ghi có EffectiveFrom, CreatedAtUtc và Reason. POST tạo phiên bản đầu tiên; PUT thêm một phiên bản mới cho cùng loại nghỉ/năm và không sửa bản ghi cũ. Năm hiện tại và tương lai được phép thêm phiên bản; năm đã kết thúc bị khóa. EffectiveFrom là ngày nghiệp vụ UTC+07:00 không được nằm trong quá khứ; phiên bản policy năm tương lai có thể có hiệu lực từ một ngày trong năm hiện tại. GET hỗ trợ asOfDate để lấy trực tiếp từ HR phiên bản mới nhất có EffectiveFrom không sau ngày chỉ định; có asOfDate thì endpoint tự dùng đường đọc authoritative kể cả khi không truyền authoritative=true.
+Leave Policy được lưu theo phiên bản bất biến, mỗi bản ghi có EffectiveFrom, CreatedAtUtc và Reason. POST tạo phiên bản đầu tiên; PUT thêm một phiên bản mới cho cùng loại nghỉ/năm và không sửa bản ghi cũ. Chỉ năm tương lai mới được tạo/thêm phiên bản; năm hiện tại và quá khứ bị khóa. EffectiveFrom là ngày nghiệp vụ UTC+07:00 không được nằm trong quá khứ; phiên bản policy năm tương lai có thể có hiệu lực từ một ngày trong năm hiện tại. GET hỗ trợ asOfDate để lấy trực tiếp từ HR phiên bản mới nhất có EffectiveFrom không sau ngày chỉ định; có asOfDate thì endpoint tự dùng đường đọc authoritative kể cả khi không truyền authoritative=true.
 
 ## 3. Leave Service
 

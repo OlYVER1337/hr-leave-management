@@ -258,7 +258,7 @@ public sealed class LeaveCatalogService(
         CancellationToken cancellationToken = default)
     {
         ValidatePolicy(request);
-        EnsurePolicyYearNotCompleted(request.Year);
+        EnsureFuturePolicyYear(request.Year);
 
         var effectiveFrom = request.EffectiveFrom ?? GetBusinessToday();
         EnsurePolicyEffectiveFrom(effectiveFrom);
@@ -311,7 +311,7 @@ public sealed class LeaveCatalogService(
         if (original.LeaveType is null || !IsBuiltInLeaveType(original.LeaveType.Code))
             throw new NotFoundException($"Leave policy with id '{id}' was not found.");
 
-        EnsurePolicyYearNotCompleted(original.Year);
+        EnsureFuturePolicyYear(original.Year);
         if (request.Year != original.Year)
             throw Problems.Invalid("year", "A policy version cannot be moved to another year.");
 
@@ -541,14 +541,14 @@ public sealed class LeaveCatalogService(
     private DateOnly GetBusinessToday() =>
         DateOnly.FromDateTime(timeProvider.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).DateTime);
 
-    private void EnsurePolicyYearNotCompleted(int year)
+    private void EnsureFuturePolicyYear(int year)
     {
         var currentYear = GetCurrentBusinessYear();
-        if (year < currentYear)
+        if (year <= currentYear)
         {
             throw Problems.Invalid(
                 "year",
-                $"Completed leave-policy years cannot be changed. Current year: {currentYear}.");
+                $"Leave policies can only be created or changed for future years. Current year: {currentYear}.");
         }
     }
 

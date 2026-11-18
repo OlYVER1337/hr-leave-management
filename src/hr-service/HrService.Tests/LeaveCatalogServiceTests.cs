@@ -272,10 +272,66 @@ public sealed class LeaveCatalogServiceTests
             Times.Never);
     }
 
-    // Năm hiện tại được phép tạo policy version; chỉ năm đã kết thúc mới bị khóa.
+    // asOfDate chỉ trả phiên bản mới nhất đã có hiệu lực và loại bỏ phiên bản được lên lịch cho tương lai.
+    [Fact]
+    public async Task GetAuthoritativeLeavePoliciesAsync_ReturnsLatestVersionEffectiveOnDate()
+    {
+        var repository = new Mock<ILeaveCatalogRepository>();
+        repository
+            .Setup(item => item.ListLeavePoliciesAsync(2026, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(
+            [
+                new LeavePolicy
+                {
+                    Id = 10,
+                    LeaveTypeId = 4,
+                    LeaveType = new LeaveType { Id = 4, Code = "ANNUAL", Name = "Annual leave" },
+                    Year = 2026,
+                    DaysPerYear = 12m,
+                    EffectiveFrom = new DateOnly(2025, 1, 1),
+                    CreatedAtUtc = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                    Reason = "Initial"
+                },
+                new LeavePolicy
+                {
+                    Id = 11,
+                    LeaveTypeId = 4,
+                    LeaveType = new LeaveType { Id = 4, Code = "ANNUAL", Name = "Annual leave" },
+                    Year = 2026,
+                    DaysPerYear = 15m,
+                    EffectiveFrom = new DateOnly(2026, 6, 1),
+                    CreatedAtUtc = new DateTime(2026, 5, 20, 0, 0, 0, DateTimeKind.Utc),
+                    Reason = "Mid-year update"
+                },
+                new LeavePolicy
+                {
+                    Id = 12,
+                    LeaveTypeId = 4,
+                    LeaveType = new LeaveType { Id = 4, Code = "ANNUAL", Name = "Annual leave" },
+                    Year = 2026,
+                    DaysPerYear = 18m,
+                    EffectiveFrom = new DateOnly(2026, 12, 1),
+                    CreatedAtUtc = new DateTime(2026, 11, 20, 0, 0, 0, DateTimeKind.Utc),
+                    Reason = "Scheduled update"
+                }
+            ]);
+        var service = CreateService(repository, new InMemoryLeaveCatalogCache());
+
+        var result = await service.GetAuthoritativeLeavePoliciesAsync(
+            2026,
+            new DateOnly(2026, 11, 18));
+
+        var policy = Assert.Single(result);
+        Assert.Equal(11, policy.Id);
+        Assert.Equal(15m, policy.DaysPerYear);
+        Assert.Equal(new DateOnly(2026, 6, 1), policy.EffectiveFrom);
+    }
+
+    // Chỉ cho phép tạo policy version cho năm tương lai.
     [Theory]
     [InlineData(2024)]
-    public async Task CreateLeavePolicyAsync_RejectsCompletedPolicyYear(int year)
+    [InlineData(2025)]
+    public async Task CreateLeavePolicyAsync_RejectsCurrentOrPastPolicyYear(int year)
     {
         var repository = new Mock<ILeaveCatalogRepository>();
         var unitOfWork = new Mock<IUnitOfWork>();
@@ -296,7 +352,7 @@ public sealed class LeaveCatalogServiceTests
             Times.Never);
     }
 
-    // Không cho chuyển policy sang năm đã bắt đầu hoặc đã qua.
+    // Không cho chuyển policy sang năm hiện tại hoặc quá khứ.
     [Fact]
     public async Task UpdateLeavePolicyAsync_RejectsChangingPolicyToCurrentOrPastYear()
     {
