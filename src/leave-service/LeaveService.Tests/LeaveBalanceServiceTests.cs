@@ -152,6 +152,7 @@ public sealed class LeaveBalanceServiceTests
             .ReturnsAsync(new HrLeaveCatalog(
                 [new HrLeaveType(1, "ANNUAL", "Annual", true, true, true)],
                 [
+                    new HrLeavePolicy(99, 1, "ANNUAL", "Annual", 2027, 99m, new DateOnly(2026, 11, 18)),
                     new HrLeavePolicy(11, 1, "ANNUAL", "Annual", 2027, 15m, new DateOnly(2027, 1, 1)),
                     new HrLeavePolicy(12, 1, "ANNUAL", "Annual", 2027, 16m, latestEffectiveDate)
                 ]));
