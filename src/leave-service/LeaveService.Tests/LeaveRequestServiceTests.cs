@@ -61,8 +61,8 @@ public sealed class LeaveRequestServiceTests
         hrClient
             .Setup(item => item.GetLeavePoliciesAsync(2027, "Bearer token", It.IsAny<CancellationToken>()))
             .ReturnsAsync([
-                new HrLeavePolicy(2, 4, "ANNUAL", "Annual leave", 2027, 15m, new DateOnly(2026, 1, 1)),
-                new HrLeavePolicy(4, 4, "ANNUAL", "Annual leave", 2027, 18m, new DateOnly(2026, 12, 1))
+                new HrLeavePolicy(2, 4, "ANNUAL", "Annual leave", 2027, 15m, new DateOnly(2027, 1, 1)),
+                new HrLeavePolicy(4, 4, "ANNUAL", "Annual leave", 2027, 18m, new DateOnly(2027, 12, 1))
             ]);
         var service = new LeaveRequestService(
             repository.Object,
@@ -1145,9 +1145,9 @@ public sealed class LeaveRequestServiceTests
         hrClient
             .Setup(item => item.GetLeavePoliciesAsync(2027, "Bearer manager", It.IsAny<CancellationToken>()))
             .ReturnsAsync([
-                new HrLeavePolicy(51, 4, "ANNUAL", "Annual leave", 2027, 15m, new DateOnly(2026, 1, 1)),
-                new HrLeavePolicy(52, 4, "ANNUAL", "Annual leave", 2027, 8m, new DateOnly(2026, 11, 17)),
-                new HrLeavePolicy(53, 4, "ANNUAL", "Annual leave", 2027, 20m, new DateOnly(2026, 11, 20))
+                new HrLeavePolicy(51, 4, "ANNUAL", "Annual leave", 2027, 15m, new DateOnly(2027, 1, 1)),
+                new HrLeavePolicy(52, 4, "ANNUAL", "Annual leave", 2027, 8m, new DateOnly(2027, 11, 17)),
+                new HrLeavePolicy(53, 4, "ANNUAL", "Annual leave", 2027, 20m, new DateOnly(2027, 11, 20))
             ]);
         repository
             .Setup(item => item.TransitionAsync(
@@ -1166,7 +1166,7 @@ public sealed class LeaveRequestServiceTests
         var service = new LeaveRequestService(
             repository.Object,
             hrClient.Object,
-            new FixedTimeProvider(new DateTimeOffset(2026, 11, 18, 2, 0, 0, TimeSpan.Zero)));
+            new FixedTimeProvider(new DateTimeOffset(2027, 11, 18, 2, 0, 0, TimeSpan.Zero)));
 
         var result = await service.DecideAsync(
             actorId,
@@ -1228,9 +1228,9 @@ public sealed class LeaveRequestServiceTests
         hrClient
             .Setup(item => item.GetLeavePoliciesAsync(2027, "Bearer employee", It.IsAny<CancellationToken>()))
             .ReturnsAsync([
-                new HrLeavePolicy(41, 4, "ANNUAL", "Annual leave", 2027, 12m, new DateOnly(2026, 1, 1)),
-                new HrLeavePolicy(42, 4, "ANNUAL", "Annual leave", 2027, 8m, new DateOnly(2026, 11, 17)),
-                new HrLeavePolicy(43, 4, "ANNUAL", "Annual leave", 2027, 20m, new DateOnly(2026, 11, 20))
+                new HrLeavePolicy(41, 4, "ANNUAL", "Annual leave", 2027, 12m, new DateOnly(2027, 1, 1)),
+                new HrLeavePolicy(42, 4, "ANNUAL", "Annual leave", 2027, 8m, new DateOnly(2027, 11, 17)),
+                new HrLeavePolicy(43, 4, "ANNUAL", "Annual leave", 2027, 20m, new DateOnly(2027, 11, 20))
             ]);
         repository
             .Setup(item => item.CancelAsync(
