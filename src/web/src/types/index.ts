@@ -75,4 +75,6 @@ export interface LeavePolicy {
   leaveTypeId?: number;
   policyId?: number;
   year?: number;
+  effectiveFrom?: string;
+  reason?: string;
 }
