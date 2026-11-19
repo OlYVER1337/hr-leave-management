@@ -912,4 +912,11 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
 
         return false;
     }
+
+    public Task<int> CountPolicyVersionReferencesAsync(
+        int policyVersionId,
+        CancellationToken cancellationToken = default) =>
+        context.LeaveRequestYearAllocations
+            .AsNoTracking()
+            .CountAsync(item => item.PolicyVersionId == policyVersionId, cancellationToken);
 }

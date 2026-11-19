@@ -150,4 +150,9 @@ public interface ILeaveHrClient
         DateOnly to,
         string authorization,
         CancellationToken cancellationToken = default);
+
+    // Số phân bổ năm của đơn nghỉ đang tham chiếu tới phiên bản chính sách (chỉ đọc).
+    Task<int> CountPolicyVersionReferencesAsync(
+        int policyVersionId,
+        CancellationToken cancellationToken = default);
 }

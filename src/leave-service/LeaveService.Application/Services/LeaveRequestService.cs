@@ -407,6 +407,11 @@ public sealed class LeaveRequestService(
         return ToResponse(result.Request, result.Balances);
     }
 
+    public Task<int> GetPolicyVersionReferenceCountAsync(
+        int policyVersionId,
+        CancellationToken cancellationToken = default) =>
+        repository.CountPolicyVersionReferencesAsync(policyVersionId, cancellationToken);
+
     public async Task<LeaveRequestResponse> CancelAsync(
         Guid employeeId,
         string authorization,
