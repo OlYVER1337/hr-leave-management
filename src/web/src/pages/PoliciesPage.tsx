@@ -340,9 +340,9 @@ export function PoliciesPage() {
                   <div className="policy-entitlement"><strong>{version.daysPerYear}</strong><span>ngày mỗi năm</span></div>
                   <p className="policy-description">Hiệu lực từ {version.effectiveFrom ? formatDate(version.effectiveFrom) : 'Chưa xác định'}</p>
                   {version.reason && <p className="policy-description">Lý do: {version.reason}</p>}
-                  {version.policyId && version.year !== undefined && version.year >= currentYear && Boolean(version.effectiveFrom) && version.effectiveFrom! > currentBusinessDate && <div className="row-actions">
+                  {version.policyId && version.year !== undefined && version.year >= currentYear && <div className="row-actions">
                     <button className="icon-button" aria-label={`Sửa phiên bản ${version.typeCode} ${version.year} version ${version.versionNumber}`} onClick={() => openEditPolicyVersion(version)} disabled={saving}><Edit3 size={16} /></button>
-                    <button className="icon-button danger-icon" aria-label={`Xóa phiên bản ${version.typeCode} ${version.year} version ${version.versionNumber}`} onClick={() => void removePolicyVersion(version)} disabled={saving}><Trash2 size={16} /></button>
+                    {Boolean(version.effectiveFrom) && version.effectiveFrom! > currentBusinessDate && <button className="icon-button danger-icon" aria-label={`Xóa phiên bản ${version.typeCode} ${version.year} version ${version.versionNumber}`} onClick={() => void removePolicyVersion(version)} disabled={saving}><Trash2 size={16} /></button>}
                   </div>}
                 </article>)}</div>
               : <EmptyState title="Chưa có phiên bản" description="Loại nghỉ này chưa có lịch sử chính sách." />
