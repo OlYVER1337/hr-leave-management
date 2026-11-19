@@ -115,6 +115,11 @@ public interface ILeaveRequestRepository
         int year,
         IReadOnlyList<LeaveBalanceEntitlement> entitlements,
         CancellationToken cancellationToken = default);
+
+    // Đếm số phân bổ năm đang tham chiếu tới phiên bản chính sách.
+    Task<int> CountPolicyVersionReferencesAsync(
+        int policyVersionId,
+        CancellationToken cancellationToken = default);
 }
 
 public interface ILeaveHrClient
@@ -151,8 +156,4 @@ public interface ILeaveHrClient
         string authorization,
         CancellationToken cancellationToken = default);
 
-    // Số phân bổ năm của đơn nghỉ đang tham chiếu tới phiên bản chính sách (chỉ đọc).
-    Task<int> CountPolicyVersionReferencesAsync(
-        int policyVersionId,
-        CancellationToken cancellationToken = default);
 }
