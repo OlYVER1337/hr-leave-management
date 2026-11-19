@@ -33,6 +33,7 @@ public interface ILeaveCatalogRepository
         CancellationToken cancellationToken = default);
     void Add(LeaveType leaveType);
     void Add(LeavePolicy leavePolicy);
+    void Remove(LeavePolicy leavePolicy);
     void Add(Holiday holiday);
     void Remove(Holiday holiday);
 }
