@@ -395,6 +395,14 @@ public sealed class LeaveCatalogService(
         }
 
         EnsureEditablePolicyYear(policy.Year);
+
+        // A version that has already taken effect is immutable business history.
+        if (policy.EffectiveFrom <= GetBusinessToday())
+        {
+            throw new ConflictException(
+                "A policy version that is already effective cannot be edited. Create a new future version instead.");
+        }
+
         if (request.Year != policy.Year)
             throw Problems.Invalid("year", "A policy version cannot be moved to another year.");
         if (request.LeaveTypeId != policy.LeaveTypeId)
