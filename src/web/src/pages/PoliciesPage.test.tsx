@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Holiday, LeavePolicy } from '../types';
 import {
   getHolidays,
+  deletePolicyVersion,
+  editPolicyVersion,
   getPolicies,
   getPolicyVersions,
   restoreBuiltInLeaveType,
@@ -16,6 +18,8 @@ import { PoliciesPage } from './PoliciesPage';
 const mocks = vi.hoisted(() => ({
   notify: vi.fn(),
   getHolidays: vi.fn(),
+  deletePolicyVersion: vi.fn(),
+  editPolicyVersion: vi.fn(),
   getPolicies: vi.fn(),
   getPolicyVersions: vi.fn(),
   restoreBuiltInLeaveType: vi.fn(),
@@ -26,6 +30,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../components/ToastProvider', () => ({ useToast: () => mocks.notify }));
 vi.mock('../services/leaveService', () => ({
   getHolidays: mocks.getHolidays,
+  deletePolicyVersion: mocks.deletePolicyVersion,
+  editPolicyVersion: mocks.editPolicyVersion,
   getPolicies: mocks.getPolicies,
   getPolicyVersions: mocks.getPolicyVersions,
   restoreBuiltInLeaveType: mocks.restoreBuiltInLeaveType,
@@ -91,6 +97,8 @@ describe('PoliciesPage', () => {
       { ...sick, versionNumber: 1 },
     ]);
     vi.mocked(getHolidays).mockResolvedValue(holidays);
+    vi.mocked(deletePolicyVersion).mockResolvedValue(undefined);
+    vi.mocked(editPolicyVersion).mockResolvedValue(undefined);
     vi.mocked(saveHolidays).mockResolvedValue(holidays);
     vi.mocked(savePolicies).mockResolvedValue(undefined);
     vi.mocked(restoreBuiltInLeaveType).mockResolvedValue(undefined);
@@ -305,6 +313,69 @@ describe('PoliciesPage', () => {
     expect(savePolicies).toHaveBeenCalledTimes(1);
     releaseSave?.();
     await waitFor(() => expect(mocks.notify).toHaveBeenCalledWith('Đã lưu chính sách nghỉ phép.'));
+  });
+
+  it('allows editing a current or future policy version from its history', async () => {
+    const user = userEvent.setup();
+    const futureAnnual: LeavePolicy = {
+      ...annual,
+      id: 'annual-future',
+      policyId: 303,
+      year: futureYear,
+      versionNumber: 1,
+      daysPerYear: 8,
+      effectiveFrom: `${futureYear}-01-01`,
+    };
+    vi.mocked(getPolicyVersions).mockResolvedValue([
+      { ...annual, versionNumber: 1, effectiveFrom: `${currentBusinessYear}-01-01` },
+      futureAnnual,
+      { ...sick, versionNumber: 1, effectiveFrom: `${currentBusinessYear}-01-01` },
+    ]);
+    renderPoliciesPage();
+
+    await user.click((await screen.findAllByRole('button', { name: /Xem lịch sử/ }))[0]);
+    await user.click(await screen.findByRole('button', {
+      name: `Sửa phiên bản ANNUAL ${futureYear} version 1`,
+    }));
+
+    expect(await screen.findByRole('dialog', { name: 'Sửa phiên bản Nghỉ phép năm' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Năm áp dụng')).toBeDisabled();
+    expect(screen.getByLabelText('Ngày hiệu lực *')).toBeDisabled();
+    await user.clear(screen.getByLabelText('Số ngày mỗi năm'));
+    await user.type(screen.getByLabelText('Số ngày mỗi năm'), '9');
+    await user.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
+
+    await waitFor(() => expect(editPolicyVersion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        policyId: 303,
+        year: futureYear,
+        daysPerYear: 9,
+        effectiveFrom: `${futureYear}-01-01`,
+      }),
+    ));
+    expect(savePolicies).not.toHaveBeenCalled();
+  });
+
+  it('allows deleting an unused current-year policy version from its history', async () => {
+    const user = userEvent.setup();
+    vi.mocked(getPolicyVersions).mockResolvedValue([
+      { ...annual, versionNumber: 1, effectiveFrom: `${currentBusinessYear}-01-01` },
+      { ...sick, versionNumber: 1, effectiveFrom: `${currentBusinessYear}-01-01` },
+    ]);
+    renderPoliciesPage();
+
+    await user.click((await screen.findAllByRole('button', { name: /Xem lịch sử/ }))[0]);
+    await user.click(await screen.findByRole('button', {
+      name: `Xóa phiên bản ANNUAL ${currentBusinessYear} version 1`,
+    }));
+
+    await waitFor(() => expect(deletePolicyVersion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        policyId: annual.policyId,
+        year: currentBusinessYear,
+      }),
+    ));
+    expect(window.confirm).toHaveBeenCalled();
   });
 
   it('restores a deleted built-in policy', async () => {
