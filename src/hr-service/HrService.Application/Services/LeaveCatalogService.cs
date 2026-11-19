@@ -425,6 +425,16 @@ public sealed class LeaveCatalogService(
         }
 
         EnsureEditablePolicyYear(policy.Year);
+
+        // A policy version whose effective date has arrived is historical/current
+        // business data and must never be deleted, even when no allocation references it.
+        var today = GetBusinessToday();
+        if (policy.EffectiveFrom <= today)
+        {
+            throw Problems.Conflict(
+                "A policy version that is already effective cannot be deleted. Create a new future version instead.");
+        }
+
         repository.Remove(policy);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await cache.RemoveAsync(LeavePoliciesCacheKey, cancellationToken);
