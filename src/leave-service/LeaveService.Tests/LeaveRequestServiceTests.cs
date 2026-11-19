@@ -10,6 +10,22 @@ namespace LeaveService.Tests;
 
 public sealed class LeaveRequestServiceTests
 {
+    // Mô phỏng hợp đồng HR: với năm và asOfDate, trả đúng một chính sách mỗi loại nghỉ
+    // (phiên bản EffectiveFrom mới nhất nhưng không sau asOfDate, trong đúng năm).
+    private static IReadOnlyList<HrLeavePolicy> EffectiveForHr(
+        int year,
+        DateOnly asOfDate,
+        IEnumerable<HrLeavePolicy> all) =>
+        all
+            .Where(policy => policy.Year == year &&
+                             policy.EffectiveFrom >= new DateOnly(year, 1, 1) &&
+                             policy.EffectiveFrom <= asOfDate)
+            .GroupBy(policy => policy.LeaveTypeId)
+            .Select(group => group.OrderByDescending(policy => policy.EffectiveFrom)
+                .ThenByDescending(policy => policy.Id)
+                .First())
+            .ToArray();
+
     // Tính số ngày làm việc sau khi loại cuối tuần/ngày lễ, sau đó chia allocation theo năm và reserve balance.
     [Fact]
     public async Task CreateAsync_CalculatesWorkingDaysAndCreatesAnnualBalanceAllocations()
@@ -54,18 +70,18 @@ public sealed class LeaveRequestServiceTests
             .ReturnsAsync([new HrHoliday(1, new DateOnly(2027, 1, 1), "New Year")]);
         hrClient
             .Setup(item => item.GetLeavePoliciesAsync(2026, It.IsAny<DateOnly>(), "Bearer token", It.IsAny<CancellationToken>()))
-            .ReturnsAsync([
+            .ReturnsAsync((int year, DateOnly asOfDate, string authorization, CancellationToken cancellationToken) =>
+                EffectiveForHr(year, asOfDate, [
                 new HrLeavePolicy(1, 4, "ANNUAL", "Annual leave", 2026, 12m, new DateOnly(2026, 1, 1)),
-                new HrLeavePolicy(3, 4, "ANNUAL", "Annual leave", 2026, 13m, new DateOnly(2026, 10, 28))
-            ]);
+                new HrLeavePolicy(3, 4, "ANNUAL", "Annual leave", 2026, 13m, new DateOnly(2026, 10, 28))]));
         hrClient
             .Setup(item => item.GetLeavePoliciesAsync(2027, It.IsAny<DateOnly>(), "Bearer token", It.IsAny<CancellationToken>()))
-            .ReturnsAsync([
+            .ReturnsAsync((int year, DateOnly asOfDate, string authorization, CancellationToken cancellationToken) =>
+                EffectiveForHr(year, asOfDate, [
                 // Dữ liệu legacy có EffectiveFrom trước năm policy phải bị bỏ qua.
                 new HrLeavePolicy(99, 4, "ANNUAL", "Annual leave", 2027, 99m, new DateOnly(2026, 11, 18)),
                 new HrLeavePolicy(2, 4, "ANNUAL", "Annual leave", 2027, 15m, new DateOnly(2027, 1, 1)),
-                new HrLeavePolicy(4, 4, "ANNUAL", "Annual leave", 2027, 18m, new DateOnly(2027, 12, 1))
-            ]);
+                new HrLeavePolicy(4, 4, "ANNUAL", "Annual leave", 2027, 18m, new DateOnly(2027, 12, 1))]));
         var service = new LeaveRequestService(
             repository.Object,
             hrClient.Object,
@@ -1146,11 +1162,11 @@ public sealed class LeaveRequestServiceTests
             .ReturnsAsync(new HrEmployeeSnapshot(employeeId, "E1", "Employee", "Employee", true, 1, actorId));
         hrClient
             .Setup(item => item.GetLeavePoliciesAsync(2027, It.IsAny<DateOnly>(), "Bearer manager", It.IsAny<CancellationToken>()))
-            .ReturnsAsync([
+            .ReturnsAsync((int year, DateOnly asOfDate, string authorization, CancellationToken cancellationToken) =>
+                EffectiveForHr(year, asOfDate, [
                 new HrLeavePolicy(51, 4, "ANNUAL", "Annual leave", 2027, 15m, new DateOnly(2027, 1, 1)),
                 new HrLeavePolicy(52, 4, "ANNUAL", "Annual leave", 2027, 8m, new DateOnly(2027, 11, 17)),
-                new HrLeavePolicy(53, 4, "ANNUAL", "Annual leave", 2027, 20m, new DateOnly(2027, 11, 20))
-            ]);
+                new HrLeavePolicy(53, 4, "ANNUAL", "Annual leave", 2027, 20m, new DateOnly(2027, 11, 20))]));
         repository
             .Setup(item => item.TransitionAsync(
                 request.Id,
@@ -1229,11 +1245,11 @@ public sealed class LeaveRequestServiceTests
             .ReturnsAsync(pendingRequest);
         hrClient
             .Setup(item => item.GetLeavePoliciesAsync(2027, It.IsAny<DateOnly>(), "Bearer employee", It.IsAny<CancellationToken>()))
-            .ReturnsAsync([
+            .ReturnsAsync((int year, DateOnly asOfDate, string authorization, CancellationToken cancellationToken) =>
+                EffectiveForHr(year, asOfDate, [
                 new HrLeavePolicy(41, 4, "ANNUAL", "Annual leave", 2027, 12m, new DateOnly(2027, 1, 1)),
                 new HrLeavePolicy(42, 4, "ANNUAL", "Annual leave", 2027, 8m, new DateOnly(2027, 11, 17)),
-                new HrLeavePolicy(43, 4, "ANNUAL", "Annual leave", 2027, 20m, new DateOnly(2027, 11, 20))
-            ]);
+                new HrLeavePolicy(43, 4, "ANNUAL", "Annual leave", 2027, 20m, new DateOnly(2027, 11, 20))]));
         repository
             .Setup(item => item.CancelAsync(
                 employeeId,
