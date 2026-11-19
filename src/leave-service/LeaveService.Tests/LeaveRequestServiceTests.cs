@@ -53,13 +53,13 @@ public sealed class LeaveRequestServiceTests
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync([new HrHoliday(1, new DateOnly(2027, 1, 1), "New Year")]);
         hrClient
-            .Setup(item => item.GetLeavePoliciesAsync(2026, "Bearer token", It.IsAny<CancellationToken>()))
+            .Setup(item => item.GetLeavePoliciesAsync(2026, It.IsAny<DateOnly>(), "Bearer token", It.IsAny<CancellationToken>()))
             .ReturnsAsync([
                 new HrLeavePolicy(1, 4, "ANNUAL", "Annual leave", 2026, 12m, new DateOnly(2026, 1, 1)),
                 new HrLeavePolicy(3, 4, "ANNUAL", "Annual leave", 2026, 13m, new DateOnly(2026, 10, 28))
             ]);
         hrClient
-            .Setup(item => item.GetLeavePoliciesAsync(2027, "Bearer token", It.IsAny<CancellationToken>()))
+            .Setup(item => item.GetLeavePoliciesAsync(2027, It.IsAny<DateOnly>(), "Bearer token", It.IsAny<CancellationToken>()))
             .ReturnsAsync([
                 // Dữ liệu legacy có EffectiveFrom trước năm policy phải bị bỏ qua.
                 new HrLeavePolicy(99, 4, "ANNUAL", "Annual leave", 2027, 99m, new DateOnly(2026, 11, 18)),
@@ -1145,7 +1145,7 @@ public sealed class LeaveRequestServiceTests
             .Setup(item => item.GetEmployeeAsync(employeeId, "Bearer manager", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new HrEmployeeSnapshot(employeeId, "E1", "Employee", "Employee", true, 1, actorId));
         hrClient
-            .Setup(item => item.GetLeavePoliciesAsync(2027, "Bearer manager", It.IsAny<CancellationToken>()))
+            .Setup(item => item.GetLeavePoliciesAsync(2027, It.IsAny<DateOnly>(), "Bearer manager", It.IsAny<CancellationToken>()))
             .ReturnsAsync([
                 new HrLeavePolicy(51, 4, "ANNUAL", "Annual leave", 2027, 15m, new DateOnly(2027, 1, 1)),
                 new HrLeavePolicy(52, 4, "ANNUAL", "Annual leave", 2027, 8m, new DateOnly(2027, 11, 17)),
@@ -1228,7 +1228,7 @@ public sealed class LeaveRequestServiceTests
             .Setup(item => item.GetForDecisionAsync(pendingRequest.Id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(pendingRequest);
         hrClient
-            .Setup(item => item.GetLeavePoliciesAsync(2027, "Bearer employee", It.IsAny<CancellationToken>()))
+            .Setup(item => item.GetLeavePoliciesAsync(2027, It.IsAny<DateOnly>(), "Bearer employee", It.IsAny<CancellationToken>()))
             .ReturnsAsync([
                 new HrLeavePolicy(41, 4, "ANNUAL", "Annual leave", 2027, 12m, new DateOnly(2027, 1, 1)),
                 new HrLeavePolicy(42, 4, "ANNUAL", "Annual leave", 2027, 8m, new DateOnly(2027, 11, 17)),

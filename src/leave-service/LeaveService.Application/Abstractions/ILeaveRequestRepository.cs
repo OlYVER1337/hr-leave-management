@@ -141,6 +141,7 @@ public interface ILeaveHrClient
 
     Task<IReadOnlyList<HrLeavePolicy>> GetLeavePoliciesAsync(
         int year,
+        DateOnly asOfDate,
         string authorization,
         CancellationToken cancellationToken = default);
 

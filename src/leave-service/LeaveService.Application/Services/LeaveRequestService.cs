@@ -57,19 +57,16 @@ public sealed class LeaveRequestService(
         {
             foreach (var (year, days) in daysByYear.Where(_ => leaveType.DeductsBalance))
             {
-                var policies = await hrClient.GetLeavePoliciesAsync(
-                    year,
-                    authorization,
-                    cancellationToken);
                 var firstPolicyDate = new DateOnly(year, 1, 1);
                 var policyAsOfDate = createdAtBusinessDate > firstPolicyDate
                     ? createdAtBusinessDate
                     : firstPolicyDate;
-                var policy = ResolveEffectivePolicy(
-                    policies,
-                    leaveType.Id,
+                var policies = await hrClient.GetLeavePoliciesAsync(
                     year,
-                    policyAsOfDate)
+                    policyAsOfDate,
+                    authorization,
+                    cancellationToken);
+                var policy = policies.FirstOrDefault(item => item.LeaveTypeId == leaveType.Id)
                     ?? throw Invalid(
                         "leaveTypeId",
                         $"No leave policy version is effective for leave type '{leaveType.Id}' in {year} on {policyAsOfDate}.");
@@ -452,17 +449,14 @@ public sealed class LeaveRequestService(
         var result = new List<LeaveBalanceEntitlement>(request.YearAllocations.Count);
         foreach (var allocation in request.YearAllocations.OrderBy(item => item.Year))
         {
-            var policies = await hrClient.GetLeavePoliciesAsync(
-                allocation.Year,
-                authorization,
-                cancellationToken);
             var firstPolicyDate = new DateOnly(allocation.Year, 1, 1);
             var policyAsOfDate = effectiveOn > firstPolicyDate ? effectiveOn : firstPolicyDate;
-            var policy = ResolveEffectivePolicy(
-                policies,
-                request.LeaveTypeId,
+            var policies = await hrClient.GetLeavePoliciesAsync(
                 allocation.Year,
-                policyAsOfDate)
+                policyAsOfDate,
+                authorization,
+                cancellationToken);
+            var policy = policies.FirstOrDefault(item => item.LeaveTypeId == request.LeaveTypeId)
                 ?? throw new LeaveConflictException(
                     $"HR has no effective leave policy for type '{request.LeaveTypeId}' in {allocation.Year} on {policyAsOfDate}.");
 
@@ -480,22 +474,6 @@ public sealed class LeaveRequestService(
 
         return result;
     }
-
-    private static HrLeavePolicy? ResolveEffectivePolicy(
-        IReadOnlyList<HrLeavePolicy> policies,
-        int leaveTypeId,
-        int year,
-        DateOnly effectiveOn) =>
-        policies
-            .Where(item =>
-                item.LeaveTypeId == leaveTypeId &&
-                item.Year == year &&
-                item.EffectiveFrom >= new DateOnly(year, 1, 1) &&
-                item.EffectiveFrom <= effectiveOn)
-            .OrderByDescending(item => item.EffectiveFrom)
-            .ThenByDescending(item => item.CreatedAtUtc)
-            .ThenByDescending(item => item.Id)
-            .FirstOrDefault();
 
     private static LeaveRequestStatus? ParseStatusFilter(string? status)
     {

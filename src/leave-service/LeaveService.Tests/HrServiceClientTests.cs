@@ -18,7 +18,7 @@ public sealed class HrServiceClientTests
         var client = new HrServiceClient(httpClient);
 
         await client.GetLeaveTypeAsync(4, "Bearer test-token");
-        await client.GetLeavePoliciesAsync(2026, "Bearer test-token");
+        await client.GetLeavePoliciesAsync(2026, new DateOnly(2026, 12, 31), "Bearer test-token");
         await client.GetHolidaysAsync(
             new DateOnly(2026, 12, 1),
             new DateOnly(2026, 12, 31),
@@ -27,7 +27,7 @@ public sealed class HrServiceClientTests
         Assert.Equal(
             [
                 "/api/v1/leave-types/4?authoritative=true",
-                "/api/v1/leave-policies?year=2026&authoritative=true",
+                "/api/v1/leave-policies?year=2026&asOfDate=2026-12-31&authoritative=true",
                 "/api/v1/holidays?from=2026-12-01&to=2026-12-31&authoritative=true"
             ],
             handler.RequestedUris);

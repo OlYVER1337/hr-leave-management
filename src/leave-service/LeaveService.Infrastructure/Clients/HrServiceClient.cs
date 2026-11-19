@@ -50,12 +50,14 @@ public sealed class HrServiceClient(HttpClient httpClient, HrCallMetrics? metric
             "leave catalog",
             cancellationToken);
 
+    // HR trả đúng một chính sách mỗi loại nghỉ có hiệu lực tại asOfDate.
     public async Task<IReadOnlyList<HrLeavePolicy>> GetLeavePoliciesAsync(
         int year,
+        DateOnly asOfDate,
         string authorization,
         CancellationToken cancellationToken = default) =>
         await GetRequiredAsync<HrLeavePolicy[]>(
-            $"/api/v1/leave-policies?year={year}&authoritative=true",
+            $"/api/v1/leave-policies?year={year}&asOfDate={asOfDate:yyyy-MM-dd}&authoritative=true",
             authorization,
             "leave policies",
             cancellationToken);

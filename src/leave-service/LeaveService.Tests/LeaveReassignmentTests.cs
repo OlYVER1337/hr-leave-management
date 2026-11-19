@@ -42,7 +42,7 @@ public sealed class LeaveReassignmentTests : IClassFixture<LeaveSqlIntegrationFi
         var hr = new Mock<ILeaveHrClient>();
         hr.Setup(h => h.GetEmployeeAsync(employee, Auth, It.IsAny<CancellationToken>()))
           .ReturnsAsync(new HrEmployeeSnapshot(employee, "E", "Employee", "Employee", true, 3, currentManager));
-        hr.Setup(h => h.GetLeavePoliciesAsync(2030, Auth, It.IsAny<CancellationToken>()))
+        hr.Setup(h => h.GetLeavePoliciesAsync(2030, It.IsAny<DateOnly>(), Auth, It.IsAny<CancellationToken>()))
           .ReturnsAsync((IReadOnlyList<HrLeavePolicy>)
           [
               new HrLeavePolicy(

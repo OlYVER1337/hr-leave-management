@@ -22,7 +22,7 @@ public sealed class LeaveBusinessTimeTests
           .ReturnsAsync(new HrLeaveType(1, "ANNUAL", "Phép năm", true, true, true));
         hr.Setup(h => h.GetHolidaysAsync(It.IsAny<DateOnly>(), It.IsAny<DateOnly>(), Auth, It.IsAny<CancellationToken>()))
           .ReturnsAsync(Array.Empty<HrHoliday>());
-        hr.Setup(h => h.GetLeavePoliciesAsync(It.IsAny<int>(), Auth, It.IsAny<CancellationToken>()))
+        hr.Setup(h => h.GetLeavePoliciesAsync(It.IsAny<int>(), It.IsAny<DateOnly>(), Auth, It.IsAny<CancellationToken>()))
           .ReturnsAsync(new[] { new HrLeavePolicy(1, 1, "ANNUAL", "Phép năm", 2026, 12m, new DateOnly(2026, 1, 1)) });
         return new LeaveRequestService(repo.Object, hr.Object, new FixedUtcClock(utcNow));
     }
