@@ -56,4 +56,25 @@ public sealed class LeavePoliciesController(LeaveCatalogService catalogService) 
         var policy = await catalogService.UpdateLeavePolicyAsync(id, request, cancellationToken);
         return Ok(policy);
     }
+
+    [Authorize(Policy = PermissionPolicies.LeavePolicyUpdate)]
+    [HttpPut("{id:int}/edit")]
+    public async Task<ActionResult<LeavePolicyResponse>> EditVersion(
+        int id,
+        [FromBody] LeavePolicyRequest request,
+        CancellationToken cancellationToken)
+    {
+        var policy = await catalogService.EditLeavePolicyVersionAsync(id, request, cancellationToken);
+        return Ok(policy);
+    }
+
+    [Authorize(Policy = PermissionPolicies.LeavePolicyUpdate)]
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> DeleteVersion(
+        int id,
+        CancellationToken cancellationToken)
+    {
+        await catalogService.DeleteLeavePolicyVersionAsync(id, cancellationToken);
+        return NoContent();
+    }
 }
