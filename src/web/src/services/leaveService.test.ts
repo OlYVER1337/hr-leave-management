@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthUser, LeavePolicy } from '../types';
-import { decideLeaveRequest, getBalances, getLeaveRequestSummary, getLeaveRequests, getLeaveRequestsPage, getPolicies, getPolicyVersions, restoreBuiltInLeaveType, savePolicies } from './leaveService';
+import { decideLeaveRequest, editPolicyVersion, getBalances, getLeaveRequestSummary, getLeaveRequests, getLeaveRequestsPage, getPolicies, getPolicyVersions, restoreBuiltInLeaveType, savePolicies } from './leaveService';
 
 const mocks = vi.hoisted(() => ({
   hrGet: vi.fn(),
