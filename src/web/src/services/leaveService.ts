@@ -821,6 +821,96 @@ export async function restoreBuiltInLeaveType(policy: LeavePolicy): Promise<void
   } catch (error) { throw new Error(`Không thể thêm lại chính sách nghỉ. ${getApiErrorMessage(error)}`); }
 }
 
+export interface LeavePolicyUsage {
+  policyVersionId: number;
+  referencedAllocations: number;
+}
+
+export async function getPolicyVersionUsage(policyVersionId: number): Promise<number> {
+  if (DEMO_MODE) return 0;
+  try {
+    const { data } = await leaveApi.get<LeavePolicyUsage>(
+      `/api/v1/leave-policy-usage/${policyVersionId}`,
+    );
+    return data.referencedAllocations;
+  } catch (error) {
+    throw new Error(`Không kiểm tra được lịch sử sử dụng chính sách. ${getApiErrorMessage(error)}`);
+  }
+}
+
+export async function editPolicyVersion(policy: LeavePolicy): Promise<void> {
+  if (!policy.policyId || !policy.leaveTypeId || !policy.year || policy.daysPerYear === null) {
+    throw new Error('Thiếu thông tin phiên bản chính sách cần sửa.');
+  }
+  const year = policy.year;
+  if (year < getBusinessYear()) {
+    throw new Error('Không thể sửa chính sách của năm đã qua.');
+  }
+  if (!policy.effectiveFrom) {
+    throw new Error('Phiên bản chính sách chưa có ngày hiệu lực hợp lệ.');
+  }
+
+  const referencedAllocations = await getPolicyVersionUsage(policy.policyId);
+  if (referencedAllocations > 0) {
+    throw new Error(
+      `Không thể sửa phiên bản này vì đã được ${referencedAllocations} phân bổ nghỉ phép tham chiếu. Hãy tạo phiên bản mới.`,
+    );
+  }
+
+  if (DEMO_MODE) {
+    updateDemoState((state) => ({
+      ...state,
+      policies: state.policies.map((existing) =>
+        existing.policyId === policy.policyId
+          ? { ...existing, daysPerYear: policy.daysPerYear, reason: policy.reason }
+          : existing),
+    }));
+    return;
+  }
+
+  try {
+    await hrApi.put(`/api/v1/leave-policies/${policy.policyId}/edit`, {
+      leaveTypeId: policy.leaveTypeId,
+      year,
+      daysPerYear: policy.daysPerYear,
+      effectiveFrom: policy.effectiveFrom,
+      reason: policy.reason?.trim() || 'Cập nhật chính sách nghỉ phép',
+    });
+  } catch (error) {
+    throw new Error(`Không sửa được phiên bản chính sách. ${getApiErrorMessage(error)}`);
+  }
+}
+
+export async function deletePolicyVersion(policy: LeavePolicy): Promise<void> {
+  if (!policy.policyId || !policy.year) {
+    throw new Error('Thiếu thông tin phiên bản chính sách cần xóa.');
+  }
+  if (policy.year < getBusinessYear()) {
+    throw new Error('Không thể xóa chính sách của năm đã qua.');
+  }
+
+  const referencedAllocations = await getPolicyVersionUsage(policy.policyId);
+  if (referencedAllocations > 0) {
+    throw new Error(
+      `Không thể xóa phiên bản này vì đã được ${referencedAllocations} phân bổ nghỉ phép tham chiếu.`,
+    );
+  }
+
+  if (DEMO_MODE) {
+    updateDemoState((state) => ({
+      ...state,
+      policies: state.policies.filter((existing) => existing.policyId !== policy.policyId),
+    }));
+    return;
+  }
+
+  try {
+    await hrApi.delete(`/api/v1/leave-policies/${policy.policyId}`);
+  } catch (error) {
+    throw new Error(`Không xóa được phiên bản chính sách. ${getApiErrorMessage(error)}`);
+  }
+}
+
 export async function savePolicies(policies: LeavePolicy[]): Promise<void> {
   if (DEMO_MODE) {
     const definitions = new Map(builtInLeaveTypes.map((type) => [type.code, type]));
