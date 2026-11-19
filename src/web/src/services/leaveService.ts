@@ -849,6 +849,9 @@ export async function editPolicyVersion(policy: LeavePolicy): Promise<void> {
   if (!policy.effectiveFrom) {
     throw new Error('Phiên bản chính sách chưa có ngày hiệu lực hợp lệ.');
   }
+  if (policy.effectiveFrom <= getBusinessDate()) {
+    throw new Error('Không thể sửa phiên bản chính sách đã hoặc đang có hiệu lực. Hãy tạo phiên bản mới có ngày hiệu lực trong tương lai.');
+  }
 
   const referencedAllocations = await getPolicyVersionUsage(policy.policyId);
   if (referencedAllocations > 0) {
