@@ -378,6 +378,58 @@ public sealed class LeaveCatalogService(
         return ToResponse(version);
     }
 
+    // Chỉnh sửa trực tiếp version chưa được dùng; không thay đổi năm hoặc ngày hiệu lực.
+    public async Task<LeavePolicyResponse> EditLeavePolicyVersionAsync(
+        int id,
+        LeavePolicyRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ValidatePolicy(request);
+        var policy = await repository.GetLeavePolicyForUpdateByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException($"Leave policy with id '{id}' was not found.");
+
+        if (policy.LeaveType is null || !IsBuiltInLeaveType(policy.LeaveType.Code) ||
+            !policy.LeaveType.DeductsBalance)
+        {
+            throw new NotFoundException($"Leave policy with id '{id}' was not found.");
+        }
+
+        EnsureEditablePolicyYear(policy.Year);
+        if (request.Year != policy.Year)
+            throw Problems.Invalid("year", "A policy version cannot be moved to another year.");
+        if (request.LeaveTypeId != policy.LeaveTypeId)
+            throw Problems.Invalid("leaveTypeId", "A policy version cannot be moved to another leave type.");
+        if (request.EffectiveFrom.HasValue && request.EffectiveFrom.Value != policy.EffectiveFrom)
+            throw Problems.Invalid("effectiveFrom", "The effective date cannot be changed when editing an existing version.");
+
+        policy.DaysPerYear = request.DaysPerYear;
+        policy.Reason = NormalizePolicyReason(request.Reason, "Cập nhật chính sách");
+
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await cache.RemoveAsync(LeavePoliciesCacheKey, cancellationToken);
+        return ToResponse(policy);
+    }
+
+    // Chỉ xóa version thuộc năm hiện tại hoặc tương lai; UI phải kiểm tra không có allocation tham chiếu trước khi gọi.
+    public async Task DeleteLeavePolicyVersionAsync(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        var policy = await repository.GetLeavePolicyForUpdateByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException($"Leave policy with id '{id}' was not found.");
+
+        if (policy.LeaveType is null || !IsBuiltInLeaveType(policy.LeaveType.Code) ||
+            !policy.LeaveType.DeductsBalance)
+        {
+            throw new NotFoundException($"Leave policy with id '{id}' was not found.");
+        }
+
+        EnsureEditablePolicyYear(policy.Year);
+        repository.Remove(policy);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await cache.RemoveAsync(LeavePoliciesCacheKey, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<HolidayResponse>> GetHolidaysAsync(
         DateOnly? from,
         DateOnly? to,
