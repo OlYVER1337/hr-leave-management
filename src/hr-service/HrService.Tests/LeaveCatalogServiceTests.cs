@@ -955,6 +955,95 @@ public sealed class LeaveCatalogServiceTests
             events);
     }
 
+
+    // Policy đã có hiệu lực hoặc bắt đầu hiệu lực ngay hôm nay đều không được sửa trực tiếp.
+    [Theory]
+    [InlineData(2025, 5, 31)]
+    [InlineData(2025, 6, 1)]
+    public async Task EditLeavePolicyVersionAsync_RejectsAlreadyEffectiveVersion(
+        int year,
+        int month,
+        int day)
+    {
+        var effectiveFrom = new DateOnly(year, month, day);
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var cache = new InMemoryLeaveCatalogCache();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        var policy = new LeavePolicy
+        {
+            Id = 9,
+            LeaveTypeId = 4,
+            LeaveType = new LeaveType
+            {
+                Id = 4,
+                Code = "ANNUAL",
+                Name = "Annual leave",
+                IsActive = true,
+                DeductsBalance = true
+            },
+            Year = 2025,
+            DaysPerYear = 12m,
+            EffectiveFrom = effectiveFrom
+        };
+        repository
+            .Setup(item => item.GetLeavePolicyForUpdateByIdAsync(9, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(policy);
+        var service = CreateService(repository, cache, unitOfWork);
+
+        await Assert.ThrowsAsync<ConflictException>(() => service.EditLeavePolicyVersionAsync(
+            9,
+            new LeavePolicyRequest(4, 2025, 16m, effectiveFrom)));
+
+        Assert.Equal(12m, policy.DaysPerYear);
+        unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
+        repository.Verify(item => item.Add(It.IsAny<LeavePolicy>()), Times.Never);
+    }
+
+    // Phiên bản chưa đến ngày hiệu lực vẫn có thể sửa nếu còn thuộc năm hiện tại/tương lai.
+    [Fact]
+    public async Task EditLeavePolicyVersionAsync_UpdatesFutureEffectiveVersion()
+    {
+        var effectiveFrom = new DateOnly(2025, 7, 1);
+        var policy = new LeavePolicy
+        {
+            Id = 9,
+            LeaveTypeId = 4,
+            LeaveType = new LeaveType
+            {
+                Id = 4,
+                Code = "ANNUAL",
+                Name = "Annual leave",
+                IsActive = true,
+                DeductsBalance = true
+            },
+            Year = 2025,
+            DaysPerYear = 12m,
+            EffectiveFrom = effectiveFrom
+        };
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var cache = new InMemoryLeaveCatalogCache();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        var events = new List<string>();
+        repository
+            .Setup(item => item.GetLeavePolicyForUpdateByIdAsync(9, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(policy);
+        unitOfWork
+            .Setup(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()))
+            .Callback(() => events.Add("save"))
+            .ReturnsAsync(1);
+        cache.Removed += key => events.Add($"cache:{key}");
+        var service = CreateService(repository, cache, unitOfWork);
+
+        var result = await service.EditLeavePolicyVersionAsync(
+            9,
+            new LeavePolicyRequest(4, 2025, 16m, effectiveFrom, "Điều chỉnh trước hiệu lực"));
+
+        Assert.Equal(16m, result.DaysPerYear);
+        Assert.Equal(effectiveFrom, result.EffectiveFrom);
+        Assert.Equal("Điều chỉnh trước hiệu lực", result.Reason);
+        Assert.Equal(new[] { "save", "cache:hr:catalog:leave-policies" }, events);
+    }
+
     private static LeaveCatalogService CreateService(
         Mock<ILeaveCatalogRepository> repository,
         ILeaveCatalogCache cache,
