@@ -148,7 +148,10 @@ export function PoliciesPage() {
       // A legacy row with a prior-year EffectiveFrom remains an append target,
       // but must not prevent a new version from starting on January 1.
       const latestVersion = versions
-        .filter((version) => version.typeCode === currentPolicy.typeCode && version.year === year)
+        .filter((version) =>
+          version.typeCode === currentPolicy.typeCode &&
+          version.year === year &&
+          Boolean(version.effectiveFrom))
         .sort((left, right) =>
           (left.effectiveFrom ?? '').localeCompare(right.effectiveFrom ?? '') ||
           (left.versionNumber ?? 0) - (right.versionNumber ?? 0))
