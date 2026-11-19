@@ -888,6 +888,9 @@ export async function deletePolicyVersion(policy: LeavePolicy): Promise<void> {
   if (policy.year < getBusinessYear()) {
     throw new Error('Không thể xóa chính sách của năm đã qua.');
   }
+  if (!policy.effectiveFrom || policy.effectiveFrom <= getBusinessDate()) {
+    throw new Error('Không thể xóa phiên bản chính sách đã hoặc đang có hiệu lực. Hãy tạo phiên bản mới có ngày hiệu lực trong tương lai.');
+  }
 
   const referencedAllocations = await getPolicyVersionUsage(policy.policyId);
   if (referencedAllocations > 0) {
