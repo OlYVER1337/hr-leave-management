@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AuthUser } from '../types';
+import type { AuthUser, LeavePolicy } from '../types';
 import { decideLeaveRequest, getBalances, getLeaveRequestSummary, getLeaveRequests, getLeaveRequestsPage, getPolicies, getPolicyVersions, restoreBuiltInLeaveType, savePolicies } from './leaveService';
 
 const mocks = vi.hoisted(() => ({
@@ -632,5 +632,58 @@ describe('built-in leave policies', () => {
 
     expect(mocks.hrPut).not.toHaveBeenCalled();
     expect(mocks.hrPost).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('leave policy version editing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const createPolicy = (year: number, policyId: number, effectiveFrom: string): LeavePolicy => ({
+    id: `annual-${year}`,
+    policyId,
+    leaveTypeId: 1,
+    year,
+    typeCode: 'ANNUAL',
+    typeName: 'Nghỉ phép năm',
+    daysPerYear: 12,
+    paid: true,
+    deductsBalance: true,
+    description: 'Nghỉ phép năm',
+    isActive: true,
+    effectiveFrom,
+  });
+
+  it('rejects editing an already-effective policy before calling either service', async () => {
+    const year = getVietnamBusinessYear();
+    const policy = createPolicy(year, 101, `${year}-01-01`);
+
+    await expect(editPolicyVersion(policy)).rejects.toThrow(
+      'Không thể sửa phiên bản chính sách đã hoặc đang có hiệu lực.',
+    );
+
+    expect(mocks.leaveGet).not.toHaveBeenCalled();
+    expect(mocks.hrPut).not.toHaveBeenCalled();
+  });
+
+  it('allows editing a future-effective policy version when it has no allocation references', async () => {
+    const year = getVietnamBusinessYear() + 1;
+    const policy = createPolicy(year, 303, `${year}-01-01`);
+    mocks.leaveGet.mockResolvedValue({
+      data: { policyVersionId: 303, referencedAllocations: 0 },
+    });
+    mocks.hrPut.mockResolvedValue({ data: {} });
+
+    await expect(editPolicyVersion({ ...policy, daysPerYear: 9 })).resolves.toBeUndefined();
+
+    expect(mocks.leaveGet).toHaveBeenCalledWith('/api/v1/leave-policy-usage/303');
+    expect(mocks.hrPut).toHaveBeenCalledWith('/api/v1/leave-policies/303/edit', expect.objectContaining({
+      leaveTypeId: 1,
+      year,
+      daysPerYear: 9,
+      effectiveFrom: `${year}-01-01`,
+    }));
   });
 });
