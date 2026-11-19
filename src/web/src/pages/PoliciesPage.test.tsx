@@ -231,6 +231,39 @@ describe('PoliciesPage', () => {
     expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveAttribute('min', `${futureYear}-01-01`);
   });
 
+  it('saves a new future-year policy version with the selected quota and January 1 effective date', async () => {
+    const user = userEvent.setup();
+    vi.mocked(getPolicies).mockImplementation(async (year) => {
+      if (year === futureYear) {
+        return [
+          { ...annual, year: futureYear, policyId: undefined, effectiveFrom: undefined },
+          { ...sick, year: futureYear, policyId: undefined, effectiveFrom: undefined },
+          { ...unpaid, year: futureYear },
+        ];
+      }
+      return policies;
+    });
+    vi.mocked(getPolicyVersions).mockImplementation(async (year) =>
+      year === futureYear ? [] : [{ ...annual, versionNumber: 1 }, { ...sick, versionNumber: 1 }]);
+    renderPoliciesPage();
+
+    await user.click((await screen.findAllByRole('button', { name: 'Tạo phiên bản mới' }))[0]);
+    await user.selectOptions(screen.getByLabelText('Năm áp dụng'), String(futureYear));
+    await waitFor(() => expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveValue(`${futureYear}-01-01`));
+
+    await user.clear(screen.getByLabelText('Số ngày mỗi năm'));
+    await user.type(screen.getByLabelText('Số ngày mỗi năm'), '8');
+    await user.click(screen.getByRole('button', { name: 'Lưu chính sách' }));
+
+    await waitFor(() => expect(savePolicies).toHaveBeenCalledWith([
+      expect.objectContaining({
+        year: futureYear,
+        daysPerYear: 8,
+        effectiveFrom: `${futureYear}-01-01`,
+      }),
+    ]));
+  });
+
   it('defaults to the next policy year when the current year has no later effective date', async () => {
     const user = userEvent.setup();
     vi.mocked(getPolicies).mockImplementation(async (year, asOfDate) => {
