@@ -380,7 +380,7 @@ describe('PoliciesPage', () => {
     expect(window.confirm).toHaveBeenCalled();
   });
 
-  it('does not offer deleting a policy version that is already effective', async () => {
+  it('does not offer editing or deleting a policy version that is already effective', async () => {
     const user = userEvent.setup();
     vi.mocked(getPolicyVersions).mockResolvedValue([
       { ...annual, versionNumber: 1, effectiveFrom: `${currentBusinessYear}-01-01` },
@@ -391,9 +391,35 @@ describe('PoliciesPage', () => {
     await user.click((await screen.findAllByRole('button', { name: /Xem lịch sử/ }))[0]);
 
     expect(screen.queryByRole('button', {
+      name: `Sửa phiên bản ANNUAL ${currentBusinessYear} version 1`,
+    })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', {
       name: `Xóa phiên bản ANNUAL ${currentBusinessYear} version 1`,
     })).not.toBeInTheDocument();
+    expect(editPolicyVersion).not.toHaveBeenCalled();
     expect(deletePolicyVersion).not.toHaveBeenCalled();
+  });
+
+
+  it('hides edit and delete actions for applied versions in the all-history view', async () => {
+    const user = userEvent.setup();
+    vi.mocked(getPolicyVersions).mockResolvedValue([
+      { ...annual, versionNumber: 1, effectiveFrom: `${currentBusinessYear}-01-01` },
+      { ...sick, versionNumber: 1, effectiveFrom: `${currentBusinessYear}-01-01` },
+    ]);
+    renderPoliciesPage();
+
+    await user.selectOptions(
+      await screen.findByRole('combobox', { name: 'Hiển thị chính sách' }),
+      'HISTORY',
+    );
+
+    expect(screen.queryByRole('button', {
+      name: `Sửa phiên bản ANNUAL ${currentBusinessYear} version 1`,
+    })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', {
+      name: `Xóa phiên bản ANNUAL ${currentBusinessYear} version 1`,
+    })).not.toBeInTheDocument();
   });
 
   it('restores a deleted built-in policy', async () => {
