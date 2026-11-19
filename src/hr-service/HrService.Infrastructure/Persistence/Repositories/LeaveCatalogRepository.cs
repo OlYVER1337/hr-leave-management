@@ -152,6 +152,8 @@ public sealed class LeaveCatalogRepository(HrDbContext dbContext) : ILeaveCatalo
 
     public void Add(LeavePolicy leavePolicy) => dbContext.LeavePolicies.Add(leavePolicy);
 
+    public void Remove(LeavePolicy leavePolicy) => dbContext.LeavePolicies.Remove(leavePolicy);
+
     public void Add(Holiday holiday) => dbContext.Holidays.Add(holiday);
 
     public void Remove(Holiday holiday) => dbContext.Holidays.Remove(holiday);
