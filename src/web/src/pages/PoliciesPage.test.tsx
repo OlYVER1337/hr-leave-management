@@ -356,11 +356,12 @@ describe('PoliciesPage', () => {
     expect(savePolicies).not.toHaveBeenCalled();
   });
 
-  it('allows deleting an unused current-year policy version from its history', async () => {
+  it('allows deleting an unused future-effective version in the current policy year', async () => {
     const user = userEvent.setup();
+    const futureEffectiveDate = `${currentBusinessYear}-12-31`;
     vi.mocked(getPolicyVersions).mockResolvedValue([
-      { ...annual, versionNumber: 1, effectiveFrom: `${currentBusinessYear}-01-01` },
-      { ...sick, versionNumber: 1, effectiveFrom: `${currentBusinessYear}-01-01` },
+      { ...annual, versionNumber: 1, effectiveFrom: futureEffectiveDate },
+      { ...sick, versionNumber: 1, effectiveFrom: futureEffectiveDate },
     ]);
     renderPoliciesPage();
 
@@ -373,9 +374,26 @@ describe('PoliciesPage', () => {
       expect.objectContaining({
         policyId: annual.policyId,
         year: currentBusinessYear,
+        effectiveFrom: futureEffectiveDate,
       }),
     ));
     expect(window.confirm).toHaveBeenCalled();
+  });
+
+  it('does not offer deleting a policy version that is already effective', async () => {
+    const user = userEvent.setup();
+    vi.mocked(getPolicyVersions).mockResolvedValue([
+      { ...annual, versionNumber: 1, effectiveFrom: `${currentBusinessYear}-01-01` },
+      { ...sick, versionNumber: 1, effectiveFrom: `${currentBusinessYear}-01-01` },
+    ]);
+    renderPoliciesPage();
+
+    await user.click((await screen.findAllByRole('button', { name: /Xem lịch sử/ }))[0]);
+
+    expect(screen.queryByRole('button', {
+      name: `Xóa phiên bản ANNUAL ${currentBusinessYear} version 1`,
+    })).not.toBeInTheDocument();
+    expect(deletePolicyVersion).not.toHaveBeenCalled();
   });
 
   it('restores a deleted built-in policy', async () => {
