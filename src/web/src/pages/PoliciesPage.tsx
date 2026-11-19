@@ -135,19 +135,41 @@ export function PoliciesPage() {
     setPolicyModal({ ...currentPolicy, year, effectiveFrom: '' });
     setLoadingPolicyYear(true);
     try {
-      const yearPolicies = await getPolicies(year, `${year}-12-31`, true);
+      const [yearPolicies, versions] = await Promise.all([
+        getPolicies(year, `${year}-12-31`, true),
+        getPolicyVersions(year),
+      ]);
       const targetPolicy = yearPolicies.find((item) => item.typeCode === currentPolicy.typeCode);
       if (!targetPolicy) {
         throw new Error('Không tìm thấy chính sách cho năm được chọn.');
       }
+
+      // Use the latest valid version for this exact year as the append baseline.
+      // A legacy row with a prior-year EffectiveFrom remains an append target,
+      // but must not prevent a new version from starting on January 1.
+      const latestVersion = versions
+        .filter((version) => version.typeCode === currentPolicy.typeCode && version.year === year)
+        .sort((left, right) =>
+          (left.effectiveFrom ?? '').localeCompare(right.effectiveFrom ?? '') ||
+          (left.versionNumber ?? 0) - (right.versionNumber ?? 0))
+        .at(-1) ?? null;
+      const appendTarget = latestVersion ?? targetPolicy;
       const effectiveFrom = getNextPolicyEffectiveDate(
-        targetPolicy,
+        appendTarget,
         currentBusinessDate,
         year,
       );
-      setPolicyBaseline(targetPolicy.policyId && targetPolicy.effectiveFrom ? targetPolicy : null);
+      const baseline = latestVersion ??
+        (targetPolicy.policyId && targetPolicy.effectiveFrom ? targetPolicy : null);
+
+      setPolicyBaseline(baseline);
       setPolicyModal({
+        ...currentPolicy,
         ...targetPolicy,
+        // Keep the selected leave type's existing quota as a starting value
+        // when the target year has no version yet; the HR user can change it.
+        daysPerYear: latestVersion?.daysPerYear ?? targetPolicy.daysPerYear ?? currentPolicy.daysPerYear,
+        policyId: latestVersion?.policyId ?? targetPolicy.policyId,
         year,
         effectiveFrom: effectiveFrom ?? '',
         reason: '',
