@@ -431,7 +431,7 @@ public sealed class LeaveCatalogService(
         var today = GetBusinessToday();
         if (policy.EffectiveFrom <= today)
         {
-            throw Problems.Conflict(
+            throw new ConflictException(
                 "A policy version that is already effective cannot be deleted. Create a new future version instead.");
         }
 
