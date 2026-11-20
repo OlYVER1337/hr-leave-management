@@ -24,7 +24,7 @@ sequenceDiagram
 
   opt Leave type có DeductsBalance
     loop Mỗi năm có ngày nghỉ
-      LV->>HR: GET /api/v1/leave-policies?year=&asOfDate={ngày tạo UTC+07}&authoritative=true
+      LV->>HR: GET /api/v1/leave-policies?year=&asOfDate={max(ngày tạo UTC+07, 01/01 policy year)}&authoritative=true
       HR->>HDB: Chọn policy version hiệu lực tại asOfDate
       HDB-->>HR: Policy version mới nhất theo LeaveType/Year
       HR-->>LV: Policy ID + DaysPerYear + EffectiveFrom
