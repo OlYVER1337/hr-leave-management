@@ -280,7 +280,7 @@ SELECT
     CreatedAtUtc
 FROM #LoadTestRequests;
 
-INSERT INTO dbo.LeaveBalances (Id, EmployeeId, LeaveTypeId, Year, Entitled, Used, Pending)
+INSERT INTO dbo.LeaveBalances (Id, EmployeeId, LeaveTypeId, Year, PolicyDays, Used, Pending)
 SELECT
     NEWID(),
     employee.EmployeeId,
