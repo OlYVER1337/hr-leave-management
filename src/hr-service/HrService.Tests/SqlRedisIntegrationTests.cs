@@ -25,6 +25,7 @@ public sealed class SqlRedisIntegrationTests : IClassFixture<SqlRedisIntegration
         _fixture = fixture;
     }
 
+    // Kiểm tra tích hợp thật: catalog lưu vào SQL, được cache trong Redis và cache bị invalidation sau khi cập nhật.
     [SqlRedisFact]
     public async Task LeaveCatalog_PersistsToSqlCachesInRedisAndInvalidatesAfterUpdate()
     {

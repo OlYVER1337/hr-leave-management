@@ -1,29 +1,31 @@
 # Dịch vụ nghỉ phép (Leave Service)
 
-Leave Service quản lý đơn nghỉ phép, số dư phép và lịch sử xử lý trong
-`Leave_DB`. Thông tin nhân viên và danh mục nghỉ phép do HR Service quản lý.
+Leave Service quản lý đơn nghỉ phép, số dư phép và lịch sử xử lý trong `Leave_DB`.
+HR Service là nguồn dữ liệu có thẩm quyền cho nhân viên, quan hệ quản lý, loại nghỉ,
+chính sách nghỉ và ngày lễ. Leave Service chỉ gọi HR qua HTTP; không truy cập trực
+tiếp `HR_DB`.
 
 ## API
 
-Tất cả endpoint đều yêu cầu bearer token do HR Service cấp:
+Các route dưới đây dùng base path `/api/v1` của Leave Service và yêu cầu bearer
+access token do HR Service cấp. Các route được publish qua Nginx với tiền tố
+`/leave-api`.
 
-- `POST /api/v1/leave-requests`: tạo đơn nghỉ cho nhân viên đang đăng nhập.
-- `GET /api/v1/leave-requests/mine`: liệt kê các đơn nghỉ của nhân viên đang
-  đăng nhập.
-- `GET /api/v1/leave-requests/{id}`: xem chi tiết một đơn nghỉ của nhân viên đó.
-- `POST /api/v1/leave-requests/{id}/cancel`: hủy đơn đang chờ duyệt của nhân viên.
-- `GET /api/v1/leave-requests/pending-approval`: liệt kê các đơn được giao cho
-  quản lý đang đăng nhập; HR có thể xem tất cả đơn đang chờ duyệt.
-- `POST /api/v1/leave-requests/{id}/approve` và
-  `POST /api/v1/leave-requests/{id}/reject`: nhận `{"note":"..."}` để duyệt hoặc
-  từ chối đơn đang chờ. Quản lý chỉ được xử lý đơn được giao cho mình; HR có thể
-  xử lý mọi đơn đang chờ duyệt.
-- `POST /api/v1/leave-requests/{id}/cancel`: nhận `{"note":"..."}`; chỉ chủ đơn
-  mới được hủy đơn đang chờ duyệt của mình.
-- `GET /api/v1/leave-balances/mine?year=2026`: trả về số dư phép của nhân viên
-  đang đăng nhập trong năm được yêu cầu.
+### Đơn nghỉ
 
-Ví dụ tạo đơn:
+| Method / route | Permission + scope | Mô tả |
+|---|---|---|
+| `GET /leave-requests?page=1&pageSize=20` | `leaves.read:Self/Team/All` | Danh sách theo data scope; hỗ trợ `search`, `status`, `leaveTypeId` |
+| `GET /leave-requests/mine?page=1&pageSize=20` | `leaves.read:Self/All` | Chỉ đơn của nhân viên đang đăng nhập |
+| `GET /leave-requests/calendar?from=YYYY-MM-DD&to=YYYY-MM-DD` | `leaves.read:Self/Team/All` | Dữ liệu lịch trong khoảng ngày hợp lệ; tối đa 62 ngày |
+| `GET /leave-requests/{id}` | `leaves.read:Self/Team/All` | Chi tiết đơn trong phạm vi được cấp; ngoài scope trả 404 |
+| `POST /leave-requests` | `leaves.create:Self` | Tạo đơn cho chính caller |
+| `GET /leave-requests/pending-approval?page=1&pageSize=20` | `leaves.decide:Team/All` | Hộp thư đơn Pending; hỗ trợ `search` |
+| `GET /leave-requests/summary` | `leaves.decide:Team/All` | Tổng hợp Pending trong decide scope; Approved/Total phụ thuộc read scope |
+| `PATCH /leave-requests/{id}/decision` | `leaves.decide:Team/All` | Duyệt hoặc từ chối đơn Pending |
+| `POST /leave-requests/{id}/cancel` | `leaves.cancel:Self` | Chủ đơn hủy đơn Pending của mình |
+
+Body tạo đơn:
 
 ```json
 {
@@ -34,30 +36,78 @@ Ví dụ tạo đơn:
 }
 ```
 
-Dịch vụ tính các ngày trong tuần, loại trừ ngày lễ do HR cấu hình và hỗ trợ đơn
-nghỉ kéo dài qua nhiều năm dương lịch bằng cách phân bổ số ngày vào chính sách
-của từng năm. Với loại nghỉ trừ vào số dư, nếu nhân viên chưa có số dư thì dịch
-vụ khởi tạo số dư từ chính sách HR. Sau đó, dịch vụ tạo đơn chờ duyệt, tăng số
-dư đang chờ và ghi lịch sử tạo đơn trong cùng một giao dịch. Đơn bị trùng ngày
-hoặc không đủ số dư trả về `409 Conflict`. Khoảng thời gian chỉ có ngày không
-làm việc và dữ liệu đầu vào không hợp lệ trả về `422 Unprocessable Entity`.
+Body quyết định:
 
-Các API được Nginx cung cấp dưới tiền tố `/leave-api/`; ví dụ:
-`/leave-api/api/v1/leave-requests/mine`.
+```json
+{
+  "decision": "approve",
+  "note": "Đã sắp xếp nhân sự thay ca."
+}
+```
 
-Quyết định duyệt/từ chối, thao tác hủy, cập nhật số dư và ghi lịch sử được thực
-hiện nguyên tử trong giao dịch. Năm và số ngày được phân bổ cho từng năm được
-lưu cùng đơn nghỉ, nhờ đó khi duyệt hoặc từ chối, dịch vụ có thể giải phóng đúng
-số ngày đã giữ chỗ, kể cả khi danh mục ngày lễ của HR thay đổi sau đó.
+`decision` nhận `approve` hoặc `reject`; `note` không bắt buộc.
+
+### Số dư phép
+
+| Method / route | Permission + scope | Mô tả |
+|---|---|---|
+| `GET /leave-balances/mine?year=2026` | `leaves.read:Self/All` | Đồng bộ PolicyDays hiện hành từ HR rồi trả balance của caller |
+| `POST /leave-balances/mine/synchronize?year=2026` | `leaves.read:Self/All` | Khởi tạo/đồng bộ balance của caller từ HR catalog authoritative |
+
+GET balance và POST synchronize đều chỉ tác động EmployeeId lấy từ JWT của
+người gọi, kể cả khi caller có scope All; nếu bỏ `year`, service dùng business
+year UTC+07. Cả hai luồng lấy policy authoritative từ HR qua HTTP trước khi
+trả số dư; Leave Service không truy cập HR_DB trực tiếp.
+
+Balance lưu `PolicyDays`, `Used`, `Pending`; `Entitled` được tính bằng
+`max(PolicyDays, Used + Pending)`, còn `Available = Entitled - Used - Pending`.
+Quota mới thấp hơn tổng Used + Pending không gây conflict: PolicyDays được cập
+nhật, còn Entitled tạm thời đủ để bao phủ số ngày đã dùng và đang chờ. Giao dịch
+dùng isolation `SERIALIZABLE`, RowVersion, retry và idempotent synchronization.
+
+Khi tạo đơn, Leave chọn phiên bản mới nhất có `EffectiveFrom` không sau ngày
+tạo đơn theo UTC+07; từng yearly allocation lưu `PolicyVersionId` và
+`PolicyDaysAtCreation`. Khi duyệt, từ chối hoặc hủy, Leave lấy policy hiện hành
+từ HR và cập nhật PolicyDays trong cùng transaction với Used/Pending. Nếu HR
+không khả dụng, thao tác cần refresh fail closed. Hiện chưa có API/worker bulk
+reconciliation để chủ động đồng bộ balance cho toàn bộ nhân viên.
+
+## Quy tắc nghiệp vụ
+
+- Employee phải active và leave type phải active khi tạo đơn.
+- Backend tính ngày làm việc từ thứ Hai đến thứ Sáu, loại trừ holidays do HR quản lý.
+- Request phải có ít nhất một ngày làm việc; ngày kết thúc không trước ngày bắt đầu.
+- Khoảng ngày tối đa 366 ngày; lý do bắt buộc, tối đa 1.000 ký tự.
+- Request qua nhiều năm được chia thành yearly allocation; mỗi allocation lưu phiên bản policy đã áp dụng theo ngày tạo request.
+- Không cho các đơn Pending/Approved của cùng nhân viên chồng ngày.
+- Create giữ chỗ bằng cách tăng `Pending`; Approve chuyển `Pending` sang `Used`;
+  Reject/Cancel giải phóng `Pending`.
+- `ApproverId` là snapshot tại thời điểm tạo đơn, không phải nguồn authorization hiện tại.
+  Với Team scope, Leave Service hỏi HR về reporting line hiện tại; HR không khả dụng
+  thì thao tác cần Team scope fail closed.
+- Cập nhật trạng thái, balance và history được thực hiện trong cùng transaction.
+  RowVersion, unique index, Serializable transaction và retry xử lý các tình huống
+  cạnh tranh đã được triển khai.
+
+## Phân trang và lỗi
+
+Các list endpoint có phân trang yêu cầu cả `page` và `pageSize`; `page >= 1`,
+`pageSize` từ 1 đến 100. Response trả danh sách trong body và tổng số record
+trong header `X-Total-Count`. Thiếu hoặc sai tham số phân trang trả HTTP 400.
+
+Các status thường gặp: 401 khi token không hợp lệ; 403 khi thiếu permission/scope;
+404 khi không tồn tại hoặc ngoài data scope; 409 khi có conflict nghiệp vụ/trạng
+thái/concurrency; 422 khi validation nghiệp vụ thất bại; 503 khi HR dependency
+không khả dụng.
 
 ## Kiểm thử
 
-Chạy unit test mà không cần Docker:
+Chạy toàn bộ Leave Service tests:
 
 ```powershell
-dotnet test src\leave-service\LeaveService.Tests\LeaveService.Tests.csproj
+dotnet test src\leave-service\LeaveService.slnx --no-restore
 ```
 
-Các kiểm thử lưu trữ trên SQL Server và kiểm thử đồng thời sẽ chạy khi thiết lập
-biến môi trường `HR_TEST_SQL_CONNECTION_STRING`. Bộ kiểm thử tạo và xóa một cơ
-sở dữ liệu riêng biệt; chỉ sử dụng SQL Server cục bộ hoặc môi trường kiểm thử.
+Các integration test cần SQL Server thông qua biến
+`HR_TEST_SQL_CONNECTION_STRING`. Test có thể tạo/xóa database ngẫu nhiên; chỉ
+dùng SQL Server dành riêng cho kiểm thử, không trỏ vào production.

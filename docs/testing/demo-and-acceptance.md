@@ -1,5 +1,9 @@
 # Kịch bản demo, kết quả kiểm thử và checklist nghiệm thu
 
+
+> **Cập nhật trạng thái 18/11/2026:** Kết quả local ngày 17/11 do người dùng cung cấp (Leave 118/118; HR 132/132; 0 failed/0 skipped) là bằng chứng lịch sử trên source trước thay đổi policy versioning. HEAD hiện tại đã thay đổi model/migration/service/API/UI/test; chưa có CI workflow phù hợp trong repository và chưa có kết quả backend/Web test/build cho SHA hiện tại. Stored TRX trong repository vẫn là evidence cũ ngày 05/11 (HR 57 passed/1 skipped; Leave 19 passed/6 skipped).
+
+
 ## 1. Kết quả kiểm thử hồi quy và tích hợp
 
 Backend được chạy lại ngày **03/11/2026** sau khi cập nhật Microsoft.Data.SqlClient
@@ -220,7 +224,7 @@ khi có API tương ứng. HR không được tạo đơn nghỉ; xác nhận ro
 |---|---|---|
 | Hai microservice, database tách biệt, giao tiếp REST | Đạt | HR Service sở hữu `HR_DB`; Leave Service sở hữu `Leave_DB`; Leave gọi HR API |
 | ASP.NET Core, React/TypeScript, EF Core, migrations, OpenAPI | Đạt | Hai solution .NET 10, Vite/React, EF migrations và OpenAPI ở Development |
-| JWT, phân quyền và vòng đời token | Đạt một phần | Có role authorization, refresh rotation/revocation và test; JWT access đã cấp vẫn hợp lệ tới khi hết hạn (mặc định 1 phút) |
+| JWT, phân quyền và vòng đời token | Đạt một phần | Backend đã triển khai Dynamic RBAC V1 với permission/scope trong JWT và refresh rotation/revocation; Role claim legacy còn phục vụ UI compatibility, không là nguồn authorize cho các API đã migrate. Access JWT đã phát vẫn hợp lệ tới expiry (mặc định 1 phút). |
 | Nghiệp vụ HR | Đạt | CRUD nhân viên/phòng ban, quản lý trực tiếp, danh mục nghỉ/ngày lễ và kiểm tra dữ liệu |
 | Nghiệp vụ nghỉ phép | Đạt | Tạo/xem/hủy/duyệt/từ chối, số dư, phân bổ năm, ngày làm việc và history |
 | Tính đồng thời | Đạt | SQL integration test cho tạo đơn cạnh tranh, trùng ngày và quyết định cạnh tranh |
@@ -260,10 +264,11 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
 | Xong | Hạng mục | Kỳ vọng khi nghiệm thu | Bằng chứng/tham chiếu |
 |---|---|---|---|
 | [x] | Dựng môi trường | Compose chạy Web, HR, Leave, SQL Server, Redis; healthcheck đạt | [README chạy hệ thống](../README.md), kiểm tra `hrbench` 03/11 |
-| [x] | Tài khoản và phân quyền theo role | API/UI chặn đúng vai trò/phạm vi; refresh token bị thu hồi khi deactivate | HR API tests, `App.tsx`, `EmployeeServiceTests`; access JWT còn hiệu lực đến expiry |
+| [x] | Dynamic RBAC và data scope | HR/Leave API kiểm tra permission + Self/Team/All; React vẫn dùng Role legacy cho menu/route guard; refresh token bị thu hồi khi deactivate | HR/Leave authorization tests, `PermissionAuthorization`, `LeavePermissionAuthorization`, `App.tsx`; access JWT còn hiệu lực đến expiry |
 | [x] | Quản trị nhân sự | HR tạo/sửa nhân viên, phòng ban và quản lý trực tiếp | `/employees`, `/departments`; HR tests |
-| [x] | Chính sách nghỉ | HR quản lý loại chuẩn, hạn mức năm và ngày lễ | `/policies`; [Redis report](../performance/redis-performance.md) |
-| [x] | Số dư cá nhân | Employee thấy hạn mức, đã dùng, đang chờ và khả dụng | Leave tests; đọc lại số dư sau demo API |
+| [x] | Chính sách nghỉ cơ bản | HR quản lý loại chuẩn, hạn mức năm và ngày lễ | `/policies`; [Redis report](../performance/redis-performance.md) |
+| [ ] | Phiên bản policy | Request chọn phiên bản theo EffectiveFrom; phiên bản cũ không bị ghi đè; chỉ năm tương lai được thay đổi | HR `LeaveCatalogServiceTests`, Leave `LeaveRequestServiceTests`; test mới chưa chạy trên HEAD hiện tại |
+| [ ] | Số dư cá nhân | GET và POST self-synchronize đều đồng bộ PolicyDays từ HR authoritative; Entitled được suy ra để không âm khi quota giảm | `LeaveBalanceServiceTests`, `LeavePersistenceIntegrationTests`, `LeaveBalancesController`; test đã cập nhật nhưng chưa chạy trên HEAD hiện tại |
 | [x] | Tạo đơn hợp lệ | Ngày kết thúc không trước ngày bắt đầu; chỉ tính ngày làm việc; tạo trạng thái Pending | `RequestLeavePage`; Leave tests; demo API |
 | [x] | Đơn không hợp lệ | Đơn trùng ngày, ngày không hợp lệ, số dư thiếu và tổng ngày bằng 0 bị từ chối | Leave service tests |
 | [x] | Hủy đơn | Employee chỉ hủy đơn Pending của mình; số dư và lịch sử cập nhật cùng giao dịch | Leave persistence integration tests |
@@ -274,7 +279,7 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
 | [x] | Redis cache | Tối thiểu 2 nhóm dữ liệu có key/TTL/invalidation; cache miss đọc SQL | [Redis report](../performance/redis-performance.md) |
 | [x] | Redis outage | Catalog vẫn đọc được từ SQL; nghiệp vụ không dựa cache cũ | [Redis report](../performance/redis-performance.md) |
 | [x] | HR outage | Tác vụ cần HR trả lỗi dependency phù hợp và không lưu đơn dở dang | `HrServiceOutageTests`; [Redis report](../performance/redis-performance.md) |
-| [x] | Regression backend | HR 53/53 và Leave 25/25 pass; không skip khi có test dependencies | Lượt chạy HR mới nhất; TRX lưu sẵn trong `evidence/dotnet/` |
+| Lịch sử | Regression backend (03/11) | HR 53/53 và Leave 25/25 được ghi nhận ở lượt chạy khi đó | Lượt local mới hơn ngày 17/11 do người dùng cung cấp: HR 132/132 và Leave 118/118 pass, 0 failed/0 skipped. Output chưa kèm Git SHA và chưa lưu TRX tương ứng; cần lưu evidence gắn revision trước sign-off. |
 | [x] | Regression frontend | 31 UI tests pass và production build thành công | Vitest/build lượt mới nhất, báo cáo mục 1 |
 | [x] | Load test catalog Redis ON/OFF | 50 và 100 VU, 5 phút mỗi lượt; báo cáo RPS/p50/p95/error và cấu hình máy | [Redis performance report](../performance/redis-performance.md) |
 | [x] | Load test workforce — Redis ON | 50/100 VU, 5 phút, dataset 1.000 nhân viên/5.000 đơn | 50 VU 0 lỗi; lượt đầu 100 VU 21 HTTP 500; hai lần chạy lại 100 VU 0 lỗi; [summary](./evidence/workforce-load-summary.json) |
@@ -292,3 +297,49 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
 - Không chạy `docker compose down -v` trên stack chính để dọn dữ liệu demo.
 - Không đưa `.env`, mật khẩu, JWT secret, access token hoặc connection string
   chứa bí mật vào báo cáo, log hoặc Git.
+
+
+## 7. Cập nhật trạng thái source và bằng chứng — 17/11/2026
+
+### 7.1. Dynamic Authorization hiện tại
+
+Backend HR/Leave đã chuyển sang authorization theo permission/scope claim:
+- JWT chứa authz_v=1 và perm JSON; login/refresh tính lại quyền từ HR database.
+- HR sở hữu Role, Permission, UserRole assignment, Scope rules và audit log.
+- Scope đang được thực thi là Self, Team, All. Department chưa có filter nghiệp vụ.
+- Leave Team reads/decisions xác minh current reporting line từ HR; không dùng ApproverId snapshot làm quyền hiện tại.
+- UserRole assignment APIs đã có; Role/Permission catalog CRUD và UI quản trị chưa có.
+- React vẫn dùng legacy HR/Manager/Employee roles cho navigation/route guard. Điều này không thay thế permission enforcement ở backend.
+
+### 7.2. Automated test evidence cần hiểu đúng
+
+**Kết quả local mới nhất do người dùng cung cấp ngày 17/11/2026:**
+- Leave Service: 118/118 passed, 0 failed, 0 skipped.
+- HR Service: 132/132 passed, 0 failed, 0 skipped.
+- Cả hai solution build thành công trong lượt chạy được báo cáo.
+
+Các lệnh đã chạy là `dotnet test src\leave-service\LeaveService.slnx --no-restore` và `dotnet test src\hr-service\HrService.slnx --no-restore`. Output không có `git rev-parse HEAD`, do đó kết quả được ghi nhận là user-reported local run, chưa thể gắn chắc chắn với SHA của branch. Chưa có kết quả mới cho `npm test -- --run` và `npm run build` sau balance-sync.
+
+TRX đã commit tại `docs/testing/evidence/dotnet/` vẫn là evidence cũ hơn: HR total 58 / 57 executed / 57 passed / 1 skipped; Leave total 25 / 19 executed / 19 passed / 6 skipped. Không dùng các TRX này để phủ nhận lượt chạy 17/11, nhưng cũng không thay chúng bằng kết quả mới khi chưa có file TRX tương ứng.
+
+### 7.3. Workforce benchmark mới nhất
+
+Ba lượt paged-v2 mỗi mức VU ngày 16/11 ghi nhận:
+- 50 VU: trung bình 454,07 RPS; P95 trung bình 17,85 ms; HTTP error rate 0%.
+- 100 VU: trung bình 764,14 RPS; P95 trung bình 73,28 ms; HTTP error rate 0%.
+- Page size 50, duration 5 phút.
+- Các raw JSON chưa gắn Git SHA/image ID (giá trị not-provided); không xem đây là benchmark baseline bất biến cho revision cụ thể.
+
+Chi tiết: dynamic-authorization-benchmark-results.md. Muốn sign-off hiệu năng phải chạy lại với SHA/image ID cố định và metrics tài nguyên đồng bộ với workload.
+
+### 7.4. Các gap còn mở
+
+- Leave Balance GET và POST đều đồng bộ PolicyDays hiện hành từ HR trước khi trả balance. Entitled = max(PolicyDays, Used + Pending); quota giảm dưới lượng đã dùng/đang chờ không làm số dư âm. Policy version được chọn theo ngày tạo đơn và snapshot ở từng yearly allocation. Các thay đổi ngày 18/11 chưa được chạy test/build trên HEAD hiện tại. Chưa có API/worker bulk reconciliation cho tất cả nhân viên sau khi HR đổi policy.
+- Leave request date validation, balance default year và HR policy year đều dùng business timezone UTC+07; frontend `leaveService.ts` dùng `Asia/Ho_Chi_Minh`. Cần rà soát các màn hình frontend còn lại ở ranh giới ngày/năm.
+- Employee lookup cần thống nhất active-state behavior giữa lookup by ID/batch và Team listing.
+- Leave History có ghi nhưng chưa có GET endpoint.
+- Health endpoint chưa tách readiness/liveness và chưa kiểm tra database readiness.
+- HR HttpClient timeout 5 giây, chưa có circuit breaker/retry.
+- Annual demo policy không thống nhất: backend DemoDataSeeder đặt ANNUAL 12 ngày, frontend built-in fallback metadata khai báo 15 ngày.
+
+Thứ tự và tiêu chí hoàn thành được theo dõi ở planning/BACKLOG.md.

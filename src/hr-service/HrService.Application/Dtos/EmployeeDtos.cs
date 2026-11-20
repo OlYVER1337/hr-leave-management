@@ -13,6 +13,13 @@ public sealed record CreateEmployeeRequest(
     int DepartmentId,
     Guid? ManagerId);
 
+public sealed record EmployeeSummaryResponse(int Total, int Active, int Managers);
+
+public sealed record EmployeeOverviewResponse(
+    IReadOnlyList<EmployeeResponse> Items,
+    int TotalCount,
+    EmployeeSummaryResponse Summary);
+
 public sealed record EmployeeResponse(
     Guid Id,
     string Code,

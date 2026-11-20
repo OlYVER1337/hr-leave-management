@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text;
+using LeaveService.Api.Authorization;
 using LeaveService.Api.Middleware;
 using LeaveService.Application.Services;
 using LeaveService.Infrastructure;
@@ -25,6 +26,7 @@ builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks();
 builder.Services.AddScoped<LeaveRequestService>();
+builder.Services.AddScoped<LeaveBalanceService>();
 builder.Services.AddLeaveInfrastructure(builder.Configuration);
 
 builder.Services
@@ -44,7 +46,7 @@ builder.Services
             ClockSkew = TimeSpan.Zero
         };
     });
-builder.Services.AddAuthorization();
+builder.Services.AddLeavePermissionAuthorization();
 
 var app = builder.Build();
 
@@ -54,6 +56,7 @@ await using (var scope = app.Services.CreateAsyncScope())
     await dbContext.Database.MigrateAsync();
 }
 
+app.UseMiddleware<HrCallMetricsMiddleware>();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();

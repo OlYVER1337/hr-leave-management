@@ -30,7 +30,6 @@ function renderApp(path: string, role: 'HR' | 'Manager' | 'Employee') {
   return render(
     <MemoryRouter
       initialEntries={[path]}
-      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
     >
       <App />
     </MemoryRouter>,

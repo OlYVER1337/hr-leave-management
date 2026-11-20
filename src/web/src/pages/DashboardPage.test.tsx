@@ -9,7 +9,7 @@ import {
   getBalances,
   getLeaveRequests,
 } from '../services/leaveService';
-import { getDepartments, getEmployees } from '../services/hrService';
+import { getDepartments, getEmployeePage } from '../services/hrService';
 import { DashboardPage } from './DashboardPage';
 
 const mocks = vi.hoisted(() => ({
@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
   getBalances: vi.fn(),
   getLeaveRequests: vi.fn(),
   getDepartments: vi.fn(),
-  getEmployees: vi.fn(),
+  getEmployeePage: vi.fn(),
 }));
 
 vi.mock('../contexts', () => ({ useAuth: mocks.useAuth }));
@@ -31,7 +31,7 @@ vi.mock('../services/leaveService', () => ({
 }));
 vi.mock('../services/hrService', () => ({
   getDepartments: mocks.getDepartments,
-  getEmployees: mocks.getEmployees,
+  getEmployeePage: mocks.getEmployeePage,
 }));
 vi.mock('recharts', () => {
   const Wrapper = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
@@ -103,7 +103,7 @@ function request(overrides: Partial<LeaveRequest> = {}): LeaveRequest {
 
 function renderDashboard() {
   return render(
-    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <MemoryRouter>
       <DashboardPage />
     </MemoryRouter>,
   );
@@ -123,7 +123,7 @@ describe('DashboardPage', () => {
     vi.mocked(getBalances).mockResolvedValue([balance]);
     vi.mocked(getLeaveRequests).mockResolvedValue([]);
     vi.mocked(getDepartments).mockResolvedValue([]);
-    vi.mocked(getEmployees).mockResolvedValue([]);
+    vi.mocked(getEmployeePage).mockResolvedValue({ items: [], totalCount: 0 });
   });
 
   it('labels HR balance as the signed-in user’s balance', async () => {
@@ -159,6 +159,7 @@ describe('DashboardPage', () => {
     const { container } = renderDashboard();
 
     expect(await screen.findByText('Có 1 yêu cầu đang chờ bạn phê duyệt.')).toBeInTheDocument();
+    await screen.findByText('Tổng số đơn');
     const pendingCard = screen.getByText('Đơn chờ tôi phê duyệt').closest('.stat-card') as HTMLElement | null;
     expect(pendingCard).not.toBeNull();
     if (!pendingCard) throw new Error('Manager approval KPI card was not rendered.');

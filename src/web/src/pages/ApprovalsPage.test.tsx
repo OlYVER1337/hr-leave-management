@@ -6,8 +6,9 @@ import type { AuthUser, LeaveRequest } from '../types';
 import { useAuth } from '../contexts';
 import {
   decideLeaveRequest,
-  getApprovalsInbox,
-  getLeaveRequests,
+  getApprovalsInboxPage,
+  getLeaveRequestSummary,
+  getLeaveRequestsPage,
 } from '../services/leaveService';
 import { ApprovalsPage } from './ApprovalsPage';
 
@@ -15,16 +16,18 @@ const mocks = vi.hoisted(() => ({
   useAuth: vi.fn(),
   notify: vi.fn(),
   decideLeaveRequest: vi.fn(),
-  getApprovalsInbox: vi.fn(),
-  getLeaveRequests: vi.fn(),
+  getApprovalsInboxPage: vi.fn(),
+  getLeaveRequestSummary: vi.fn(),
+  getLeaveRequestsPage: vi.fn(),
 }));
 
 vi.mock('../contexts', () => ({ useAuth: mocks.useAuth }));
 vi.mock('../components/ToastProvider', () => ({ useToast: () => mocks.notify }));
 vi.mock('../services/leaveService', () => ({
   decideLeaveRequest: mocks.decideLeaveRequest,
-  getApprovalsInbox: mocks.getApprovalsInbox,
-  getLeaveRequests: mocks.getLeaveRequests,
+  getApprovalsInboxPage: mocks.getApprovalsInboxPage,
+  getLeaveRequestSummary: mocks.getLeaveRequestSummary,
+  getLeaveRequestsPage: mocks.getLeaveRequestsPage,
 }));
 
 const manager: AuthUser = {
@@ -74,15 +77,16 @@ describe('ApprovalsPage', () => {
       signIn: vi.fn(),
       signOut: vi.fn(),
     });
-    vi.mocked(getLeaveRequests).mockResolvedValue([pendingRequest]);
-    vi.mocked(getApprovalsInbox).mockResolvedValue([pendingRequest]);
+    vi.mocked(getLeaveRequestsPage).mockResolvedValue({ items: [pendingRequest], totalCount: 1 });
+    vi.mocked(getApprovalsInboxPage).mockResolvedValue({ items: [pendingRequest], totalCount: 1 });
+    vi.mocked(getLeaveRequestSummary).mockResolvedValue({ pending: 1, approved: 2, total: 3 });
     vi.mocked(decideLeaveRequest).mockResolvedValue(undefined);
   });
 
   it('approves a pending request and refreshes the inbox', async () => {
     const user = userEvent.setup();
     render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter>
         <ApprovalsPage />
       </MemoryRouter>,
     );
@@ -100,15 +104,39 @@ describe('ApprovalsPage', () => {
       );
     });
     expect(mocks.notify).toHaveBeenCalledWith('Đã phê duyệt đơn nghỉ.');
-    expect(getApprovalsInbox).toHaveBeenCalledTimes(2);
+    expect(getApprovalsInboxPage).toHaveBeenCalledWith(manager, expect.objectContaining({ page: 1, pageSize: 20 }));
+    expect(getApprovalsInboxPage).toHaveBeenCalled();
+    // One initial summary load and one refresh after the decision.
+    expect(getLeaveRequestSummary).toHaveBeenCalledTimes(2);
+    expect(getLeaveRequestsPage).not.toHaveBeenCalledWith(
+      manager,
+      expect.objectContaining({ pageSize: 1 }),
+    );
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('hides read metrics when the caller only has decision permission', async () => {
+    vi.mocked(getLeaveRequestSummary).mockResolvedValue({
+      pending: 2,
+      approved: null,
+      total: null,
+    });
+
+    render(
+      <MemoryRouter>
+        <ApprovalsPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findAllByText('—')).toHaveLength(2);
+    expect(screen.getByText('Chờ bạn xem xét')).toBeInTheDocument();
   });
 
   it('shows an error notification when the decision fails', async () => {
     const user = userEvent.setup();
     vi.mocked(decideLeaveRequest).mockRejectedValue(new Error('Đơn đã được xử lý.'));
     render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter>
         <ApprovalsPage />
       </MemoryRouter>,
     );
@@ -125,10 +153,19 @@ describe('ApprovalsPage', () => {
   it('paginates approval requests and resets to the first page when searching', async () => {
     const user = userEvent.setup();
     const requests = Array.from({ length: 25 }, (_, index) => makePendingRequest(index + 1));
-    vi.mocked(getLeaveRequests).mockResolvedValue(requests);
-    vi.mocked(getApprovalsInbox).mockResolvedValue(requests);
+    const pageResult = async (_user: AuthUser, query: { page: number; pageSize: number; search?: string; status?: string }) => {
+      const filtered = requests.filter((item) =>
+        (!query.search || item.id.toLowerCase().includes(query.search.toLowerCase()) || item.reason.toLowerCase().includes(query.search.toLowerCase())) &&
+        (!query.status || item.status === query.status));
+      return {
+        items: filtered.slice((query.page - 1) * query.pageSize, query.page * query.pageSize),
+        totalCount: filtered.length,
+      };
+    };
+    vi.mocked(getLeaveRequestsPage).mockImplementation(pageResult);
+    vi.mocked(getApprovalsInboxPage).mockImplementation(pageResult);
     render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter>
         <ApprovalsPage />
       </MemoryRouter>,
     );
@@ -139,9 +176,9 @@ describe('ApprovalsPage', () => {
     expect(screen.getByText('Nhân viên 11')).toBeInTheDocument();
     expect(screen.getByText('Trang 2 / 3')).toBeInTheDocument();
 
-    await user.type(screen.getByRole('textbox', { name: 'Tìm đơn cần duyệt' }), 'Nhân viên 20');
-    expect(screen.getByText('Trang 1 / 1')).toBeInTheDocument();
-    expect(screen.getByText('Nhân viên 20')).toBeInTheDocument();
+    await user.type(screen.getByRole('textbox', { name: 'Tìm đơn cần duyệt' }), 'Lý do nghỉ 20');
+    expect(await screen.findByText('Trang 1 / 1')).toBeInTheDocument();
+    expect(await screen.findByText('Nhân viên 20')).toBeInTheDocument();
     expect(screen.queryByText('Nhân viên 11')).not.toBeInTheDocument();
   });
 
@@ -149,21 +186,28 @@ describe('ApprovalsPage', () => {
     const user = userEvent.setup();
     const initialRequests = Array.from({ length: 21 }, (_, index) => makePendingRequest(index + 1));
     const remainingRequests = initialRequests.slice(0, 20);
-    vi.mocked(getLeaveRequests)
-      .mockResolvedValueOnce(initialRequests)
-      .mockResolvedValueOnce(remainingRequests);
-    vi.mocked(getApprovalsInbox)
-      .mockResolvedValueOnce(initialRequests)
-      .mockResolvedValueOnce(remainingRequests);
+    let currentRequests = initialRequests;
+    const pageResult = async (_user: AuthUser, query: { page: number; pageSize: number; search?: string; status?: string }) => {
+      const filtered = currentRequests.filter((item) =>
+        (!query.search || item.id.toLowerCase().includes(query.search.toLowerCase()) || item.reason.toLowerCase().includes(query.search.toLowerCase())) &&
+        (!query.status || item.status === query.status));
+      return {
+        items: filtered.slice((query.page - 1) * query.pageSize, query.page * query.pageSize),
+        totalCount: filtered.length,
+      };
+    };
+    vi.mocked(getLeaveRequestsPage).mockImplementation(pageResult);
+    vi.mocked(getApprovalsInboxPage).mockImplementation(pageResult);
+    vi.mocked(decideLeaveRequest).mockImplementation(async () => { currentRequests = remainingRequests; });
     render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter>
         <ApprovalsPage />
       </MemoryRouter>,
     );
 
     await screen.findByText('Nhân viên 01');
-    await user.click(screen.getByRole('button', { name: 'Trang sau' }));
-    await user.click(screen.getByRole('button', { name: 'Trang sau' }));
+    await user.click(screen.getByRole('button', { name: 'Trang 3' }));
+    expect(await screen.findByText('Nhân viên 21')).toBeInTheDocument();
     expect(screen.getByText('Trang 3 / 3')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Xem xét đơn/ }));
     await user.click(screen.getByRole('button', { name: 'Phê duyệt đơn' }));

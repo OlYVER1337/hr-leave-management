@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
 import { CheckCircle2, Info, X, XCircle } from 'lucide-react';
 
 type ToastKind = 'success' | 'error' | 'info';
@@ -9,10 +9,22 @@ export function useToast() { return useContext(ToastContext); }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([]);
+  const recentMessages = useRef(new Map<string, number>());
   const notify = useCallback((message: string, kind: ToastKind = 'success') => {
-    const id = Date.now() + Math.random();
+    const key = `${kind}:${message}`;
+    const now = Date.now();
+    const previous = recentMessages.current.get(key);
+    if (previous !== undefined && now - previous < 3600) return;
+
+    recentMessages.current.set(key, now);
+    const id = now + Math.random();
     setItems((current) => [...current, { id, message, kind }]);
-    window.setTimeout(() => setItems((current) => current.filter((item) => item.id !== id)), 3600);
+    window.setTimeout(() => {
+      setItems((current) => current.filter((item) => item.id !== id));
+      if (recentMessages.current.get(key) === now) {
+        recentMessages.current.delete(key);
+      }
+    }, 3600);
   }, []);
   return (
     <ToastContext.Provider value={notify}>

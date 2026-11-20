@@ -200,7 +200,7 @@
     }
   },
   "setup_data": {
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxZmEyY2U5Zi0zZTg2LTQyZDctOTk3Yi1jYTJlODEzODkyZWEiLCJuYW1lIjoiTmd1eWVuIE5oYXQgTWluaCIsImVtYWlsIjoibWluaDEyMzQ1NjQ1NjdAZ21haWwuY29tIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiSFIiLCJqdGkiOiI0MmFhNmM1ZC1mZTE4LTQwNGUtOTUzMS1mZDJkZTJlZmI1MzEiLCJuYmYiOjE3OTM2MTQzNDAsImV4cCI6MTc5MzYxNjE0MCwiaXNzIjoiaHItbGVhdmUiLCJhdWQiOiJoci1sZWF2ZS1jbGllbnRzIn0.T1HmoA2NpdlJj1a_cOMRkvxqWQcy9xeKt9_VPm9fDJU"
+    "token": "[REDACTED-JWT]"
   },
   "root_group": {
     "id": "d41d8cd98f00b204e9800998ecf8427e",

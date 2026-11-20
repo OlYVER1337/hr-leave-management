@@ -42,6 +42,20 @@ public sealed class LeaveReassignmentTests : IClassFixture<LeaveSqlIntegrationFi
         var hr = new Mock<ILeaveHrClient>();
         hr.Setup(h => h.GetEmployeeAsync(employee, Auth, It.IsAny<CancellationToken>()))
           .ReturnsAsync(new HrEmployeeSnapshot(employee, "E", "Employee", "Employee", true, 3, currentManager));
+        hr.Setup(h => h.GetLeavePoliciesAsync(2030, It.IsAny<DateOnly>(), Auth, It.IsAny<CancellationToken>()))
+          .ReturnsAsync((IReadOnlyList<HrLeavePolicy>)
+          [
+              new HrLeavePolicy(
+                  2030,
+                  2,
+                  "SICK",
+                  "Nghỉ ốm",
+                  2030,
+                  20m,
+                  new DateOnly(2030, 1, 1),
+                  new DateTime(2026, 11, 1, 0, 0, 0, DateTimeKind.Utc),
+                  "Reassignment test policy")
+          ]);
         return hr;
     }
 
@@ -49,8 +63,14 @@ public sealed class LeaveReassignmentTests : IClassFixture<LeaveSqlIntegrationFi
     {
         await using var context = _fixture.CreateContext();
         var service = new LeaveRequestService(new LeaveRequestRepository(context), hr.Object, TimeProvider.System);
-        return await service.DecideAsync(actor, Auth, requestId, approve, false, null);
+        return await service.DecideAsync(actor, Auth, requestId, approve, ManagerAccess(), null);
     }
+
+    private static LeaveAccess ManagerAccess() =>
+        new([
+            new LeavePermissionGrant("leaves.read", ["Self", "Team"]),
+            new LeavePermissionGrant("leaves.decide", ["Team"])
+        ]);
 
     private async Task<LeaveRequest> StoredAsync(Guid requestId)
     {
@@ -58,6 +78,7 @@ public sealed class LeaveReassignmentTests : IClassFixture<LeaveSqlIntegrationFi
         return await context.LeaveRequests.AsNoTracking().SingleAsync(r => r.Id == requestId);
     }
 
+    // Sau khi nhân viên chuyển team, Manager mới được quyền quyết định; ApproverId snapshot cập nhật khi quyết định thành công.
     [LeaveSqlFact]
     public async Task NewManager_CanDecideOldRequest_AndApproverIdIsUpdatedOnSuccess()
     {
@@ -73,6 +94,7 @@ public sealed class LeaveReassignmentTests : IClassFixture<LeaveSqlIntegrationFi
         Assert.Equal(newManager, stored.ApproverId);
     }
 
+    // Manager cũ không còn thuộc reporting line phải bị từ chối và không sửa ApproverId.
     [LeaveSqlFact]
     public async Task OldManager_IsForbidden_AndApproverIdIsUnchanged()
     {
@@ -89,6 +111,7 @@ public sealed class LeaveReassignmentTests : IClassFixture<LeaveSqlIntegrationFi
         Assert.Equal(oldManager, stored.ApproverId);
     }
 
+    // Quyết định thất bại không được thay đổi người duyệt lưu trên đơn.
     [LeaveSqlFact]
     public async Task FailedDecision_DoesNotChangeApproverId()
     {

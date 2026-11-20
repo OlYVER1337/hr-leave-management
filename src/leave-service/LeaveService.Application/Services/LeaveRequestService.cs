@@ -12,6 +12,7 @@ public sealed class LeaveRequestService(
 {
     private const int MaximumReasonLength = 1000;
     private const int MaximumRangeDays = 366;
+    private const int MaximumCalendarRangeDays = 62;
 
     public async Task<LeaveRequestResponse> CreateAsync(
         Guid employeeId,
@@ -19,7 +20,9 @@ public sealed class LeaveRequestService(
         CreateLeaveRequest request,
         CancellationToken cancellationToken = default)
     {
-        ValidateRequest(request, DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime));
+        var createdAt = timeProvider.GetUtcNow();
+        var createdAtBusinessDate = DateOnly.FromDateTime(createdAt.ToOffset(BusinessOffset).DateTime);
+        ValidateRequest(request, createdAtBusinessDate);
         var employee = await hrClient.GetEmployeeAsync(
             employeeId,
             authorization,
@@ -54,20 +57,25 @@ public sealed class LeaveRequestService(
         {
             foreach (var (year, days) in daysByYear.Where(_ => leaveType.DeductsBalance))
             {
+                var firstPolicyDate = new DateOnly(year, 1, 1);
+                var policyAsOfDate = createdAtBusinessDate > firstPolicyDate
+                    ? createdAtBusinessDate
+                    : firstPolicyDate;
                 var policies = await hrClient.GetLeavePoliciesAsync(
                     year,
+                    policyAsOfDate,
                     authorization,
                     cancellationToken);
                 var policy = policies.FirstOrDefault(item => item.LeaveTypeId == leaveType.Id)
                     ?? throw Invalid(
                         "leaveTypeId",
-                        $"No leave policy is configured for leave type '{leaveType.Id}' in {year}.");
-                allocations.Add(new AnnualLeaveAllocation(year, days, policy.DaysPerYear));
+                        $"No leave policy version is effective for leave type '{leaveType.Id}' in {year} on {policyAsOfDate}.");
+                allocations.Add(new AnnualLeaveAllocation(year, days, policy.DaysPerYear, policy.Id));
             }
         }
 
         var totalDays = daysByYear.Values.Sum();
-        var createdAtUtc = timeProvider.GetUtcNow().UtcDateTime;
+        var createdAtUtc = createdAt.UtcDateTime;
         var entity = new LeaveRequest
         {
             EmployeeId = employee.Id,
@@ -106,53 +114,236 @@ public sealed class LeaveRequestService(
         return requests.Select(item => ToResponse(item.Request, item.Balances)).ToArray();
     }
 
-    public async Task<LeaveRequestResponse> GetByIdAsync(
+    public async Task<PagedLeaveRequestResponse> GetMinePagedAsync(
         Guid employeeId,
-        Guid requestId,
+        int page,
+        int pageSize,
+        string? search,
+        string? status,
+        int? leaveTypeId,
         CancellationToken cancellationToken = default)
     {
-        var result = await repository.GetByIdAsync(employeeId, requestId, cancellationToken)
-            ?? throw new LeaveNotFoundException($"Leave request with id '{requestId}' was not found.");
-        return ToResponse(result.Request, result.Balances);
+        if (leaveTypeId is <= 0)
+            throw Invalid("leaveTypeId", "Leave type ID must be a positive integer.");
+
+        var (rows, totalCount) = await repository.ListByEmployeePageAsync(
+            employeeId,
+            ParseStatusFilter(status),
+            leaveTypeId,
+            search,
+            Math.Max(1, page),
+            Math.Clamp(pageSize, 1, 100),
+            cancellationToken);
+
+        return new PagedLeaveRequestResponse(
+            rows.Select(item => ToResponse(item.Request, item.Balances)).ToArray(),
+            totalCount);
+    }
+
+    public async Task<LeaveRequestResponse> GetVisibleByIdAsync(
+        Guid employeeId,
+        string authorization,
+        Guid requestId,
+        LeaveAccess access,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(access);
+        if (!access.CanRead)
+        {
+            throw new LeaveForbiddenException("The caller does not have leaves.read permission.");
+        }
+
+        var teamEmployeeIds = access.CanReadTeam && !access.CanReadAll
+            ? await hrClient.GetTeamEmployeeIdsAsync(employeeId, authorization, cancellationToken)
+            : Array.Empty<Guid>();
+
+        var result = await repository.GetVisibleByIdAsync(
+            employeeId,
+            requestId,
+            access,
+            teamEmployeeIds,
+            cancellationToken);
+
+        if (!result.HasValue)
+        {
+            // Do not reveal whether a request outside the caller's scope exists.
+            throw new LeaveNotFoundException($"Leave request with id '{requestId}' was not found.");
+        }
+
+        return ToResponse(result.Value.Request, result.Value.Balances);
     }
 
     public async Task<IReadOnlyList<LeaveRequestResponse>> GetPendingAsync(
         Guid actorId,
         string authorization,
-        bool isHr,
+        LeaveAccess access,
         CancellationToken cancellationToken = default)
     {
-        if (isHr)
+        ArgumentNullException.ThrowIfNull(access);
+        if (access.CanDecideAll)
         {
-            var all = await repository.ListPendingAsync(null, cancellationToken);
+            var all = await repository.ListPendingAsync(cancellationToken);
             return all.Select(item => ToResponse(item.Request, item.Balances)).ToArray();
         }
 
-        // The manager's queue is derived from the *current* reporting lines in HR, not from the
-        // approver snapshot stored on each request, so it stays correct after a reassignment.
-        var team = await hrClient.GetTeamAsync(actorId, authorization, cancellationToken);
+        if (!access.CanDecideTeam)
+        {
+            throw new LeaveForbiddenException("The caller does not have leaves.decide permission.");
+        }
+
+        // Team membership is resolved from HR at request time. ApproverId is only a snapshot
+        // and may be stale after an employee is reassigned.
+        var teamEmployeeIds = await hrClient.GetTeamEmployeeIdsAsync(
+            actorId,
+            authorization,
+            cancellationToken);
         var requests = await repository.ListPendingByEmployeesAsync(
-            team.Select(member => member.Id).ToArray(),
+            teamEmployeeIds,
             cancellationToken);
         return requests.Select(item => ToResponse(item.Request, item.Balances)).ToArray();
     }
 
+    public async Task<PagedLeaveRequestResponse> GetVisiblePagedAsync(
+        Guid employeeId,
+        string authorization,
+        LeaveAccess access,
+        int page,
+        int pageSize,
+        string? search,
+        string? status,
+        int? leaveTypeId,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(access);
+        if (!access.CanRead)
+            throw new LeaveForbiddenException("The caller does not have leaves.read permission.");
+        if (leaveTypeId is <= 0)
+            throw Invalid("leaveTypeId", "Leave type ID must be a positive integer.");
+
+        var teamEmployeeIds = access.CanReadTeam && !access.CanReadAll
+            ? await hrClient.GetTeamEmployeeIdsAsync(employeeId, authorization, cancellationToken)
+            : Array.Empty<Guid>();
+
+        var (rows, totalCount) = await repository.ListVisiblePageAsync(
+            employeeId,
+            access,
+            teamEmployeeIds,
+            calendarOnly: false,
+            from: null,
+            to: null,
+            ParseStatusFilter(status),
+            leaveTypeId,
+            search,
+            Math.Max(1, page),
+            Math.Clamp(pageSize, 1, 100),
+            cancellationToken);
+
+        return new PagedLeaveRequestResponse(
+            rows.Select(item => ToResponse(item.Request, item.Balances)).ToArray(),
+            totalCount);
+    }
+
+    public async Task<PagedLeaveRequestResponse> GetPendingPagedAsync(
+        Guid actorId,
+        string authorization,
+        LeaveAccess access,
+        int page,
+        int pageSize,
+        string? search,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(access);
+        if (!access.CanDecide)
+            throw new LeaveForbiddenException("The caller does not have leaves.decide permission.");
+
+        var includeAll = access.CanDecideAll;
+        var teamEmployeeIds = includeAll
+            ? Array.Empty<Guid>()
+            : await hrClient.GetTeamEmployeeIdsAsync(actorId, authorization, cancellationToken);
+
+        var (rows, totalCount) = await repository.ListPendingPageAsync(
+            teamEmployeeIds,
+            includeAll,
+            search,
+            Math.Max(1, page),
+            Math.Clamp(pageSize, 1, 100),
+            cancellationToken);
+
+        return new PagedLeaveRequestResponse(
+            rows.Select(item => ToResponse(item.Request, item.Balances)).ToArray(),
+            totalCount);
+    }
+
+    public async Task<LeaveRequestSummaryResponse> GetSummaryAsync(
+        Guid employeeId,
+        string authorization,
+        LeaveAccess access,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(access);
+        if (!access.CanDecide)
+            throw new LeaveForbiddenException("The caller does not have leaves.decide permission.");
+
+        // Read and decision scopes can differ. Read-only counters are hidden when
+        // the caller has no leaves.read grant; the approval inbox still works.
+        var needsTeam = (access.CanReadTeam && !access.CanReadAll) ||
+                        (access.CanDecideTeam && !access.CanDecideAll);
+        var teamEmployeeIds = needsTeam
+            ? await hrClient.GetTeamEmployeeIdsAsync(employeeId, authorization, cancellationToken)
+            : Array.Empty<Guid>();
+
+        var counts = await repository.GetSummaryAsync(
+            employeeId,
+            access,
+            teamEmployeeIds,
+            cancellationToken);
+
+        return new LeaveRequestSummaryResponse(
+            counts.Pending,
+            access.CanRead ? counts.Approved : null,
+            access.CanRead ? counts.Total : null);
+    }
+
     public async Task<IReadOnlyList<LeaveRequestResponse>> GetVisibleAsync(
         Guid employeeId,
-        bool isHr,
+        string authorization,
+        LeaveAccess access,
         bool calendarOnly,
         DateOnly? from,
         DateOnly? to,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(access);
+        if (!access.CanRead)
+        {
+            throw new LeaveForbiddenException("The caller does not have leaves.read permission.");
+        }
+
+        if (calendarOnly && (!from.HasValue || !to.HasValue))
+        {
+            throw Invalid("from", "Calendar queries require both from and to dates.");
+        }
+
         if (from.HasValue && to.HasValue && from.Value > to.Value)
         {
             throw Invalid("from", "The start date must not be later than the end date.");
         }
 
+        if (calendarOnly &&
+            to!.Value.DayNumber - from!.Value.DayNumber + 1 > MaximumCalendarRangeDays)
+        {
+            throw Invalid("to", $"Calendar queries cannot exceed {MaximumCalendarRangeDays} days.");
+        }
+
+        // Team scope is resolved from HR at request time (current manager), not from ApproverId.
+        var teamEmployeeIds = access.CanReadTeam && !access.CanReadAll
+            ? await hrClient.GetTeamEmployeeIdsAsync(employeeId, authorization, cancellationToken)
+            : Array.Empty<Guid>();
+
         var requests = await repository.ListVisibleAsync(
             employeeId,
-            isHr,
+            access,
+            teamEmployeeIds,
             calendarOnly,
             from,
             to,
@@ -160,35 +351,21 @@ public sealed class LeaveRequestService(
         return requests.Select(item => ToResponse(item.Request, item.Balances)).ToArray();
     }
 
-    public async Task<IReadOnlyList<LeaveBalanceResponse>> GetBalancesAsync(
-        Guid employeeId,
-        int year,
-        CancellationToken cancellationToken = default)
-    {
-        if (year is < 1900 or > 9998)
-        {
-            throw Invalid("year", "Year must be between 1900 and 9998.");
-        }
-
-        var balances = await repository.ListBalancesAsync(employeeId, year, cancellationToken);
-        return balances.Select(balance => new LeaveBalanceResponse(
-            balance.LeaveTypeId,
-            balance.Year,
-            balance.Entitled,
-            balance.Used,
-            balance.Pending,
-            balance.Entitled - balance.Used - balance.Pending)).ToArray();
-    }
-
     public async Task<LeaveRequestResponse> DecideAsync(
         Guid actorId,
         string authorization,
         Guid requestId,
         bool approve,
-        bool isHr,
+        LeaveAccess access,
         string? note,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(access);
+        if (!access.CanDecide)
+        {
+            throw new LeaveForbiddenException("The caller does not have leaves.decide permission.");
+        }
+
         var request = await repository.GetForDecisionAsync(requestId, cancellationToken)
             ?? throw new LeaveNotFoundException($"Leave request with id '{requestId}' was not found.");
         EnsurePending(request);
@@ -198,46 +375,123 @@ public sealed class LeaveRequestService(
         }
 
         Guid? verifiedApproverId = null;
-        if (!isHr)
+        if (!access.CanDecideAll)
         {
-            // HR is the source of truth for reporting lines. It also answers 403 when the caller
-            // may not look this employee up, which we surface as Forbidden.
+            // Team decisions always re-check the employee's current manager in HR.
+            // Do not trust the approver snapshot stored on the leave request.
             var employee = await hrClient.GetEmployeeAsync(request.EmployeeId, authorization, cancellationToken);
-            if (employee.ManagerId != actorId)
+            if (!employee.IsActive || employee.ManagerId != actorId)
             {
-                throw new LeaveForbiddenException("Only the assigned manager or HR can decide this request.");
+                throw new LeaveForbiddenException(
+                    "Only the current active manager can decide a Team request.");
             }
 
             verifiedApproverId = employee.ManagerId;
         }
 
         ValidateNote(note);
+        IReadOnlyList<LeaveBalanceEntitlement>? currentPolicyDays = request.YearAllocations.Count == 0
+            ? null
+            : await GetCurrentPolicyDaysAsync(request, authorization, cancellationToken);
+
         var result = await repository.TransitionAsync(
             requestId,
             actorId,
-            isHr,
+            access,
             approve ? LeaveRequestStatus.Approved : LeaveRequestStatus.Rejected,
             NormalizeNote(note),
             timeProvider.GetUtcNow().UtcDateTime,
             verifiedApproverId,
-            cancellationToken);
+            cancellationToken,
+            currentPolicyDays);
         return ToResponse(result.Request, result.Balances);
     }
 
+    public Task<int> GetPolicyVersionReferenceCountAsync(
+        int policyVersionId,
+        CancellationToken cancellationToken = default) =>
+        repository.CountPolicyVersionReferencesAsync(policyVersionId, cancellationToken);
+
     public async Task<LeaveRequestResponse> CancelAsync(
         Guid employeeId,
+        string authorization,
         Guid requestId,
         string? note,
         CancellationToken cancellationToken = default)
     {
         ValidateNote(note);
+        var request = await repository.GetForDecisionAsync(requestId, cancellationToken);
+        if (request is null || request.EmployeeId != employeeId)
+        {
+            throw new LeaveNotFoundException($"Leave request with id '{requestId}' was not found.");
+        }
+
+        if (request.Status != LeaveRequestStatus.Pending)
+        {
+            throw new LeaveConflictException("Only pending leave requests can be cancelled.");
+        }
+
+        var currentPolicyDays = request.YearAllocations.Count == 0
+            ? null
+            : await GetCurrentPolicyDaysAsync(request, authorization, cancellationToken);
+
         var result = await repository.CancelAsync(
             employeeId,
             requestId,
             NormalizeNote(note),
             timeProvider.GetUtcNow().UtcDateTime,
-            cancellationToken);
+            cancellationToken,
+            currentPolicyDays);
         return ToResponse(result.Request, result.Balances);
+    }
+
+    private async Task<IReadOnlyList<LeaveBalanceEntitlement>> GetCurrentPolicyDaysAsync(
+        LeaveRequest request,
+        string authorization,
+        CancellationToken cancellationToken)
+    {
+        var effectiveOn = BusinessToday();
+        var result = new List<LeaveBalanceEntitlement>(request.YearAllocations.Count);
+        foreach (var allocation in request.YearAllocations.OrderBy(item => item.Year))
+        {
+            var firstPolicyDate = new DateOnly(allocation.Year, 1, 1);
+            var policyAsOfDate = effectiveOn > firstPolicyDate ? effectiveOn : firstPolicyDate;
+            var policies = await hrClient.GetLeavePoliciesAsync(
+                allocation.Year,
+                policyAsOfDate,
+                authorization,
+                cancellationToken);
+            var policy = policies.FirstOrDefault(item => item.LeaveTypeId == request.LeaveTypeId)
+                ?? throw new LeaveConflictException(
+                    $"HR has no effective leave policy for type '{request.LeaveTypeId}' in {allocation.Year} on {policyAsOfDate}.");
+
+            if (policy.DaysPerYear is < 0m or > 366m ||
+                decimal.Round(policy.DaysPerYear, 1) != policy.DaysPerYear)
+            {
+                throw new LeaveConflictException("HR returned an invalid leave-policy entitlement.");
+            }
+
+            result.Add(new LeaveBalanceEntitlement(
+                request.LeaveTypeId,
+                policy.DaysPerYear,
+                allocation.Year));
+        }
+
+        return result;
+    }
+
+    private static LeaveRequestStatus? ParseStatusFilter(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+            return null;
+
+        if (!Enum.TryParse<LeaveRequestStatus>(status, ignoreCase: true, out var parsed) ||
+            !Enum.IsDefined(parsed))
+        {
+            throw Invalid("status", "Status must be Pending, Approved, Rejected, or Cancelled.");
+        }
+
+        return parsed;
     }
 
     private static void EnsurePending(LeaveRequest request)
@@ -285,6 +539,13 @@ public sealed class LeaveRequestService(
 
         return result;
     }
+
+    // Múi giờ nghiệp vụ (Việt Nam, UTC+7). Dùng offset cố định để không phụ thuộc
+    // TimeZoneInfo khác nhau giữa Windows và Linux container.
+    public static readonly TimeSpan BusinessOffset = TimeSpan.FromHours(7);
+
+    private DateOnly BusinessToday() =>
+        DateOnly.FromDateTime(timeProvider.GetUtcNow().ToOffset(BusinessOffset).DateTime);
 
     private void ValidateRequest(CreateLeaveRequest request, DateOnly today)
     {
@@ -345,5 +606,8 @@ public sealed class LeaveRequestService(
                 balance.Entitled,
                 balance.Used,
                 balance.Pending,
-                balance.Entitled - balance.Used - balance.Pending)).ToArray());
+                balance.Entitled - balance.Used - balance.Pending,
+                balance.PolicyDays)).ToArray());
 }
+
+public sealed record PagedLeaveRequestResponse(IReadOnlyList<LeaveRequestResponse> Items, int TotalCount);

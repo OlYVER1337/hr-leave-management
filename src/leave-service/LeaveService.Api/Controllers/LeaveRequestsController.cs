@@ -1,4 +1,6 @@
+using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
+using LeaveService.Api.Authorization;
 using LeaveService.Application.Dtos;
 using LeaveService.Application.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -12,26 +14,50 @@ namespace LeaveService.Api.Controllers;
 public sealed class LeaveRequestsController(LeaveRequestService leaveRequestService) : ControllerBase
 {
     [HttpGet]
+    [Authorize(Policy = LeavePermissionPolicies.LeavesRead)]
     public async Task<ActionResult<IReadOnlyList<LeaveRequestResponse>>> GetVisible(
-        CancellationToken cancellationToken)
+        [FromQuery, Range(1, int.MaxValue)] int? page,
+        [FromQuery, Range(1, 100)] int? pageSize,
+        [FromQuery] string? search = null,
+        [FromQuery] string? status = null,
+        [FromQuery] int? leaveTypeId = null,
+        CancellationToken cancellationToken = default)
     {
+        if (!IsValidPagination(page, pageSize))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Invalid pagination",
+                Detail = "Both page and pageSize are required. page must be at least 1 and pageSize must be between 1 and 100."
+            });
+        }
+
         var employeeId = GetCurrentEmployeeId();
         if (!employeeId.HasValue)
         {
             return Unauthorized();
         }
 
-        var requests = await leaveRequestService.GetVisibleAsync(
+        var authorization = Request.Headers["Authorization"].ToString();
+        var access = LeaveAccess.FromClaims(User);
+
+        var paged = await leaveRequestService.GetVisiblePagedAsync(
             employeeId.Value,
-            User.IsInRole("HR"),
-            calendarOnly: false,
-            from: null,
-            to: null,
+            authorization,
+            access,
+            page!.Value,
+            pageSize!.Value,
+            search,
+            status,
+            leaveTypeId,
             cancellationToken);
-        return Ok(requests);
+        Response.Headers["X-Total-Count"] = paged.TotalCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return Ok(paged.Items);
     }
 
     [HttpGet("calendar")]
+    [Authorize(Policy = LeavePermissionPolicies.LeavesRead)]
     public async Task<ActionResult<IReadOnlyList<LeaveRequestResponse>>> GetCalendar(
         [FromQuery] DateOnly? from,
         [FromQuery] DateOnly? to,
@@ -45,7 +71,8 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
 
         var requests = await leaveRequestService.GetVisibleAsync(
             employeeId.Value,
-            User.IsInRole("HR"),
+            Request.Headers.Authorization.ToString(),
+            LeaveAccess.FromClaims(User),
             calendarOnly: true,
             from,
             to,
@@ -54,38 +81,61 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
     }
 
     [HttpGet("{id:guid}")]
+    [Authorize(Policy = LeavePermissionPolicies.LeavesRead)]
     public async Task<ActionResult<LeaveRequestResponse>> GetById(
         Guid id,
         CancellationToken cancellationToken)
     {
         var employeeId = GetCurrentEmployeeId();
-        if (!employeeId.HasValue)
+        var authorization = Request.Headers.Authorization.ToString();
+        if (!employeeId.HasValue || string.IsNullOrWhiteSpace(authorization))
         {
             return Unauthorized();
         }
 
-        var request = await leaveRequestService.GetByIdAsync(
+        var request = await leaveRequestService.GetVisibleByIdAsync(
             employeeId.Value,
+            authorization,
             id,
+            LeaveAccess.FromClaims(User),
             cancellationToken);
         return Ok(request);
     }
 
     [HttpGet("mine")]
+    [Authorize(Policy = LeavePermissionPolicies.LeavesReadSelfOrAll)]
     public async Task<ActionResult<IReadOnlyList<LeaveRequestResponse>>> GetMine(
-        CancellationToken cancellationToken)
+        [FromQuery, Range(1, int.MaxValue)] int? page,
+        [FromQuery, Range(1, 100)] int? pageSize,
+        [FromQuery] string? search = null,
+        [FromQuery] string? status = null,
+        [FromQuery] int? leaveTypeId = null,
+        CancellationToken cancellationToken = default)
     {
+        if (!IsValidPagination(page, pageSize))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Invalid pagination",
+                Detail = "Both page and pageSize are required. page must be at least 1 and pageSize must be between 1 and 100."
+            });
+        }
+
         var employeeId = GetCurrentEmployeeId();
         if (!employeeId.HasValue)
         {
             return Unauthorized();
         }
 
-        var requests = await leaveRequestService.GetMineAsync(employeeId.Value, cancellationToken);
-        return Ok(requests);
+        var paged = await leaveRequestService.GetMinePagedAsync(
+            employeeId.Value, page!.Value, pageSize!.Value, search, status, leaveTypeId, cancellationToken);
+        Response.Headers["X-Total-Count"] = paged.TotalCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return Ok(paged.Items);
     }
 
     [HttpPost]
+    [Authorize(Policy = LeavePermissionPolicies.LeavesCreate)]
     public async Task<ActionResult<LeaveRequestResponse>> Create(
         [FromBody] CreateLeaveRequest request,
         CancellationToken cancellationToken)
@@ -105,11 +155,24 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
-    [Authorize(Roles = "Manager,HR")]
+    [Authorize(Policy = LeavePermissionPolicies.LeavesDecide)]
     [HttpGet("pending-approval")]
     public async Task<ActionResult<IReadOnlyList<LeaveRequestResponse>>> GetPendingApproval(
-        CancellationToken cancellationToken)
+        [FromQuery, Range(1, int.MaxValue)] int? page,
+        [FromQuery, Range(1, 100)] int? pageSize,
+        [FromQuery] string? search = null,
+        CancellationToken cancellationToken = default)
     {
+        if (!IsValidPagination(page, pageSize))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Invalid pagination",
+                Detail = "Both page and pageSize are required. page must be at least 1 and pageSize must be between 1 and 100."
+            });
+        }
+
         var actorId = GetCurrentEmployeeId();
         var authorization = Request.Headers.Authorization.ToString();
         if (!actorId.HasValue || string.IsNullOrWhiteSpace(authorization))
@@ -117,44 +180,80 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
             return Unauthorized();
         }
 
-        var requests = await leaveRequestService.GetPendingAsync(
+        var paged = await leaveRequestService.GetPendingPagedAsync(
             actorId.Value,
             authorization,
-            User.IsInRole("HR"),
+            LeaveAccess.FromClaims(User),
+            page!.Value,
+            pageSize!.Value,
+            search,
             cancellationToken);
-        return Ok(requests);
+        Response.Headers["X-Total-Count"] = paged.TotalCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return Ok(paged.Items);
     }
 
-    [Authorize(Roles = "Manager,HR")]
-    [HttpPost("{id:guid}/approve")]
-    public Task<ActionResult<LeaveRequestResponse>> Approve(
-        Guid id,
-        [FromBody] LeaveDecisionRequest request,
-        CancellationToken cancellationToken) =>
-        DecideAsync(id, request, approve: true, cancellationToken);
+    [Authorize(Policy = LeavePermissionPolicies.LeavesSummary)]
+    [HttpGet("summary")]
+    public async Task<ActionResult<LeaveRequestSummaryResponse>> GetSummary(
+        CancellationToken cancellationToken)
+    {
+        var actorId = GetCurrentEmployeeId();
+        var authorization = Request.Headers.Authorization.ToString();
+        if (!actorId.HasValue || string.IsNullOrWhiteSpace(authorization))
+            return Unauthorized();
 
-    [Authorize(Roles = "Manager,HR")]
-    [HttpPost("{id:guid}/reject")]
-    public Task<ActionResult<LeaveRequestResponse>> Reject(
+        var summary = await leaveRequestService.GetSummaryAsync(
+            actorId.Value,
+            authorization,
+            LeaveAccess.FromClaims(User),
+            cancellationToken);
+        return Ok(summary);
+    }
+
+    [Authorize(Policy = LeavePermissionPolicies.LeavesDecide)]
+    [HttpPatch("{id:guid}/decision")]
+    public async Task<ActionResult<LeaveRequestResponse>> Decide(
         Guid id,
-        [FromBody] LeaveDecisionRequest request,
-        CancellationToken cancellationToken) =>
-        DecideAsync(id, request, approve: false, cancellationToken);
+        [FromBody] LeaveDecisionCommand request,
+        CancellationToken cancellationToken)
+    {
+        var approve = request.Decision?.Trim().ToLowerInvariant() switch
+        {
+            "approve" or "approved" => true,
+            "reject" or "rejected" => false,
+            _ => (bool?)null
+        };
+
+        if (!approve.HasValue)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Invalid leave decision",
+                Detail = "decision must be either 'approve' or 'reject'."
+            });
+        }
+
+        return await DecideAsync(id, new LeaveDecisionRequest(request.Note), approve.Value, cancellationToken);
+    }
 
     [HttpPost("{id:guid}/cancel")]
+    [Authorize(Policy = LeavePermissionPolicies.LeavesCancel)]
     public async Task<ActionResult<LeaveRequestResponse>> Cancel(
         Guid id,
         [FromBody] CancelLeaveRequest request,
         CancellationToken cancellationToken)
     {
         var employeeId = GetCurrentEmployeeId();
-        if (!employeeId.HasValue)
+        var authorization = Request.Headers.Authorization.ToString();
+        if (!employeeId.HasValue || string.IsNullOrWhiteSpace(authorization))
         {
             return Unauthorized();
         }
 
         var cancelled = await leaveRequestService.CancelAsync(
             employeeId.Value,
+            authorization,
             id,
             request.Note,
             cancellationToken);
@@ -179,11 +278,15 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
             authorization,
             id,
             approve,
-            User.IsInRole("HR"),
+            LeaveAccess.FromClaims(User),
             request.Note,
             cancellationToken);
         return Ok(updated);
     }
+
+    private static bool IsValidPagination(int? page, int? pageSize) =>
+        page.HasValue && page.Value >= 1 &&
+        pageSize.HasValue && pageSize.Value is >= 1 and <= 100;
 
     private Guid? GetCurrentEmployeeId()
     {

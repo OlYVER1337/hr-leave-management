@@ -33,7 +33,6 @@ describe('LoginPage', () => {
     render(
       <MemoryRouter
         initialEntries={['/login']}
-        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -57,7 +56,6 @@ describe('LoginPage', () => {
     render(
       <MemoryRouter
         initialEntries={['/login']}
-        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
           <Route path="/login" element={<LoginPage />} />

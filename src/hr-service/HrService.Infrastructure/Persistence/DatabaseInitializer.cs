@@ -25,6 +25,7 @@ public sealed class DatabaseInitializer(
                 await dbContext.Database.MigrateAsync(cancellationToken);
                 await services.GetRequiredService<InitialHrSeeder>().SeedAsync(cancellationToken);
                 await services.GetRequiredService<DemoDataSeeder>().SeedAsync(cancellationToken);
+                await services.GetRequiredService<AuthorizationSeeder>().SeedAsync(cancellationToken);
                 return;
             }
             catch (Exception exception) when (

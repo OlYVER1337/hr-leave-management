@@ -1,32 +1,52 @@
 sequenceDiagram
   autonumber
-  actor M as Người duyệt (Manager / HR)
+  actor M as Manager / HR
   participant W as React (Nginx)
   participant LV as Leave Service
+  participant HR as HR Service
   participant DB as Leave_DB
-  M->>W: Mở trang phê duyệt
-  W->>LV: GET /leave-api/leave-requests/pending-approval
-  LV->>DB: Đơn có ApproverId = người dùng, Status = Pending
-  DB-->>LV: Danh sách đơn
-  LV-->>W: 200 danh sách đơn
-  M->>W: Bấm Duyệt hoặc Từ chối
-  W->>LV: POST /leave-requests/{id}/approve (hoặc reject)
-  LV->>DB: BEGIN TRANSACTION
-  LV->>DB: Đọc đơn và LeaveBalance (RowVersion)
-  alt Không phải người duyệt hợp lệ
-    LV->>DB: ROLLBACK
-    LV-->>W: 403 Forbidden
-  else Đơn không còn Pending (đã xử lý hoặc đã hủy)
+  M->>W: Mở hộp thư phê duyệt
+  W->>LV: GET /leave-api/api/v1/leave-requests/pending-approval?page=&pageSize=
+  LV->>LV: Kiểm tra leaves.decide:Team/All
+  alt Caller có Team scope
+    LV->>HR: GET /api/v1/leave-scope/managers/{callerId}/employee-ids
+    HR->>HR: Xác nhận managerId trùng caller và scope phù hợp
+    HR-->>LV: Direct report IDs hiện tại
+  else Caller có All scope
+    Note over LV: Không cần lấy danh sách Team
+  end
+  LV->>DB: Query Pending trong visibility scope + pagination
+  DB-->>LV: Pending requests
+  LV-->>W: 200 list + X-Total-Count
+  M->>W: Gửi quyết định approve/reject
+  W->>LV: PATCH /leave-requests/{id}/decision
+  LV->>LV: Kiểm tra leaves.decide và request Pending
+  alt Team scope
+    LV->>HR: GET /api/v1/lookup/employees/{employeeId}
+    HR-->>LV: Employee active + ManagerId hiện tại
+    LV->>LV: Xác minh ManagerId = caller và không cho tự duyệt
+  else All scope
+    LV->>LV: Xác minh quyền All và chặn tự duyệt
+  end
+  opt HR lookup lỗi với thao tác Team
+    LV-->>W: 503 Dependency unavailable, không đổi trạng thái
+  end
+  LV->>DB: BEGIN SERIALIZABLE transaction
+  LV->>DB: Đọc request + LeaveBalance/YearAllocations
+  alt Request không còn Pending hoặc concurrency conflict
     LV->>DB: ROLLBACK
     LV-->>W: 409 Conflict
-  else Hợp lệ
-    alt Duyệt
-      LV->>DB: Status = Approved, Balance: Pending giảm n, Used tăng n
-    else Từ chối
-      LV->>DB: Status = Rejected, Balance: Pending giảm n
-    end
-    LV->>DB: INSERT LeaveRequestHistory (ai, hành động, thời điểm UTC)
-    LV->>DB: COMMIT (kiểm tra RowVersion)
+  else Approve
+    LV->>DB: Status = Approved
+    LV->>DB: Balance Pending -= days, Used += days
+    LV->>DB: INSERT LeaveRequestHistory
+    LV->>DB: COMMIT
+    LV-->>W: 200 OK
+  else Reject
+    LV->>DB: Status = Rejected
+    LV->>DB: Balance Pending -= days
+    LV->>DB: INSERT LeaveRequestHistory
+    LV->>DB: COMMIT
     LV-->>W: 200 OK
   end
-  Note over LV,DB: Employee hủy đơn Pending của mình: Status = Cancelled,<br/>Balance: Pending giảm n, ghi lịch sử tương tự.
+  Note over LV,DB: Employee cancel Pending: cancel:Self, giải phóng Pending và ghi history cùng transaction.

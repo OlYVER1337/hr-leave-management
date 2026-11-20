@@ -5,10 +5,20 @@ sequenceDiagram
   participant HR as HR Service
   participant DB as HR_DB
   U->>W: Nhập email, mật khẩu
-  W->>HR: POST /hr-api/auth/login
-  HR->>DB: Tìm Employee theo Email (IsActive = true)
-  DB-->>HR: Employee + PasswordHash
-  HR->>HR: Kiểm tra mật khẩu, tạo JWT (id, role)
-  HR-->>W: 200 accessToken + role
-  W->>W: Lưu token, điều hướng theo role
-  Note over W,HR: Các request sau gửi Authorization: Bearer token.<br/>Leave Service tự xác thực JWT bằng cùng khóa ký,<br/>không gọi lại HR Service.
+  W->>HR: POST /hr-api/api/v1/auth/login
+  HR->>DB: Tìm Employee theo Email và IsActive
+  DB-->>HR: Employee + password hash
+  HR->>HR: Verify mật khẩu
+  HR->>DB: Lấy UserRoles còn hiệu lực + RolePermissions + Scopes
+  DB-->>HR: Effective grants nguồn HR_DB
+  HR->>HR: Tạo JWT authz_v=1, perm JSON + legacy role claim
+  HR->>DB: Lưu hash RefreshToken
+  HR-->>W: 200 AccessToken + HttpOnly refresh cookie
+  W->>W: Lưu access token và hiển thị menu theo legacy role
+  Note over W,HR: Refresh token không trả trong JSON, access token được gửi Bearer.
+  Note over W,HR: Backend API kiểm tra permission/scope, UI role guard chỉ là UX.
+  U->>W: Khi access token hết hạn, yêu cầu refresh
+  W->>HR: POST /hr-api/api/v1/auth/refresh + HttpOnly cookie
+  HR->>DB: Xác minh/rotate refresh token, đọc authorization mới
+  DB-->>HR: Refresh token state + effective grants hiện tại
+  HR-->>W: Access JWT mới với perm được tính lại

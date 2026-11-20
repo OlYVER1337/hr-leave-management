@@ -1,15 +1,16 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Department, Employee } from '../types';
-import { deactivateEmployee, getDepartments, getEmployees, saveEmployee } from '../services/hrService';
+import { deactivateEmployee, getDepartments, getEmployeeOverviewPage, getEmployeePage, saveEmployee } from '../services/hrService';
 import { EmployeesPage } from './EmployeesPage';
 
 const mocks = vi.hoisted(() => ({
   notify: vi.fn(),
   deactivateEmployee: vi.fn(),
   getDepartments: vi.fn(),
-  getEmployees: vi.fn(),
+  getEmployeePage: vi.fn(),
+  getEmployeeOverviewPage: vi.fn(),
   saveEmployee: vi.fn(),
 }));
 
@@ -17,7 +18,8 @@ vi.mock('../components/ToastProvider', () => ({ useToast: () => mocks.notify }))
 vi.mock('../services/hrService', () => ({
   deactivateEmployee: mocks.deactivateEmployee,
   getDepartments: mocks.getDepartments,
-  getEmployees: mocks.getEmployees,
+  getEmployeePage: mocks.getEmployeePage,
+  getEmployeeOverviewPage: mocks.getEmployeeOverviewPage,
   saveEmployee: mocks.saveEmployee,
 }));
 
@@ -44,10 +46,43 @@ const employees: Employee[] = Array.from({ length: 25 }, (_, index) => {
 describe('EmployeesPage filtering, sorting and pagination', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(getEmployees).mockResolvedValue(employees);
+    vi.mocked(getEmployeePage).mockImplementation(async (query) => {
+      const search = query.search?.toLocaleLowerCase('vi-VN') ?? '';
+      const filtered = employees.filter((employee) =>
+        (!search || [employee.fullName, employee.code, employee.email, employee.departmentName].some((value) => value.toLocaleLowerCase('vi-VN').includes(search))) &&
+        (!query.role || employee.role === query.role) &&
+        (query.isActive === undefined || employee.isActive === query.isActive) &&
+        (query.departmentId === undefined || employee.departmentId === query.departmentId));
+      const collator = new Intl.Collator('vi', { sensitivity: 'base', numeric: true });
+      const sorted = [...filtered].sort((left, right) => {
+        const field = query.sortBy ?? 'fullName';
+        const leftValue = String(left[field] ?? '');
+        const rightValue = String(right[field] ?? '');
+        return collator.compare(leftValue, rightValue) * (query.sortDirection === 'desc' ? -1 : 1) || left.id.localeCompare(right.id);
+      });
+      const offset = (query.page - 1) * query.pageSize;
+      return { items: sorted.slice(offset, offset + query.pageSize), totalCount: sorted.length };
+    });
     vi.mocked(getDepartments).mockResolvedValue([department]);
+    vi.mocked(getEmployeeOverviewPage).mockImplementation(async (query) => ({
+      ...await vi.mocked(getEmployeePage)(query),
+      summary: { total: 25, active: 25, managers: 0 },
+    }));
     vi.mocked(deactivateEmployee).mockResolvedValue(undefined);
     vi.mocked(saveEmployee).mockResolvedValue(employees[0]);
+  });
+
+  it('loads employee summary in one request instead of three count queries', async () => {
+    render(<EmployeesPage />);
+
+    await screen.findByText('Nhân viên 01');
+
+    expect(getEmployeeOverviewPage).toHaveBeenCalledTimes(1);
+    expect(getEmployeeOverviewPage).toHaveBeenCalledWith(
+      expect.objectContaining({ page: 1, pageSize: 20 }),
+    );
+    const totalMetric = screen.getByText('Tổng số nhân viên').closest('.summary-metric');
+    expect(totalMetric?.textContent).toContain('25');
   });
 
   it('paginates employee rows and returns to the first page when filtering', async () => {
@@ -64,8 +99,8 @@ describe('EmployeesPage filtering, sorting and pagination', () => {
     expect(screen.queryByText('Nhân viên 01')).not.toBeInTheDocument();
 
     await user.type(screen.getByRole('textbox', { name: 'Tìm nhân viên' }), 'Nhân viên 20');
-    expect(screen.getByText('Trang 1 / 1')).toBeInTheDocument();
-    expect(screen.getByText('Nhân viên 20')).toBeInTheDocument();
+    expect(await screen.findByText('Trang 1 / 1')).toBeInTheDocument();
+    expect(await screen.findByText('Nhân viên 20')).toBeInTheDocument();
     expect(screen.queryByText('Nhân viên 11')).not.toBeInTheDocument();
     expect(document.querySelector('.table-footer')?.textContent).toContain('Đang hiển thị 1–1 / 1 nhân viên');
   });
@@ -89,6 +124,28 @@ describe('EmployeesPage filtering, sorting and pagination', () => {
     expect(screen.getByRole('button', { name: 'Trang sau' })).toBeDisabled();
   });
 
+  it('reuses the prefetched page and requests another block only when leaving it', async () => {
+    const user = userEvent.setup();
+    render(<EmployeesPage />);
+    await screen.findByText('Nhân viên 01');
+
+    const matchingBlockCalls = () => vi.mocked(getEmployeeOverviewPage).mock.calls.filter(([query]) =>
+      query.pageSize === 20 && query.sortBy === 'fullName' &&
+      query.sortDirection === 'asc' && query.search === undefined).length;
+    expect(matchingBlockCalls()).toBe(1);
+
+    await user.click(screen.getByRole('button', { name: 'Trang 2' }));
+    expect(screen.getByText('Nhân viên 11')).toBeInTheDocument();
+    expect(matchingBlockCalls()).toBe(1);
+
+    await user.click(screen.getByRole('button', { name: 'Trang 3' }));
+    expect(await screen.findByText('Nhân viên 21')).toBeInTheDocument();
+    await waitFor(() => expect(matchingBlockCalls()).toBe(2));
+    expect(getEmployeeOverviewPage).toHaveBeenCalledWith(
+      expect.objectContaining({ page: 2, pageSize: 20 }),
+    );
+  });
+
   it('sorts employees by name in ascending and descending order', async () => {
     const user = userEvent.setup();
     render(<EmployeesPage />);
@@ -98,12 +155,18 @@ describe('EmployeesPage filtering, sorting and pagination', () => {
     const rows = () => within(screen.getByRole('table')).getAllByRole('row');
 
     await user.click(sortByName);
-    expect(within(rows()[1]).getByText('Nhân viên 25')).toBeInTheDocument();
-    expect(rows()[0].querySelector('th')).toHaveAttribute('aria-sort', 'descending');
+    await waitFor(() => {
+      expect(within(rows()[1]).getByText('Nhân viên 25')).toBeInTheDocument();
+      expect(rows()[0].querySelector('th')).toHaveAttribute('aria-sort', 'descending');
+    });
 
-    await user.click(sortByName);
-    expect(within(rows()[1]).getByText('Nhân viên 01')).toBeInTheDocument();
-    expect(rows()[0].querySelector('th')).toHaveAttribute('aria-sort', 'ascending');
+    // Sorting triggers a reload that temporarily unmounts the table. Query the
+    // newly rendered button instead of reusing the detached first reference.
+    await user.click(screen.getByRole('button', { name: 'Sắp xếp theo họ tên' }));
+    await waitFor(() => {
+      expect(within(rows()[1]).getByText('Nhân viên 01')).toBeInTheDocument();
+      expect(rows()[0].querySelector('th')).toHaveAttribute('aria-sort', 'ascending');
+    });
   });
 
   it('filters employees by the selected department name', async () => {
@@ -113,7 +176,16 @@ describe('EmployeesPage filtering, sorting and pagination', () => {
         ? employee
         : { ...employee, departmentId: secondDepartment.id, departmentName: secondDepartment.name },
     );
-    vi.mocked(getEmployees).mockResolvedValue(employeesAcrossDepartments);
+    vi.mocked(getEmployeePage).mockImplementation(async (query) => {
+      const search = query.search?.toLocaleLowerCase('vi-VN') ?? '';
+      const filtered = employeesAcrossDepartments.filter((employee) =>
+        (!search || [employee.fullName, employee.code, employee.email, employee.departmentName].some((value) => value.toLocaleLowerCase('vi-VN').includes(search))) &&
+        (!query.role || employee.role === query.role) &&
+        (query.isActive === undefined || employee.isActive === query.isActive) &&
+        (query.departmentId === undefined || employee.departmentId === query.departmentId));
+      const offset = (query.page - 1) * query.pageSize;
+      return { items: filtered.slice(offset, offset + query.pageSize), totalCount: filtered.length };
+    });
     vi.mocked(getDepartments).mockResolvedValue([department, secondDepartment]);
 
     render(<EmployeesPage />);

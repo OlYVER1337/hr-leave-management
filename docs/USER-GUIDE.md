@@ -90,10 +90,23 @@ bằng tài khoản có quyền tương ứng.
    hoặc vô hiệu hóa tài khoản.
 3. Vào **Chính sách nghỉ phép** để quản lý ba loại nghỉ cố định:
    `ANNUAL` (nghỉ phép năm), `SICK` (nghỉ ốm), `UNPAID` (nghỉ không lương).
-   Chọn **Năm áp dụng** trước khi xem hạn mức. Chỉ các năm tương lai mới được
-   tạo hoặc chỉnh sửa; năm hiện tại và các năm trước chỉ có thể xem. Nếu thiếu
-   một loại chuẩn, HR có thể khôi phục loại đó khi đang làm việc với năm tương
-   lai. Tab **Ngày nghỉ lễ** dùng để thêm, sửa hoặc xóa ngày lễ.
+   Màn hình mặc định hiển thị các chính sách đang có hiệu lực tại ngày hiện tại
+   (UTC+07:00). Bộ lọc chung có hai chế độ: **Đang có hiệu lực** và
+   **Tất cả lịch sử**. Chế độ lịch sử nhóm version theo từng loại nghỉ; từ thẻ
+   ANNUAL hoặc SICK có thể mở lịch sử riêng, xem ngày hiệu lực, số ngày, lý do
+   và nhận biết version hiện hành. UNPAID không quản lý quota nên không có version.
+   Khi tạo phiên bản mới, modal hiển thị quota/ngày hiệu lực hiện tại, cho chọn
+   **Năm áp dụng**, số ngày, **Ngày hiệu lực** và lý do thay đổi. Lịch sử
+   bao gồm mọi năm; số thứ tự version được đánh lại riêng cho từng loại nghỉ
+   trong từng năm.
+   Năm hiện tại chỉ nhận ngày hiệu lực từ hôm nay; năm tương lai chỉ nhận ngày
+   từ 01/01 của chính năm đó. Không cho đặt hiệu lực hồi tố hoặc sang năm khác.
+   Với mỗi năm phân bổ, nếu năm đó đã bắt đầu thì đơn dùng phiên bản có hiệu lực
+   tại ngày gửi đơn; nếu đơn được gửi trước khi năm phân bổ bắt đầu, hệ thống
+   dùng mốc 01/01 của năm đó. Phiên bản đã áp dụng được lưu snapshot, phiên bản
+   cũ không bị ghi đè. Nếu thiếu một loại chuẩn, HR có thể khôi phục loại đó
+   cho năm hiện tại hoặc năm tương lai.
+   Tab **Ngày nghỉ lễ** dùng để thêm, sửa hoặc xóa ngày lễ.
 4. Dùng **Tất cả đơn nghỉ** để theo dõi các đơn trong tổ chức và
    **Hộp thư phê duyệt** để xử lý đơn chờ.
 
@@ -119,6 +132,17 @@ bằng tài khoản có quyền tương ứng.
 4. Quản lý cũng có thể tạo đơn nghỉ cho chính mình và theo dõi đơn của mình.
 
 HR có thể xem và xử lý mọi đơn đang chờ; quản lý chỉ xử lý đơn được phân công.
+
+
+## Lưu ý về phân quyền hiện tại
+
+Backend sử dụng Dynamic RBAC: các thao tác API được kiểm tra theo permission và data scope trong JWT (Self, Team, All). HR là nguồn quản lý Role assignment và quan hệ quản lý hiện tại; Leave Service gọi HR để xác minh Team khi cần.
+
+Giao diện React hiện vẫn hiển thị menu và chặn route theo ba role legacy HR/Manager/Employee để giữ tương thích UI. Vì vậy:
+- Một API call trực tiếp vẫn phải thỏa permission/scope backend; việc thấy hoặc không thấy menu không cấp quyền.
+- API có thể hỗ trợ khả năng mà UI chưa cung cấp. Ví dụ Role assignment hiện có backend API nhưng chưa có trang quản trị.
+- Role catalog CRUD và cấu hình permission/scope cho Role chưa có UI/API quản trị tổng quát.
+- Access JWT đã phát vẫn có hiệu lực đến khi hết hạn; gán/thu hồi Role không cập nhật token đang tồn tại tại chỗ.
 
 ## 3. Kịch bản demo nhanh
 

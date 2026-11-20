@@ -1,14 +1,14 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { deleteDepartment, getDepartments, getEmployees, saveDepartment } from '../services/hrService';
+import { deleteDepartment, getDepartments, getEmployeePage, saveDepartment } from '../services/hrService';
 import { DepartmentsPage } from './DepartmentsPage';
 
 const mocks = vi.hoisted(() => ({
   notify: vi.fn(),
   deleteDepartment: vi.fn(),
   getDepartments: vi.fn(),
-  getEmployees: vi.fn(),
+  getEmployeePage: vi.fn(),
   saveDepartment: vi.fn(),
 }));
 
@@ -16,7 +16,7 @@ vi.mock('../components/ToastProvider', () => ({ useToast: () => mocks.notify }))
 vi.mock('../services/hrService', () => ({
   deleteDepartment: mocks.deleteDepartment,
   getDepartments: mocks.getDepartments,
-  getEmployees: mocks.getEmployees,
+  getEmployeePage: mocks.getEmployeePage,
   saveDepartment: mocks.saveDepartment,
 }));
 
@@ -26,7 +26,7 @@ describe('DepartmentsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getDepartments).mockResolvedValue([department]);
-    vi.mocked(getEmployees).mockResolvedValue([]);
+    vi.mocked(getEmployeePage).mockResolvedValue({ items: [], totalCount: 0 });
     vi.mocked(saveDepartment).mockResolvedValue({ id: 2, name: 'Vận hành' });
     vi.mocked(deleteDepartment).mockResolvedValue(undefined);
   });

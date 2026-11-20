@@ -31,7 +31,7 @@ namespace LeaveService.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("EmployeeId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<decimal>("Entitled")
+                    b.Property<decimal>("PolicyDays")
                         .HasPrecision(6, 1)
                         .HasColumnType("decimal(6,1)");
 
@@ -60,7 +60,14 @@ namespace LeaveService.Infrastructure.Persistence.Migrations
                     b.HasIndex("EmployeeId", "LeaveTypeId", "Year")
                         .IsUnique();
 
-                    b.ToTable("LeaveBalances");
+                    b.ToTable("LeaveBalances", t =>
+                        {
+                            t.HasCheckConstraint("CK_LeaveBalances_PolicyDays_NonNegative", "[PolicyDays] >= 0");
+
+                            t.HasCheckConstraint("CK_LeaveBalances_Pending_NonNegative", "[Pending] >= 0");
+
+                            t.HasCheckConstraint("CK_LeaveBalances_Used_NonNegative", "[Used] >= 0");
+                        });
                 });
 
             modelBuilder.Entity("LeaveService.Domain.Entities.LeaveRequest", b =>
@@ -167,6 +174,13 @@ namespace LeaveService.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("Year")
                         .HasColumnType("int");
+
+                    b.Property<int?>("PolicyVersionId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("PolicyDaysAtCreation")
+                        .HasPrecision(6, 1)
+                        .HasColumnType("decimal(6,1)");
 
                     b.Property<decimal>("Days")
                         .HasPrecision(6, 1)

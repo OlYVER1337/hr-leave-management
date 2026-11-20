@@ -1,3 +1,4 @@
+using HrService.Api.Authorization;
 using HrService.Application.Dtos;
 using HrService.Application.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -16,7 +17,7 @@ public sealed class LeaveTypesController(LeaveCatalogService catalogService) : C
         [FromQuery] bool authoritative,
         CancellationToken cancellationToken)
     {
-        if (includeInactive && !User.IsInRole("HR"))
+        if (includeInactive && !AuthorizationClaimReader.Read(User).HasScope("leave-types.update", "All"))
         {
             return Forbid();
         }
@@ -39,7 +40,7 @@ public sealed class LeaveTypesController(LeaveCatalogService catalogService) : C
         return Ok(leaveType);
     }
 
-    [Authorize(Roles = "HR")]
+    [Authorize(Policy = PermissionPolicies.LeaveTypeCreate)]
     [HttpPost]
     public async Task<ActionResult<LeaveTypeResponse>> Create(
         [FromBody] CreateLeaveTypeRequest request,
@@ -49,7 +50,7 @@ public sealed class LeaveTypesController(LeaveCatalogService catalogService) : C
         return CreatedAtAction(nameof(GetById), new { id = leaveType.Id }, leaveType);
     }
 
-    [Authorize(Roles = "HR")]
+    [Authorize(Policy = PermissionPolicies.LeaveTypeUpdate)]
     [HttpPut("{id:int}")]
     public async Task<ActionResult<LeaveTypeResponse>> Update(
         int id,

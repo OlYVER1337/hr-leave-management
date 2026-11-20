@@ -2,6 +2,16 @@
 
 Hệ thống quản lý nhân sự và nghỉ phép, được xây dựng theo kiến trúc Clean Architecture với hai backend .NET, frontend React và các dịch vụ hạ tầng chạy bằng Docker Compose.
 
+## Trạng thái triển khai hiện tại
+
+Backend đã triển khai Dynamic RBAC V1: HR_DB quản lý Roles, Permissions, UserRoles, Permission Scopes và audit log; login/refresh tính lại quyền hiệu lực rồi phát JWT có authz_v=1 và perm JSON. HR và Leave API kiểm tra permission/scope. Các scope đang thực thi là Self, Team, All; Department chưa có bộ lọc nghiệp vụ.
+
+Frontend hiện vẫn dùng Role legacy HR/Manager/Employee cho menu và route guard, chưa có màn hình quản trị Role assignment hoặc Role/Permission catalog. Đây là giới hạn UI, không thay đổi việc backend phải tự kiểm tra quyền cho mọi API.
+
+Leave Service lưu requests, balances, yearly allocations và histories trong Leave_DB. Nhân viên có thể khởi tạo/đồng bộ balance của chính mình theo HR catalog authoritative qua `POST /api/v1/leave-balances/mine/synchronize`; cả GET và POST balance đều đồng bộ PolicyDays hiện hành từ HR trước khi trả dữ liệu. Request lưu PolicyVersionId và PolicyDaysAtCreation theo từng năm; Entitled được tính bằng `max(PolicyDays, Used + Pending)` để giữ nguyên usage lịch sử khi quota giảm. Luồng tạo đơn, duyệt, từ chối và hủy đều refresh quota trong transaction cập nhật Used/Pending. Chưa có API HR bulk reconciliation cho toàn bộ nhân viên. Leave History có ghi nhưng chưa có GET endpoint riêng.
+
+Các khoảng trống và thứ tự hoàn thiện được theo dõi tại [Backlog](docs/planning/BACKLOG.md). Mô tả kiến trúc, database, authorization và API chi tiết nằm trong [docs index](docs/README.md).
+
 ## Mục lục
 
 - [1. Công nghệ sử dụng](#1-công-nghệ-sử-dụng)
@@ -271,14 +281,16 @@ Chạy test của Leave Service:
 dotnet test src/leave-service/LeaveService.slnx
 ```
 
-Một số integration test cần SQL Server hoặc Redis riêng dành cho kiểm thử. Theo cấu hình của test, có thể cần các biến môi trường:
+Một số integration test cần SQL Server hoặc Redis riêng dành cho kiểm thử. Nếu thiếu dịch vụ hoặc biến môi trường cần thiết, test tích hợp có thể được đánh dấu `Skipped`; điều đó không đồng nghĩa với việc chức năng tích hợp đã được kiểm thử thành công. Không trỏ các test có khả năng tạo/xóa database hoặc xóa cache vào môi trường production.
 
-```text
-HR_TEST_SQL_CONNECTION_STRING
-HR_TEST_REDIS_CONNECTION_STRING
+Các integration test cần connection string qua biến môi trường. Nếu không cấu hình, test phụ thuộc SQL Server/Redis sẽ bị `Skipped`. Để chạy đầy đủ trên stack `hrbench`, cấu hình hai biến sau trong phiên PowerShell (thay `<SA_PASSWORD>` bằng giá trị cục bộ trong `.env`), rồi chạy lại hai lệnh `dotnet test` ở trên:
+
+```powershell
+$env:HR_TEST_SQL_CONNECTION_STRING = "Server=localhost,11433;Database=master;User Id=sa;Password=<SA_PASSWORD>;Encrypt=False;TrustServerCertificate=True;Connect Timeout=5"
+$env:HR_TEST_REDIS_CONNECTION_STRING = "localhost:16379,abortConnect=false,connectTimeout=5000"
 ```
 
-Nếu thiếu dịch vụ hoặc biến môi trường cần thiết, test tích hợp có thể được đánh dấu `Skipped`; điều đó không đồng nghĩa với việc chức năng tích hợp đã được kiểm thử thành công. Không trỏ các test có khả năng tạo/xóa database hoặc xóa cache vào môi trường production.
+Các test tích hợp có thể tạo và xóa database kiểm thử ngẫu nhiên; HR integration test sử dụng Redis database 15. Chỉ dùng SQL Server/Redis riêng cho kiểm thử, không trỏ vào production.
 
 ## 9. Lệnh Docker thường dùng
 

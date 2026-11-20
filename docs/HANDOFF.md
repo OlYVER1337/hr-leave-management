@@ -1,101 +1,76 @@
-# Checklist bàn giao
+# Checklist bàn giao — cập nhật 17/11/2026
 
-Checklist này phân biệt giữa **bằng chứng hiện có trong repository** và những công việc vẫn cần **release chính thức hoặc xác nhận trực tiếp của con người**.
+## 1. Revision và phạm vi
 
-**Lần rà soát bằng chứng gần nhất: 03/11/2026**
+| Thuộc tính | Giá trị |
+|---|---|
+| Repository | OlYVER1337/hr-leave-management |
+| Branch được rà soát | feature/dynamic-authorization-v1 |
+| Source revision đã đối chiếu | ddfd8e613770e12274808a63e72916733d4253b4 |
+| Branch HEAD tại thời điểm rà soát | ddfd8e613770e12274808a63e72916733d4253b4 |
+| Ngày rà soát | 17/11/2026 |
+| Phạm vi | Đối chiếu code và đồng bộ tài liệu với API, Dynamic RBAC, balance self-sync, timezone, test suite và giới hạn hiện tại |
 
-| # | Hạng mục bàn giao | Trạng thái | Nội dung đã có / còn lại |
+Đây là trạng thái feature branch. Không đồng nghĩa branch đã merge/release lên master hoặc production.
+
+## 2. Trạng thái từng hạng mục
+
+| # | Hạng mục | Trạng thái hiện tại | Bằng chứng / việc còn lại |
 |---:|---|---|---|
-| **1** | **Source code và Git history** | **Đã có; còn chờ thao tác release** | Frontend, HR Service, Leave Service, automated tests, Docker/Compose và tài liệu đều đã có trong repository. Git đã có lịch sử commit được thiết lập. Worktree hiện tại vẫn chứa các thay đổi chưa commit; cần kiểm tra, commit và push lên remote dự kiến trước khi xác nhận bàn giao source code hoàn tất. |
-| **2** | **Ứng dụng đang chạy và các workflow theo vai trò** | **Luồng API đã được kiểm tra; UI đã được chấp nhận** | Demo dựa trên Docker Compose, đăng nhập, nhân viên tạo đơn nghỉ, Manager phê duyệt và cập nhật số dư phép đã được kiểm tra thông qua API trên stack `hrbench` độc lập. Người dùng đã xác nhận chấp nhận giao diện UI vào ngày 03/11/2026. Các workflow của HR/Manager/Employee được mô tả trong `USER-GUIDE.md`. Dashboard có dữ liệu; chức năng xuất báo cáo và thông báo hiện chưa được triển khai. |
-| **3** | **Thiết kế hệ thống** | **Đã được tài liệu hóa** | `SYSTEM_DESIGN.md` bao gồm thiết kế hệ thống, sơ đồ kiến trúc và sequence diagram, quyền sở hữu dữ liệu của từng service, cơ chế giao tiếp và hành vi khi xảy ra lỗi. |
-| **4** | **Thiết kế cơ sở dữ liệu** | **Đã được tài liệu hóa** | `DATABASE_DESIGN.md` bao gồm cả hai ERD, migrations, cơ chế seed dữ liệu khi chạy hệ thống, indexes và constraints. |
-| **5** | **Tài liệu API** | **Đã được tài liệu hóa** | `API_REFERENCE.md`, OpenAPI JSON trong môi trường Development, ví dụ request/response và các HTTP status code. Các API HR chỉ cho phép khôi phục các loại nghỉ mặc định hoặc thêm policy bị thiếu cho các loại nghỉ có trừ số dư. |
-| **6** | **Frontend Design System** | **Đã được tài liệu hóa; UI đã được chấp nhận, accessibility audit vẫn chưa thực hiện** | `DESIGN_SYSTEM.md` bao gồm sơ đồ các shared UI component/source, quy tắc layout và tương tác. Người dùng đã chấp nhận UI; tuy nhiên chưa thực hiện một đợt kiểm tra accessibility riêng biệt. |
-| **7** | **Thiết kế và bằng chứng Redis** | **Đã được tài liệu hóa và kiểm tra** | `redis-performance.md` ghi nhận Redis key, TTL, cơ chế invalidation, fallback, hành vi khi Redis bị dừng và các phép đo Catalog khi Redis ON/OFF. Redis được sử dụng làm cache cho HR catalog; các quyết định liên quan đến Leave không phụ thuộc vào Redis. |
-| **8** | **Tests và báo cáo hiệu năng** | **Automated tests đã pass; lỗi load test lịch sử chưa xác định nguyên nhân** | Kết quả mới nhất: HR **53/53**, Leave **25/25**, Web **31/31**; build đã pass. Catalog k6 bao gồm Redis ON/OFF tại 50/100 VU. Lần chạy Workforce đầu tiên ở 100 VU xuất hiện **21 HTTP 500 (0,31%)**; hai lần chạy lại sau đó ở 100 VU đều không có lỗi, nhưng nguyên nhân của lỗi ban đầu vẫn chưa xác định và Workforce Redis OFF chưa được đo. Chưa có code fix nào được xác nhận. Xem `demo-and-acceptance.md`. |
-| **9** | **Deployment package** | **Đã có; còn chờ kiểm tra triển khai trong môi trường sạch** | Root Compose file, shared .NET Dockerfile, Web Dockerfile/Nginx config, `.env.example`, persistent volumes và hướng dẫn khởi động mới đều đã có. Cần chạy thử từ một clean clone/máy mới chỉ sử dụng các prerequisites đã được tài liệu hóa trước khi production hoặc bàn giao ra bên ngoài. |
+| 1 | Source code và Git | Có trên feature branch; chưa xác nhận release | HEAD và branch được kiểm tra. Cần review/merge theo quy trình nhóm; chưa có bằng chứng release production. |
+| 2 | Web UI và workflow | Đã có; cần nghiệm thu lại trên HEAD hiện tại | Có Login, Dashboard, Leave Requests, Request Leave, Approvals, Calendar, Manager Team, HR Employees/Departments/Policies và Profile. Người dùng đã xác nhận UI đạt ngày 03/11/2026; đó là sign-off thủ công tại thời điểm đó, không tự động chứng minh mọi UI behavior của HEAD mới. |
+| 3 | Dynamic Authorization V1 | Đã triển khai backend | HR migration, Roles/Permissions/UserRoles/Scope rules/Audit, JWT claims và permission/scope policies ở HR/Leave. React vẫn dùng role legacy cho menu/route; không có Role assignment UI hoặc Role/Permission catalog CRUD. |
+| 4 | Kiến trúc và ownership | Được tài liệu hóa theo source | HR owns HR_DB; Leave owns Leave_DB; Leave chỉ gọi HR qua HTTP; không có API Gateway riêng. |
+| 5 | Database design | Được tài liệu hóa theo migrations hiện tại | HR migrations gồm Initial schema, RefreshTokens, Dynamic Authorization và Leave Policy versions; Leave migrations gồm Initial schema, approval/year allocations, CHECK constraints và PolicyDays/policy snapshots. EF Model/Migrations là nguồn quyết định schema thật. |
+| 6 | API reference | Đã cập nhật theo controller hiện có | API permission/scope, pagination, current Team lookup, role assignment và giới hạn chưa có History/Export/Notification được ghi tại API_REFERENCE.md. |
+| 7 | Redis | Đã có và có evidence kiểm tra lịch sử | Redis cache-aside cho leave types/policies/holidays, TTL mặc định 30 phút, invalidation và SQL fallback. Báo cáo ON/OFF ở redis-performance.md là workload Catalog; không coi là Redis comparison cho Workforce paged-v2. |
+| 8 | Workforce benchmark paged-v2 | 3 lượt mỗi mức; 0 HTTP errors | 50 VU trung bình khoảng 454,07 RPS, p95 trung bình 17,85 ms; 100 VU trung bình khoảng 764,14 RPS, p95 trung bình 73,28 ms. Page size 50, duration 5m. Git SHA/image ID trong JSON là not-provided; chưa phải baseline gắn revision bất biến. |
+| 9 | Approval benchmark | Có evidence burst cũ | approval.js dùng per-vu-iterations, không phải sustained load 5 phút; xem riêng kết quả lịch sử ở benchmark report. |
+| 10 | Automated tests backend | Chưa xác minh trên HEAD hiện tại | Ngày 17/11: Leave 118/118 pass, HR 132/132 pass trên source trước thay đổi policy versioning; output không kèm `git rev-parse HEAD`. Sau các commit ngày 18/11, chưa có CI workflow backend/Web test/build được chạy hoặc gắn với SHA hiện tại. TRX đã commit trong repository vẫn là evidence cũ. |
+| 11 | Deployment package | Có local/demo Compose; chưa nghiệm thu production | Dockerfiles, Nginx, Compose và .env.example có sẵn. Chưa có bằng chứng clean-environment deployment, TLS, secrets manager, backup/restore hoặc production monitoring. |
 
----
+## 3. Bằng chứng benchmark hiện tại
 
-# Các yêu cầu bắt buộc trước khi ký xác nhận bàn giao cuối cùng
+Các file workforce-{50,100}vu-paged-v2-run{1,2,3}.json trong docs/testing/evidence/dynamic-authorization/ có metadata:
+- duration = 5m
+- page_size = 50
+- workload = employee-and-leave-reads
+- generated_at_utc
+- git_sha = not-provided
+- image_tag = not-provided
 
-## 1. Kiểm tra và hoàn tất Git worktree
+Các lần chạy đều kéo dài xấp xỉ 300 giây và có error rate 0. RPS trung bình theo script (requests / 300 giây cấu hình): 50 VU khoảng 454,07; 100 VU khoảng 764,14. P95 trung bình tăng từ khoảng 17.85 ms lên 73.28 ms. Không thể gắn chắc chắn các số liệu vào một source/image cụ thể khi metadata thiếu SHA/image ID. Xem dynamic-authorization-benchmark-results.md.
 
-Cần:
+Một lỗi lịch sử ở workload Workforce cũ ghi nhận 21 HTTP 500 tại 100 VU ngày 03/11; hai lượt chạy xác nhận sau đó không tái hiện. Nguyên nhân lỗi ban đầu chưa được xác định. Không dùng sự kiện này để khẳng định code hiện tại còn lỗi hoặc đã được fix.
 
-- Kiểm tra các thay đổi hiện tại trong worktree.
-- Loại bỏ các benchmark artifact, file local hoặc file được sinh tự động nếu không cần đưa vào repository.
-- Commit source code và tài liệu cần thiết.
-- Push lên Git remote đã thống nhất.
+## 4. Việc cần làm trước sign-off
 
-Chỉ sau đó mới nên xác nhận bàn giao source code hoàn tất.
+1. Chạy Web Vitest và production build trên revision được chốt; lưu log và Git SHA cùng kết quả.
+2. Lưu TRX mới cho lượt HR/Leave 17/11 nếu cần evidence trong repository; kết quả terminal hiện có chưa gắn SHA.
+3. Lặp lại Workforce 50/100 VU từ cùng Git SHA và immutable image ID; truyền metadata vào k6.
+4. Thu thập CPU/Memory/SQL metrics đồng bộ với workload nếu cần kết luận bottleneck.
+5. Tiếp tục xử lý P1 còn mở: kiểm tra timezone ở các màn hình khác và thống nhất active-state của employee lookup.
+6. Rà soát clean clone, secrets, TLS, backup/restore và migration/rollback trước deployment.
+7. Review feature branch và xác nhận merge/release qua quy trình nhóm.
 
----
+## 5. Rủi ro và giới hạn phải công khai
 
-## 2. Tiếp tục điều tra lỗi HTTP 500 trong Workforce load test
+- Dynamic RBAC backend chưa đi cùng permission-driven React UI.
+- Role/Permission catalog CRUD chưa có; chỉ có seed baseline và UserRole assignment API.
+- Leave Balance lưu `PolicyDays`, `Used`, `Pending`; `Entitled = max(PolicyDays, Used + Pending)`. GET và POST self-sync đều lấy policy authoritative từ HR rồi cập nhật PolicyDays idempotent; quota giảm dưới Used + Pending không còn conflict, entitlement vẫn bao phủ dữ liệu đã dùng/đang chờ. Request lưu PolicyVersionId và PolicyDaysAtCreation theo từng yearly allocation; khi tạo, duyệt, từ chối hoặc hủy đều chọn/refresh policy theo ngày nghiệp vụ. Chưa có HR bulk reconciliation cho toàn bộ nhân viên.
+- Backend HR policy year, Leave request validation và balance default year dùng UTC+07; frontend `leaveService.ts` đã chuẩn hóa ngày hiện tại/default year theo `Asia/Ho_Chi_Minh`. Cần rà soát tiếp các màn hình frontend khác để xác nhận không còn dùng browser-local date cho nghiệp vụ.
+- Inactive direct report có thể cần chuẩn hóa giữa lookup by-ID/batch và Team listing.
+- Không có Leave History GET endpoint; History chỉ được ghi.
+- /health chưa phải readiness check có dependency status; HR client chưa có circuit breaker.
+- Access JWT đã phát không bị thu hồi tức thời khi user bị deactivate hoặc grant/revoke.
+- Stored TRX trong repository vẫn có skipped integration tests và cũ hơn code revision đang rà soát. Kết quả terminal 17/11 do người dùng cung cấp có 0 skipped nhưng chưa được lưu thành TRX mới hoặc gắn với local Git SHA.
 
-Vấn đề này vẫn cần được theo dõi cho đến khi:
+## 6. Tài liệu liên quan
 
-- Xác định được nguyên nhân của **21 HTTP 500** trong lần chạy 100 VU đầu tiên.
-- Ghi lại nguyên nhân.
-- Kiểm tra và xác nhận kết quả sau khi xử lý.
-
-Hiện tại:
-
-- Hai lần chạy lại ở 100 VU đều có **0 lỗi**.
-- Nguyên nhân lỗi ban đầu vẫn chưa được xác định.
-- Chưa có code fix nào được xác nhận.
-
-Nếu Redis OFF là một phần của acceptance criteria, cần thu thập thêm kết quả:
-
-```text id="6tz49b"
-Workforce + Redis OFF
-```
-
-để so sánh.
-
----
-
-## 3. Accessibility audit — tùy chọn
-
-Có thể thực hiện và ghi lại một đợt kiểm tra accessibility riêng.
-
-Hiện tại:
-
-- UI đã được người dùng kiểm tra và chấp nhận về mặt trực quan.
-- Chưa có accessibility audit chính thức.
-
-Việc người dùng chấp nhận giao diện trực quan **không đồng nghĩa** với việc hệ thống đã đạt accessibility compliance.
-
----
-
-## 4. Kiểm tra triển khai từ môi trường sạch
-
-Cần thực hiện thử nghiệm triển khai bằng cách:
-
-1. Clone repository mới.
-2. Sử dụng một môi trường/máy sạch.
-3. Chỉ cài đặt các prerequisites được ghi trong tài liệu.
-4. Làm theo hướng dẫn deployment từ đầu.
-5. Xác nhận toàn bộ hệ thống có thể chạy thành công.
-
-Đối với môi trường production, cần thay thế các cấu hình local mặc định bằng:
-
-- Quản lý secrets.
-- TLS/HTTPS.
-- Backup.
-- Operational monitoring.
-
----
-
-# Lưu ý quan trọng
-
-**Không được xem các hạng mục đang mở là đã hoàn thành chỉ vì chúng đã được ghi trong tài liệu.**
-
-Hai rủi ro bàn giao cần được lưu ý rõ ràng là:
-
-1. **Kết quả HTTP 500 lịch sử trong Workforce load test vẫn chưa xác định được nguyên nhân.**
-2. **Worktree có thay đổi chưa commit là rủi ro đối với việc bàn giao source code.**
-
-Các vấn đề này cần được xử lý hoặc được chấp nhận chính thức như các rủi ro còn tồn tại trước khi thực hiện **final sign-off**.
+- Docs index: README.md
+- System design: architecture/SYSTEM_DESIGN.md
+- Database design: architecture/DATABASE_DESIGN.md
+- Dynamic Authorization design: architecture/AUTHORIZATION_DESIGN.md
+- API reference: API_REFERENCE.md
+- Backlog: planning/BACKLOG.md
+- Validation: testing/dynamic-authorization-validation.md

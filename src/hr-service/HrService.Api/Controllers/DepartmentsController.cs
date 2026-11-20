@@ -1,3 +1,4 @@
+using HrService.Api.Authorization;
 using HrService.Application.Dtos;
 using HrService.Application.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -27,7 +28,7 @@ public sealed class DepartmentsController(DepartmentService departmentService) :
         return Ok(department);
     }
 
-    [Authorize(Roles = "HR")]
+    [Authorize(Policy = PermissionPolicies.DepartmentCreate)]
     [HttpPost]
     public async Task<ActionResult<DepartmentResponse>> Create(
         [FromBody] DepartmentRequest request,
@@ -38,7 +39,7 @@ public sealed class DepartmentsController(DepartmentService departmentService) :
         return CreatedAtAction(nameof(GetById), new { id = department.Id }, department);
     }
 
-    [Authorize(Roles = "HR")]
+    [Authorize(Policy = PermissionPolicies.DepartmentUpdate)]
     [HttpPut("{id:int}")]
     public async Task<ActionResult<DepartmentResponse>> Update(
         int id,
@@ -49,7 +50,7 @@ public sealed class DepartmentsController(DepartmentService departmentService) :
         return Ok(department);
     }
 
-    [Authorize(Roles = "HR")]
+    [Authorize(Policy = PermissionPolicies.DepartmentDelete)]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
     {

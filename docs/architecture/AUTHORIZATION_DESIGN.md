@@ -1,0 +1,245 @@
+# Dynamic Authorization Design — V1
+
+## 1. Mục tiêu và phạm vi
+
+V1 thay thế dần phân quyền phụ thuộc Role enum bằng Dynamic RBAC kết hợp Resource-based Data Scope.
+
+Mục tiêu:
+
+- Thêm Role mới bằng dữ liệu trong HR_DB, không phải thêm enum hoặc viết nhánh if (role == ...).
+- Một endpoint có thể phục vụ nhiều Role; backend tự kiểm tra Permission và Scope.
+- Không trả dữ liệu ngoài phạm vi được cấp.
+- Giữ quyền sở hữu dữ liệu: HR Service sở hữu HR_DB; Leave Service chỉ gọi HR Service qua HTTP, không truy cập trực tiếp HR_DB.
+- Không thêm message broker hoặc cơ chế đồng bộ bất đồng bộ vào V1.
+
+## 2. Nguồn dữ liệu và giao tiếp giữa service
+
+HR Service là nguồn dữ liệu có thẩm quyền cho:
+
+- Danh tính và trạng thái hoạt động của nhân viên.
+- Role và Permission.
+- Phòng ban và quan hệ quản lý hiện tại (Employee.ManagerId).
+
+Leave Service sở hữu Leave_DB và không tạo bản sao quan hệ quản lý trong V1.
+
+### Truy vấn danh sách
+
+Khi Scope yêu cầu Team, Leave Service gọi HR Service một lần để lấy danh sách EmployeeId thuộc Team hiện tại, sau đó truyền danh sách này cho repository lọc trong SQL. Không gọi HR theo từng đơn.
+
+Leave Team lookup dùng endpoint chuyên biệt `GET /api/v1/leave-scope/managers/{managerId}/employee-ids`. Endpoint chỉ trả ID, yêu cầu `leaves.read:Team` hoặc `leaves.decide:Team`, và chỉ cho phép người gọi truy vấn Team có `managerId` trùng employee ID trong JWT. Endpoint này không yêu cầu `employees.read`; quyền đọc hồ sơ nhân viên và quyền lấy ID để giới hạn Leave data được tách riêng.
+
+### Quyết định phê duyệt
+
+Khi Manager quyết định một đơn Pending, Leave Service gọi HR Service tại thời điểm quyết định để xác minh ManagerId hiện tại của nhân viên. Không dùng ApproverId snapshot hoặc dữ liệu cache để quyết định quyền.
+
+Nếu HR Service không khả dụng, Leave Service trả 503 Dependency unavailable và không thay đổi trạng thái, số dư hoặc lịch sử đơn.
+
+## 3. Schema authorization trong HR_DB
+
+| Bảng | Trách nhiệm |
+|---|---|
+| Roles | Danh mục Role động |
+| Permissions | Danh mục Permission dạng resource.action |
+| UserRoles | Gán một hoặc nhiều Role cho nhân viên, hỗ trợ thời hạn và thu hồi |
+| RolePermissions | Gán Permission cho Role |
+| PermissionScopeRules | Danh mục Scope hợp lệ theo từng Permission |
+| RolePermissionScopes | Gán Scope cho Role-Permission; khóa ngoại kép bảo đảm Permission được gán và Scope hợp lệ |
+| AuthzAuditLog | Lưu người thực hiện, đối tượng bị thay đổi và giá trị trước/sau |
+
+Employee.Role enum được giữ tạm trong giai đoạn chuyển đổi. Không xóa trường cũ cho đến khi dữ liệu hiện tại đã được backfill sang UserRoles và mọi API, seeder, test, JWT đều đọc Dynamic RBAC.
+
+Scope được lưu dưới dạng chuỗi có constraint: Self, Team, Department, All. V1 chỉ bật các Scope đã được định nghĩa nghiệp vụ và đã được service hỗ trợ. Chưa cấp Department trước khi chốt quy tắc phòng ban hiện tại hay snapshot.
+
+## 4. Hợp nhiều Role
+
+- Effective permissions là hợp Permission của tất cả Role còn hiệu lực của User.
+- Effective scopes của một Permission là hợp các Scope từ các Role có Permission đó.
+- Không xếp hạng Scope bằng enum hoặc số thứ tự.
+- Repository áp dụng hợp điều kiện bằng OR và luôn lọc trong SQL.
+- Không có Permission hoặc không có Scope hợp lệ thì từ chối (fail closed).
+
+## 5. Permission baseline
+
+Permission sử dụng mã resource.action:
+
+- employees.read
+- employees.create
+- employees.update
+- employees.deactivate
+- employees.password.reset
+- leaves.read
+- leaves.create
+- leaves.decide
+- leaves.cancel
+- roles.manage
+- departments.create, departments.update, departments.delete
+- holidays.create, holidays.update, holidays.delete
+- leave-policies.create, leave-policies.update
+- leave-types.create, leave-types.update
+
+V1 sử dụng leaves.decide cho cả approve và reject; thao tác quyết định vẫn ghi rõ trạng thái và Actor vào LeaveRequestHistory.
+
+### Role và Scope được seed trong V1
+
+Các Role hệ thống ban đầu là Employee, Manager, HR và Auditor. Bảng dưới đây là baseline quyền; Scope chỉ được hợp nhất giữa các Role mà người dùng đang sở hữu.
+
+| Role | Permission | Scope |
+|---|---|---|
+| Employee | employees.read | Self |
+| Employee | leaves.read | Self |
+| Employee | leaves.create | Self |
+| Employee | leaves.cancel | Self |
+| Manager | employees.read | Self, Team |
+| Manager | leaves.read | Self, Team |
+| Manager | leaves.create | Self |
+| Manager | leaves.cancel | Self |
+| Manager | leaves.decide | Team |
+| HR | employees.read | All |
+| HR | employees.create | All |
+| HR | employees.update | All |
+| HR | employees.deactivate | All |
+| HR | employees.password.reset | All |
+| HR | leaves.read | All |
+| HR | leaves.create | Self |
+| HR | leaves.decide | All |
+| HR | leaves.cancel | Self |
+| HR | roles.manage | All |
+| HR | departments.create, departments.update, departments.delete | All |
+| HR | holidays.create, holidays.update, holidays.delete | All |
+| HR | leave-policies.create, leave-policies.update | All |
+| HR | leave-types.create, leave-types.update | All |
+| Auditor | employees.read | All |
+| Auditor | leaves.read | All |
+
+Danh mục Scope hợp lệ của V1:
+
+- employees.read: Self, Team, All.
+- leaves.read: Self, Team, All.
+- leaves.decide: Team, All.
+- employees.create, employees.update, employees.deactivate, employees.password.reset, roles.manage: All.
+- departments.create, departments.update, departments.delete: All.
+- holidays.create, holidays.update, holidays.delete: All.
+- leave-policies.create, leave-policies.update: All.
+- leave-types.create, leave-types.update: All.
+- leaves.create, leaves.cancel: Self.
+
+Department chưa được cấp cho Permission nào trong V1. Chỉ mở Scope này sau khi chốt và triển khai quy tắc Department theo từng resource.
+
+Backfill từ Employee.Role chỉ tạo UserRole nếu cặp EmployeeId/RoleId chưa từng tồn tại. Bản ghi đã thu hồi hoặc hết hạn không bị seeder tự động khôi phục; điều này bảo đảm khởi động lại ứng dụng không cấp lại quyền đã bị thu hồi. Seeder có thể chạy lặp lại mà không nhân bản Role, Permission, Scope hoặc Role assignment.
+
+## 6. Authorization Service — trạng thái triển khai
+
+Authorization Service nằm ở Application layer và chỉ đọc quyền hiệu lực qua IAuthorizationRepository.
+
+Repository chỉ trả các cặp Permission/Scope khi đáp ứng toàn bộ điều kiện:
+
+- Nhân viên đang hoạt động.
+- UserRole chưa bị thu hồi.
+- UserRole chưa hết hạn tại thời điểm truy vấn (ExpiresAtUtc > UTC now).
+- Role đang hoạt động.
+- Permission đang hoạt động.
+- Role-Permission có Scope được gán.
+
+Authorization Service hợp các Scope trùng Permission giữa nhiều Role, loại bỏ Scope trùng và mặc định không có quyền nếu không có Scope hợp lệ. V1 hiện hỗ trợ Self, Team và All; Department bị từ chối cho đến khi có bộ lọc thực thi theo từng resource.
+
+Authorization Service đã được nối vào luồng phát access token của AuthenticationService. Cả login và refresh đều gọi lại GetEffectiveAuthorizationAsync trước khi phát JWT; refresh không sao chép claim perm từ access token cũ.
+
+HR Employees API đã chuyển sang Permission + Scope:
+- GET collection và GET theo ID dùng employees.read, giới hạn Self/Team/All.
+- POST, PUT, deactivate và reset-password lần lượt yêu cầu employees.create, employees.update, employees.deactivate và employees.password.reset với Scope All.
+- EmployeeLookupController dùng employees.read cho tra cứu theo ID; tra cứu Team yêu cầu employees.read với Team hoặc All. Service kiểm tra Self/Team/All từ perm, không đọc role claim.
+
+Các thao tác ghi ở Departments, Holidays, LeavePolicies và LeaveTypes cũng dùng policy riêng: departments.create/update/delete, holidays.create/update/delete, leave-policies.create/update và leave-types.create/update; các policy ghi dùng Scope All. HR system role được seed đầy đủ các quyền này. Employee.Role enum vẫn là dữ liệu tương thích/backfill trong giai đoạn chuyển tiếp, nhưng không còn là điều kiện authorization cho các endpoint nêu trên. Đọc danh mục leave type với includeInactive cũng kiểm tra leave-types.update:All thay vì role claim.
+
+Leave Service dựng LeaveAccess từ claim authz_v=1 và perm. LeaveRequestsController áp dụng policy theo từng hành động: leaves.read cho danh sách/lịch/chi tiết, leaves.read với Self hoặc All cho /mine, leaves.create:Self cho tạo, leaves.decide:Team hoặc All cho hộp chờ/approve/reject và leaves.cancel:Self cho hủy. LeaveRequestService và repository nhận LeaveAccess thay vì bool isHr. Danh sách, lịch và chi tiết đều lọc cùng quy tắc Self/Team/All; endpoint /mine luôn giới hạn EmployeeId của người gọi. All scope cho phép đọc toàn cục; Self/Team giới hạn theo quyền cụ thể.
+
+Với leaves.decide:Team, hộp chờ gọi endpoint Leave Team scope của HR để lấy danh sách EmployeeId theo ManagerId hiện tại; endpoint chỉ trả ID và kiểm tra `leaves.decide:Team`. Với `leaves.read:Team`, danh sách và truy vấn chi tiết theo ID cũng dùng endpoint này và kiểm tra đúng permission đọc. Khi approve/reject, Leave Service gọi HR Service để xác minh nhân viên còn hoạt động và ManagerId hiện tại tại thời điểm quyết định; Repository yêu cầu kết quả xác minh này và không fallback sang ApproverId snapshot. Khi HR Service không khả dụng, thao tác phụ thuộc Team bị từ chối và không thay đổi dữ liệu. Với leaves.decide:All hoặc leaves.read:All, không cần lookup Team vì quyền đã bao phủ toàn cục.
+
+Các endpoint đã chuyển sang Permission + Scope không sử dụng claim role để authorization. Role claim vẫn có thể được giữ tạm cho hiển thị UI hoặc controller ngoài phạm vi migration; mục tiêu là không dùng role claim trong quyết định truy cập nghiệp vụ.
+
+### API quản lý gán Role
+
+Các endpoint quản lý UserRoles:
+
+- GET /api/v1/roles: liệt kê Role đang hoạt động để giao diện chọn.
+- GET /api/v1/employees/{employeeId}/roles: xem các Role đang hiệu lực của nhân viên.
+- POST /api/v1/employees/{employeeId}/roles: gán Role, có thể kèm ExpiresAtUtc.
+- DELETE /api/v1/employees/{employeeId}/roles/{roleCode}: thu hồi Role.
+
+Toàn bộ endpoint yêu cầu roles.manage với Scope All trong JWT và service đọc lại quyền hiện tại từ HR_DB trước khi thực hiện. Không cho phép thao tác trên tài khoản của chính người gọi, nhân viên đích phải đang hoạt động khi gán Role, Role đích phải đang hoạt động.
+
+Khi gán, mọi cặp Permission/Scope của Role đích phải nằm trong quyền hiện tại của người cấp; Scope All của người cấp được xem là bao phủ các Scope hẹp hơn của cùng Permission. Vì vậy người cấp không thể trao quyền mà bản thân không có. Role có roles.manage:All không được đặt thời hạn tự hết hiệu lực; khi thu hồi, hệ thống từ chối nếu đó là gán Role quản trị cuối cùng còn hiệu lực.
+
+Mọi thao tác gán, gia hạn và thu hồi ghi AuthzAuditLog cùng lần SaveChanges với thay đổi UserRoles. Nếu một gán đã hết hạn nhưng chưa bị thu hồi, thao tác gán lại cập nhật bản ghi hiện tại và lưu trạng thái trước/sau trong audit để không vi phạm unique index có filter RevokedAtUtc IS NULL. API này quản lý gán Role đã tồn tại; tạo Role mới và chỉnh RolePermissions/RolePermissionScopes là phạm vi quản trị danh mục riêng.
+
+Quyền trong access token đã phát không bị thay đổi tại chỗ. Login/refresh tiếp theo tính lại Permission từ UserRoles; access token cũ vẫn có hiệu lực đến khi hết hạn.
+
+Các controller ghi Employees, Departments, Holidays, LeavePolicies, LeaveTypes và EmployeeLookupController đã chuyển sang policy theo Permission. Trong phạm vi HR/Leave endpoints của V1, không còn dùng [Authorize(Roles = "HR")] hay User.IsInRole("HR") để cấp quyền nghiệp vụ.
+
+## 7. JWT và hiệu lực quyền
+
+HR Service phát Permission và Scope hiệu lực vào JWT dưới dạng claim có cấu trúc và phiên bản schema:
+
+- authz_v = 1.
+- perm là một mảng JSON; mỗi phần tử có p là mã Permission và s là danh sách Scope.
+- Ví dụ: [{"p":"leaves.read","s":["Self","Team"]}].
+- Không có Permission hiệu lực thì không phát claim perm.
+- Claim role được giữ tạm cho giao diện và các controller HR chưa chuyển đổi. Các endpoint đã chuyển sang Permission + Scope không sử dụng claim role để authorization. Mục tiêu cuối cùng của V1 vẫn là loại bỏ Role claim khỏi mọi quyết định authorization.
+
+Login và refresh đều gọi lại AuthorizationService.GetEffectiveAuthorizationAsync trước khi phát token. Vì vậy sau khi Role bị thu hồi, access token phát lại từ refresh chỉ chứa Permission còn hiệu lực; không sao chép quyền từ token cũ.
+
+Access JWT được kiểm tra cục bộ tại mỗi service. Thay đổi Role/Permission có hiệu lực khi access token mới được phát hành; thu hồi refresh token không vô hiệu hóa access token đã được cấp. V1 giữ access-token lifetime ngắn hiện có và ghi nhận giới hạn này.
+
+## 8. Quy tắc Team
+
+Một nhân viên chỉ đủ điều kiện được chọn làm ManagerId khi đang hoạt động và có UserRole hiệu lực cấp leaves.decide với Scope Team hoặc All; không kiểm tra Employee.Role enum.
+
+Team được định nghĩa theo quan hệ quản lý hiện tại:
+
+- Employees Team: Employees.ManagerId == ActorId.
+- Leave Team: EmployeeId của đơn phải thuộc danh sách nhân viên hiện đang có ManagerId == ActorId trong HR Service. Leave Service nhận danh sách ID qua `GET /api/v1/leave-scope/managers/{managerId}/employee-ids`; đây là API chỉ phục vụ scope của Leave, không cấp quyền đọc hồ sơ nhân viên.
+
+LeaveRequests.ApproverId là snapshot tại thời điểm tạo đơn, chỉ phục vụ lịch sử. Không dùng trường này làm điều kiện authorization hoặc Team filter.
+
+## 9. Thứ tự triển khai V1
+
+1. Thêm schema authorization và migration HR_DB; giữ tương thích Role enum.
+2. Seed Role/Permission/Scope baseline và backfill UserRoles từ Employee.Role.
+3. Thêm Authorization Service để hợp Permission và Scope, mặc định deny.
+4. Phát perm claim từ HR login/refresh; cập nhật token tests.
+5. Refactor HR Employees API và /api/v1/me/team sang Permission + Scope.
+6. Cung cấp API quản lý UserRoles có kiểm tra quyền hiện tại, chống leo thang đặc quyền, audit và bảo vệ quản trị viên cuối cùng.
+7. Chuyển HR write endpoints và EmployeeLookupController sang policy Permission; chuyển Leave API/repository sang LeaveAccess từ perm, giữ HR lookup cho Team inbox và quyết định Team.
+8. Chạy toàn bộ test SQL/Redis với skipped = 0; benchmark workforce và approval lookup ở 50/100 VU theo [hướng dẫn xác minh và benchmark](../testing/dynamic-authorization-validation.md).
+
+Outbox, asynchronous read model, backfill/reconciliation giữa hai service không thuộc V1; chỉ xem xét nếu benchmark chứng minh HTTP lookup là nút thắt.
+
+## 10. Ràng buộc bảo mật
+
+- Không cho phép gán Role hoặc Permission vượt quá quyền người cấp.
+- Không cho phép người dùng tự cấp quyền cho chính mình.
+- Không xóa quản trị viên cuối cùng.
+- Ghi audit cho thay đổi Role/Permission/Scope.
+- Không trả PasswordHash hoặc entity trực tiếp.
+- Resource không tồn tại hoặc ngoài quyền có thể trả 404 để tránh lộ sự tồn tại; thiếu permission trả 403.
+- Không tin cậy role/scope do client gửi trong query hoặc body.
+
+
+## As-built boundary và phần chưa triển khai (17/11/2026)
+
+### Đã có trong backend
+- HR migration AddDynamicAuthorizationSchema và các bảng Roles, Permissions, UserRoles, RolePermissions, PermissionScopeRules, RolePermissionScopes, AuthzAuditLog.
+- AuthorizationSeeder seed baseline Employee, Manager, HR, Auditor và permission/scope; backfill UserRoles từ Employee.Role theo hướng idempotent.
+- Login/refresh tính quyền lại và phát authz_v=1 cùng perm JSON.
+- HR write APIs, employee list/detail/lookup, UserRole assignment API và Leave API đã có permission/scope policies.
+- UserRole grant/revoke dùng transaction; có kiểm tra actor hiện thời, chặn tự cấp quyền và privilege escalation, bảo vệ admin cuối cùng, đồng thời ghi audit.
+
+### Giới hạn hiện tại
+- API quản trị hiện chỉ xem danh mục Role đang active và gán/xem/thu hồi UserRole assignment. Chưa có API tạo Role tùy ý, activate/deactivate Role/Permission hoặc sửa RolePermissions/RolePermissionScopes.
+- Danh mục Role/Permission baseline được quản lý qua code seeder/migration, chưa phải catalog management UI.
+- React vẫn dùng legacy Role cho navigation và route guard. Frontend chưa đọc/áp dụng từng permission/scope để ẩn/hiện action. Backend vẫn là enforcement cuối cùng.
+- Employee.Role và Role claim legacy chưa bị loại bỏ; chỉ duy trì compatibility/UI/backfill, không dùng để authorize các endpoint đã migrate.
+- Department scope có trong schema nhưng chưa được seed/cấp cho baseline và không có repository filter thực thi.
+- Access JWT đã phát không bị thu hồi tức thời khi gán/thu hồi Role hoặc deactivate; permission mới áp dụng sau login/refresh, token cũ còn hiệu lực đến expiry.
+
+Không nên mô tả V1 là hệ thống có thể tạo Role/Permission tùy ý end-to-end cho tới khi catalog CRUD và permission-driven frontend được triển khai.

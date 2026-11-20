@@ -25,11 +25,29 @@ interface LeaveTypeRecord {
   deductsBalance: boolean;
   isActive?: boolean;
 }
-interface LeavePolicyRecord { id: number; leaveTypeId: number; year: number; daysPerYear: number; }
+interface LeavePolicyRecord {
+  id: number;
+  leaveTypeId: number;
+  year: number;
+  daysPerYear: number;
+  effectiveFrom?: string;
+  createdAtUtc?: string;
+  reason?: string;
+}
+interface LeaveCatalogRecord {
+  leaveTypes: LeaveTypeRecord[];
+  leavePolicies: LeavePolicyRecord[];
+}
+interface LeaveRequestSummaryRecord {
+  pending: number;
+  approved: number | null;
+  total: number | null;
+}
 interface LeaveBalanceRecord {
   leaveTypeId: number;
   year: number;
   entitled: number;
+  policyDays: number;
   used: number;
   pending: number;
   available: number;
@@ -46,6 +64,91 @@ interface EmployeeRecord {
   managerId: string | null;
   managerName: string | null;
 }
+
+// Display metadata is not authorization data. Cache it briefly per signed-in user to
+// avoid repeating HR lookups while navigating adjacent pages.
+const DISPLAY_LOOKUP_CACHE_TTL_MS = 15_000;
+const MAX_EMPLOYEE_DISPLAY_CACHE_ENTRIES = 500;
+const employeeDisplayCache = new Map<string, { value: EmployeeRecord; expiresAt: number }>();
+const employeeDisplayInFlight = new Map<string, Promise<void>>();
+const leaveTypeCache = new Map<boolean, { value: LeaveTypeRecord[]; expiresAt: number }>();
+const leaveTypeInFlight = new Map<boolean, Promise<LeaveTypeRecord[]>>();
+
+function getBusinessDate(value = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(value);
+  const values = new Map<string, string>(
+    parts.map((part) => [part.type, part.value] as [string, string]),
+  );
+  const year = values.get('year');
+  const month = values.get('month');
+  const day = values.get('day');
+  if (!year || !month || !day) {
+    throw new Error('Could not resolve the Vietnam business date.');
+  }
+  return `${year}-${month}-${day}`;
+}
+
+function getBusinessYear(value = new Date()): number {
+  return Number(getBusinessDate(value).slice(0, 4));
+}
+
+function employeeDisplayCacheKey(userId: string, employeeId: string): string {
+  return `${userId}:${employeeId}`;
+}
+
+function cacheEmployeeDisplay(userId: string, employee: EmployeeRecord): void {
+  const key = employeeDisplayCacheKey(userId, employee.id);
+  if (!employeeDisplayCache.has(key) && employeeDisplayCache.size >= MAX_EMPLOYEE_DISPLAY_CACHE_ENTRIES) {
+    const oldestKey = employeeDisplayCache.keys().next().value;
+    if (oldestKey) employeeDisplayCache.delete(oldestKey);
+  }
+
+  employeeDisplayCache.set(key, {
+    value: employee,
+    expiresAt: Date.now() + DISPLAY_LOOKUP_CACHE_TTL_MS,
+  });
+}
+
+async function getCachedLeaveTypes(user: AuthUser): Promise<LeaveTypeRecord[]> {
+  const includeInactive = user.role === 'HR';
+  const cached = leaveTypeCache.get(includeInactive);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  const existingRequest = leaveTypeInFlight.get(includeInactive);
+  if (existingRequest) return existingRequest;
+
+  const request = hrApi
+    .get<LeaveTypeRecord[]>('/api/v1/leave-types', {
+      params: { includeInactive },
+    })
+    .then(({ data }) => {
+      leaveTypeCache.set(includeInactive, {
+        value: data,
+        expiresAt: Date.now() + DISPLAY_LOOKUP_CACHE_TTL_MS,
+      });
+      return data;
+    })
+    .finally(() => {
+      leaveTypeInFlight.delete(includeInactive);
+    });
+
+  leaveTypeInFlight.set(includeInactive, request);
+  return request;
+}
+export interface LeavePageQuery {
+  page: number;
+  pageSize: number;
+  search?: string;
+  status?: LeaveRequest['status'];
+  typeCode?: string;
+  mineOnly?: boolean;
+}
+
 interface LeaveRequestRecord {
   id: string;
   employeeId: string;
@@ -144,34 +247,114 @@ function countWeekdays(startDate: string, endDate: string, holidays: Holiday[]):
   return count;
 }
 
-async function getEmployeeDirectory(user: AuthUser): Promise<Map<string, EmployeeRecord>> {
-  if (user.role === 'HR') {
-    const { data } = await hrApi.get<EmployeeRecord[]>('/api/v1/employees');
-    return new Map(data.map((employee) => [employee.id, employee]));
+async function getEmployeeDirectory(
+  user: AuthUser,
+  records: LeaveRequestRecord[],
+): Promise<Map<string, EmployeeRecord>> {
+  const directory = new Map<string, EmployeeRecord>();
+
+  if (user.role === 'Employee') {
+    const key = employeeDisplayCacheKey(user.id, user.id);
+    const cached = employeeDisplayCache.get(key);
+    let currentEmployee = cached && cached.expiresAt > Date.now() ? cached.value : undefined;
+
+    if (!currentEmployee) {
+      const { data } = await hrApi.get<EmployeeRecord>('/api/v1/me');
+      currentEmployee = data;
+      cacheEmployeeDisplay(user.id, currentEmployee);
+    }
+
+    directory.set(currentEmployee.id, currentEmployee);
+    if (currentEmployee.managerId && currentEmployee.managerName) {
+      directory.set(currentEmployee.managerId, {
+        ...currentEmployee,
+        id: currentEmployee.managerId,
+        fullName: currentEmployee.managerName,
+      });
+    }
+    return directory;
   }
 
-  const { data: currentEmployee } = await hrApi.get<EmployeeRecord>('/api/v1/me');
-  const employees = [currentEmployee];
-  if (user.role === 'Manager') {
-    const { data: team } = await hrApi.get<EmployeeRecord[]>('/api/v1/me/team');
-    employees.push(...team);
+  const ids = [...new Set(records.flatMap((record) =>
+    [record.employeeId, record.approverId]
+      .filter((id): id is string => Boolean(id) && id !== user.id),
+  ))];
+  const missingIds: string[] = [];
+  const pendingRequests = new Set<Promise<void>>();
+  const now = Date.now();
+
+  for (const id of ids) {
+    const key = employeeDisplayCacheKey(user.id, id);
+    const cached = employeeDisplayCache.get(key);
+    if (cached && cached.expiresAt > now) {
+      directory.set(id, cached.value);
+      continue;
+    }
+
+    const inFlight = employeeDisplayInFlight.get(key);
+    if (inFlight) pendingRequests.add(inFlight);
+    else missingIds.push(id);
   }
-  const directory = new Map(employees.map((employee) => [employee.id, employee]));
-  if (currentEmployee.managerId && currentEmployee.managerName && !directory.has(currentEmployee.managerId)) {
-    directory.set(currentEmployee.managerId, {
-      ...currentEmployee,
-      id: currentEmployee.managerId,
-      fullName: currentEmployee.managerName,
+
+  const batches: string[][] = [];
+  for (let index = 0; index < missingIds.length; index += 100) {
+    batches.push(missingIds.slice(index, index + 100));
+  }
+
+  for (const batch of batches) {
+    const request = hrApi
+      .post<EmployeeRecord[]>('/api/v1/lookup/employees/batch', batch)
+      .then(({ data }) => {
+        for (const employee of data) {
+          cacheEmployeeDisplay(user.id, employee);
+        }
+      });
+
+    const keys = batch.map((id) => employeeDisplayCacheKey(user.id, id));
+    for (const key of keys) employeeDisplayInFlight.set(key, request);
+    pendingRequests.add(request);
+
+    void request.finally(() => {
+      for (const key of keys) {
+        if (employeeDisplayInFlight.get(key) === request) {
+          employeeDisplayInFlight.delete(key);
+        }
+      }
+    }).catch(() => {
+      // The original request is awaited below and owns error propagation.
     });
   }
+
+  await Promise.all(pendingRequests);
+
+  // Read from the cache after any in-flight batch has completed.
+  for (const id of ids) {
+    const cached = employeeDisplayCache.get(employeeDisplayCacheKey(user.id, id));
+    if (cached && cached.expiresAt > Date.now()) directory.set(id, cached.value);
+  }
+
+  // The caller may identify itself even when employees.read has Team but not Self.
+  directory.set(user.id, {
+    id: user.id,
+    code: '',
+    fullName: user.fullName,
+    role: user.role,
+    isActive: true,
+    departmentId: 0,
+    departmentName: '',
+    managerId: null,
+    managerName: null,
+  });
+
   return directory;
 }
 
 async function mapApiRequests(records: LeaveRequestRecord[], user: AuthUser): Promise<LeaveRequest[]> {
-  const [{ data: leaveTypes }, employees] = await Promise.all([
-    hrApi.get<LeaveTypeRecord[]>('/api/v1/leave-types', { params: { includeInactive: user.role === 'HR' } }),
-    getEmployeeDirectory(user),
+  const [leaveTypes, employees] = await Promise.all([
+    getCachedLeaveTypes(user),
+    getEmployeeDirectory(user, records),
   ]);
+
   return records.map((record) => {
     const employee = employees.get(record.employeeId);
     const approver = record.approverId ? employees.get(record.approverId) : undefined;
@@ -181,8 +364,8 @@ async function mapApiRequests(records: LeaveRequestRecord[], user: AuthUser): Pr
       id: record.id,
       employeeId: record.employeeId,
       employeeName: employee?.fullName ?? record.employeeId,
-      employeeCode: employee?.code ?? record.employeeId,
-      departmentName: employee?.departmentName ?? String(record.departmentId),
+      employeeCode: employee?.code || record.employeeId,
+      departmentName: employee?.departmentName || String(record.departmentId),
       typeCode,
       typeName: getLocalizedLeaveTypeName(typeCode, leaveType?.name ?? typeCode),
       startDate: record.startDate,
@@ -196,21 +379,108 @@ async function mapApiRequests(records: LeaveRequestRecord[], user: AuthUser): Pr
   });
 }
 
-export async function getLeaveRequests(user: AuthUser): Promise<LeaveRequest[]> {
-  if (DEMO_MODE) return loadDemoState().requests.map(localizeLeaveRequest);
-  try {
-    const { data } = await leaveApi.get<LeaveRequestRecord[]>('/api/v1/leave-requests');
-    return await mapApiRequests(data, user);
+function filterDemoRequests(user: AuthUser, query: LeavePageQuery, pendingOnly = false): LeaveRequest[] {
+  const state = loadDemoState();
+  const allowedEmployeeIds = new Set(
+    user.role === 'HR'
+      ? state.employees.map((employee) => employee.id)
+      : user.role === 'Manager'
+        ? [user.id, ...state.employees.filter((employee) => employee.managerId === user.id).map((employee) => employee.id)]
+        : [user.id],
+  );
+  const search = query.search?.trim().toLocaleLowerCase('vi-VN') ?? '';
+  return state.requests
+    .filter((item) => query.mineOnly ? item.employeeId === user.id : allowedEmployeeIds.has(item.employeeId))
+    .filter((item) => !pendingOnly || item.status === 'Pending')
+    .filter((item) => !query.status || item.status === query.status)
+    .filter((item) => !query.typeCode || item.typeCode === query.typeCode)
+    .filter((item) => !search || [item.id, item.reason, item.employeeName, item.employeeCode, item.typeName]
+      .some((value) => value.toLocaleLowerCase('vi-VN').includes(search)))
+    .map(localizeLeaveRequest);
+}
+
+async function resolveLeaveTypeId(typeCode: string | undefined, user: AuthUser): Promise<number | undefined> {
+  if (!typeCode) return undefined;
+  const types = await getCachedLeaveTypes(user);
+  return types.find((item) => item.code.toUpperCase() === typeCode.toUpperCase())?.id ?? -1;
+}
+
+export async function getLeaveRequestsPage(
+  user: AuthUser,
+  query: LeavePageQuery,
+): Promise<{ items: LeaveRequest[]; totalCount: number }> {
+  const page = Math.max(1, query.page);
+  const pageSize = Math.min(100, Math.max(1, query.pageSize));
+  if (DEMO_MODE) {
+    const filtered = filterDemoRequests(user, query);
+    const offset = (page - 1) * pageSize;
+    return { items: filtered.slice(offset, offset + pageSize), totalCount: filtered.length };
   }
-  catch (error) { throw new Error(getApiErrorMessage(error)); }
+  try {
+    const leaveTypeId = await resolveLeaveTypeId(query.typeCode, user);
+    if (leaveTypeId === -1) return { items: [], totalCount: 0 };
+    const endpoint = query.mineOnly ? '/api/v1/leave-requests/mine' : '/api/v1/leave-requests';
+    const { data, headers } = await leaveApi.get<LeaveRequestRecord[]>(endpoint, {
+      params: {
+        page,
+        pageSize,
+        search: query.search || undefined,
+        status: query.status,
+        leaveTypeId,
+      },
+    });
+    return {
+      items: await mapApiRequests(data, user),
+      totalCount: Number(headers?.['x-total-count'] ?? data.length),
+    };
+  } catch (error) { throw new Error(getApiErrorMessage(error)); }
+}
+
+export async function getApprovalsInboxPage(
+  user: AuthUser,
+  query: Pick<LeavePageQuery, 'page' | 'pageSize' | 'search'>,
+): Promise<{ items: LeaveRequest[]; totalCount: number }> {
+  if (user.role === 'Employee') return { items: [], totalCount: 0 };
+  const page = Math.max(1, query.page);
+  const pageSize = Math.min(100, Math.max(1, query.pageSize));
+  if (DEMO_MODE) {
+    const filtered = filterDemoRequests(user, query, true);
+    const offset = (page - 1) * pageSize;
+    return { items: filtered.slice(offset, offset + pageSize), totalCount: filtered.length };
+  }
+  try {
+    const { data, headers } = await leaveApi.get<LeaveRequestRecord[]>('/api/v1/leave-requests/pending-approval', {
+      params: { page, pageSize, search: query.search || undefined },
+    });
+    return {
+      items: await mapApiRequests(data, user),
+      totalCount: Number(headers['x-total-count'] ?? data.length),
+    };
+  } catch (error) { throw new Error(getApiErrorMessage(error)); }
+}
+
+// Bounded compatibility reads for small summary widgets; table screens use the paged functions above.
+export async function getLeaveRequests(user: AuthUser): Promise<LeaveRequest[]> {
+  return (await getLeaveRequestsPage(user, { page: 1, pageSize: 100 })).items;
 }
 
 export async function getApprovalsInbox(user: AuthUser): Promise<LeaveRequest[]> {
-  if (user.role === 'Employee') return [];
-  if (DEMO_MODE) return loadDemoState().requests.filter((item) => item.status === 'Pending' && (user.role === 'HR' || item.approverName === user.fullName)).map(localizeLeaveRequest);
+  return (await getApprovalsInboxPage(user, { page: 1, pageSize: 100 })).items;
+}
+
+export async function getLeaveRequestSummary(user: AuthUser): Promise<LeaveRequestSummaryRecord> {
+  if (DEMO_MODE) {
+    const visible = filterDemoRequests(user, { page: 1, pageSize: 100 });
+    return {
+      pending: visible.filter((item) => item.status === 'Pending').length,
+      approved: visible.filter((item) => item.status === 'Approved').length,
+      total: visible.length,
+    };
+  }
+
   try {
-    const { data } = await leaveApi.get<LeaveRequestRecord[]>('/api/v1/leave-requests/pending-approval');
-    return await mapApiRequests(data, user);
+    const { data } = await leaveApi.get<LeaveRequestSummaryRecord>('/api/v1/leave-requests/summary');
+    return data;
   } catch (error) { throw new Error(getApiErrorMessage(error)); }
 }
 
@@ -236,23 +506,22 @@ export async function getBalances(user: AuthUser): Promise<LeaveBalance[]> {
     ];
   }
   try {
-    const year = new Date().getFullYear();
-    const [{ data: response }, { data: types }, { data: policies }] = await Promise.all([
-      leaveApi.get<LeaveBalanceRecord[]>('/api/v1/leave-balances/mine', { params: { year } }),
+    const year = getBusinessYear();
+    const [{ data: response }, { data: types }] = await Promise.all([
+      leaveApi.post<LeaveBalanceRecord[]>('/api/v1/leave-balances/mine/synchronize', null, { params: { year } }),
       hrApi.get<LeaveTypeRecord[]>('/api/v1/leave-types'),
-      hrApi.get<LeavePolicyRecord[]>('/api/v1/leave-policies', { params: { year } }),
     ]);
     return types.map((type) => {
       const balance = response.find((item) => item.leaveTypeId === type.id);
-      const policy = policies.find((item) => item.leaveTypeId === type.id);
       const code = type.code.toUpperCase();
-      const entitled = type.deductsBalance ? (balance?.entitled ?? policy?.daysPerYear ?? 0) : null;
+      const entitled = type.deductsBalance ? (balance?.entitled ?? 0) : null;
       const used = balance?.used ?? 0;
       const pending = balance?.pending ?? 0;
       return {
         code,
         name: getLocalizedLeaveTypeName(type.code, type.name),
         entitled,
+        policyDays: type.deductsBalance ? (balance?.policyDays ?? entitled ?? 0) : undefined,
         used,
         pending,
         available: type.deductsBalance ? (balance?.available ?? Math.max(0, (entitled ?? 0) - used - pending)) : null,
@@ -264,7 +533,7 @@ export async function getBalances(user: AuthUser): Promise<LeaveBalance[]> {
 
 export async function createLeaveRequest(user: AuthUser, input: CreateLeaveInput): Promise<void> {
   const today = new Date();
-  const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const todayDate = getBusinessDate(today);
   if (input.startDate < todayDate) throw new Error('Ngày bắt đầu nghỉ phải từ hôm nay trở đi.');
   if (input.endDate < input.startDate) throw new Error('Ngày kết thúc phải bằng hoặc sau ngày bắt đầu.');
   if (!input.reason.trim()) throw new Error('Vui lòng nhập lý do nghỉ phép.');
@@ -283,7 +552,7 @@ export async function createLeaveRequest(user: AuthUser, input: CreateLeaveInput
         if (taken + days > policy.daysPerYear) throw new Error(`Không đủ số dư ${policy.typeName.toLowerCase()}.`);
       }
       const approver = employee.managerName || 'HR Team';
-      const request: LeaveRequest = { id: `LR-${new Date().getFullYear()}-${String(state.requests.length + 15).padStart(3, '0')}`, employeeId: user.id, employeeName: employee.fullName, employeeCode: employee.code, departmentName: employee.departmentName, typeCode: input.typeCode, typeName: getLocalizedLeaveTypeName(policy.typeCode, policy.typeName), startDate: input.startDate, endDate: input.endDate, days, reason: input.reason.trim(), status: 'Pending', approverName: approver, createdAt: new Date().toISOString() };
+      const request: LeaveRequest = { id: `LR-${getBusinessYear()}-${String(state.requests.length + 15).padStart(3, '0')}`, employeeId: user.id, employeeName: employee.fullName, employeeCode: employee.code, departmentName: employee.departmentName, typeCode: input.typeCode, typeName: getLocalizedLeaveTypeName(policy.typeCode, policy.typeName), startDate: input.startDate, endDate: input.endDate, days, reason: input.reason.trim(), status: 'Pending', approverName: approver, createdAt: new Date().toISOString() };
       return { ...state, requests: [request, ...state.requests] };
     });
     return;
@@ -320,11 +589,19 @@ export async function decideLeaveRequest(id: string, decision: 'approve' | 'reje
     });
     return;
   }
-  try { await leaveApi.post(`/api/v1/leave-requests/${encodeURIComponent(id)}/${decision}`, { note }); }
-  catch (error) { throw new Error(getApiErrorMessage(error)); }
+  try {
+    await leaveApi.patch(`/api/v1/leave-requests/${encodeURIComponent(id)}/decision`, {
+      decision,
+      note,
+    });
+  } catch (error) { throw new Error(getApiErrorMessage(error)); }
 }
 
-export async function getPolicies(year = new Date().getFullYear() + 1): Promise<LeavePolicy[]> {
+export async function getPolicies(
+  year = getBusinessYear(),
+  asOfDate = year === getBusinessYear() ? getBusinessDate() : `${year}-12-31`,
+  includeLegacyFallback = false,
+): Promise<LeavePolicy[]> {
   if (DEMO_MODE) {
     const savedPolicies = new Map(
       loadDemoState().policies.map((policy) => [policy.typeCode.toUpperCase(), policy]),
@@ -354,21 +631,47 @@ export async function getPolicies(year = new Date().getFullYear() + 1): Promise<
     });
   }
   try {
-    const [{ data: types }, { data: policies }] = await Promise.all([
-      hrApi.get<LeaveTypeRecord[]>('/api/v1/leave-types', { params: { includeInactive: true } }),
-      hrApi.get<LeavePolicyRecord[]>('/api/v1/leave-policies', { params: { year } }),
-    ]);
+    const { data: catalog } = await hrApi.get<LeaveCatalogRecord>('/api/v1/leave-catalog', {
+      params: { year, includeInactive: true },
+    });
+    const { leaveTypes: types, leavePolicies: policies } = catalog;
     return builtInLeaveTypes.map((definition) => {
       const type = types.find((candidate) => candidate.code.toUpperCase() === definition.code);
-      const policy = type && policies.find((candidate) => candidate.leaveTypeId === type.id && candidate.year === year);
+      const candidates = type
+        ? policies
+          .filter((candidate) => candidate.leaveTypeId === type.id && candidate.year === year)
+          .sort((left, right) =>
+            (right.effectiveFrom ?? '').localeCompare(left.effectiveFrom ?? '') ||
+            (right.createdAtUtc ?? '').localeCompare(left.createdAtUtc ?? '') ||
+            right.id - left.id)
+        : [];
+      const firstDayOfPolicyYear = `${year}-01-01`;
+      const policy = candidates.find((candidate) =>
+        Boolean(candidate.effectiveFrom) &&
+        candidate.effectiveFrom! >= firstDayOfPolicyYear &&
+        candidate.effectiveFrom! <= asOfDate)
+        // Keep a legacy row available for appending a valid version, but do not
+        // expose its prior-year EffectiveFrom as the current policy date.
+        ?? (includeLegacyFallback
+          ? candidates.find((candidate) =>
+            !candidate.effectiveFrom || candidate.effectiveFrom < firstDayOfPolicyYear)
+          : undefined);
       return {
         id: type ? `type-${type.id}` : `type-${definition.code}`,
         leaveTypeId: type?.id,
         policyId: policy?.id,
+        effectiveFrom: policy?.effectiveFrom &&
+          policy.effectiveFrom >= `${year}-01-01` &&
+          policy.effectiveFrom <= `${year}-12-31`
+          ? policy.effectiveFrom
+          : undefined,
+        reason: policy?.reason,
         year,
         typeCode: definition.code,
         typeName: definition.name,
-        daysPerYear: definition.deductsBalance ? policy?.daysPerYear ?? definition.defaultDays : null,
+        daysPerYear: definition.deductsBalance
+          ? policy?.daysPerYear ?? (type?.isActive ? null : definition.defaultDays)
+          : null,
         paid: definition.isPaid,
         deductsBalance: definition.deductsBalance,
         description: leaveDescription(definition.code),
@@ -378,10 +681,85 @@ export async function getPolicies(year = new Date().getFullYear() + 1): Promise<
   } catch (error) { throw new Error(`Không tải được loại nghỉ/chính sách. ${getApiErrorMessage(error)}`); }
 }
 
+export async function getPolicyVersions(year?: number): Promise<LeavePolicy[]> {
+  if (DEMO_MODE) {
+    const state = loadDemoState();
+    const demoYear = year ?? getBusinessYear();
+    return builtInLeaveTypes.flatMap((definition) => {
+      const policy = state.policies.find((item) =>
+        item.typeCode.toUpperCase() === definition.code);
+      if (!policy || !definition.deductsBalance || !policy.isActive) return [];
+      return [{
+        ...policy,
+        year: demoYear,
+        versionNumber: 1,
+        policyId: policy.policyId,
+        daysPerYear: policy.daysPerYear,
+      }];
+    });
+  }
+
+  try {
+    const params = year === undefined
+      ? { includeInactive: true }
+      : { year, includeInactive: true };
+    const { data: catalog } = await hrApi.get<LeaveCatalogRecord>('/api/v1/leave-catalog', { params });
+
+    return builtInLeaveTypes.flatMap((definition) => {
+      if (!definition.deductsBalance) return [];
+      const type = catalog.leaveTypes.find(
+        (candidate) => candidate.code.toUpperCase() === definition.code,
+      );
+      if (!type) return [];
+
+      const versions = catalog.leavePolicies
+        .filter((candidate) => {
+          if (candidate.leaveTypeId !== type.id || (year !== undefined && candidate.year !== year)) {
+            return false;
+          }
+          const firstDayOfPolicyYear = `${candidate.year}-01-01`;
+          const lastDayOfPolicyYear = `${candidate.year}-12-31`;
+          return Boolean(candidate.effectiveFrom) &&
+            candidate.effectiveFrom! >= firstDayOfPolicyYear &&
+            candidate.effectiveFrom! <= lastDayOfPolicyYear;
+        })
+        .sort((left, right) =>
+          left.year - right.year ||
+          (left.effectiveFrom ?? '').localeCompare(right.effectiveFrom ?? '') ||
+          (left.createdAtUtc ?? '').localeCompare(right.createdAtUtc ?? '') ||
+          left.id - right.id);
+
+      const yearVersionCounters = new Map<number, number>();
+      return versions.map((version): LeavePolicy => {
+        const versionNumber = (yearVersionCounters.get(version.year) ?? 0) + 1;
+        yearVersionCounters.set(version.year, versionNumber);
+        return {
+          id: `type-${type.id}-policy-${version.id}`,
+          leaveTypeId: type.id,
+          policyId: version.id,
+          year: version.year,
+          versionNumber,
+          typeCode: definition.code,
+          typeName: definition.name,
+          daysPerYear: version.daysPerYear,
+          paid: definition.isPaid,
+          deductsBalance: definition.deductsBalance,
+          description: leaveDescription(definition.code),
+          isActive: type.isActive ?? false,
+          effectiveFrom: version.effectiveFrom,
+          reason: version.reason,
+        };
+      });
+    });
+  } catch (error) {
+    throw new Error(`Không tải được lịch sử phiên bản chính sách. ${getApiErrorMessage(error)}`);
+  }
+}
+
 export async function restoreBuiltInLeaveType(policy: LeavePolicy): Promise<void> {
   const definition = builtInLeaveTypes.find((type) => type.code === policy.typeCode);
   if (!definition) throw new Error(`Unsupported built-in leave type: ${policy.typeCode}.`);
-  const year = policy.year ?? new Date().getFullYear() + 1;
+  const year = policy.year ?? getBusinessYear();
   if (DEMO_MODE) {
     updateDemoState((state) => {
       const existing = state.policies.find((item) => item.typeCode === policy.typeCode);
@@ -409,10 +787,10 @@ export async function restoreBuiltInLeaveType(policy: LeavePolicy): Promise<void
   }
 
   try {
-    const [{ data: types }, { data: policies }] = await Promise.all([
-      hrApi.get<LeaveTypeRecord[]>('/api/v1/leave-types', { params: { includeInactive: true } }),
-      hrApi.get<LeavePolicyRecord[]>('/api/v1/leave-policies', { params: { year } }),
-    ]);
+    const { data: catalog } = await hrApi.get<LeaveCatalogRecord>('/api/v1/leave-catalog', {
+      params: { year, includeInactive: true },
+    });
+    const { leaveTypes: types, leavePolicies: policies } = catalog;
     const existingType = types.find((item) => item.code.toUpperCase() === definition.code);
     let leaveTypeId: number;
     const typePayload = {
@@ -443,6 +821,102 @@ export async function restoreBuiltInLeaveType(policy: LeavePolicy): Promise<void
   } catch (error) { throw new Error(`Không thể thêm lại chính sách nghỉ. ${getApiErrorMessage(error)}`); }
 }
 
+export interface LeavePolicyUsage {
+  policyVersionId: number;
+  referencedAllocations: number;
+}
+
+export async function getPolicyVersionUsage(policyVersionId: number): Promise<number> {
+  if (DEMO_MODE) return 0;
+  try {
+    const { data } = await leaveApi.get<LeavePolicyUsage>(
+      `/api/v1/leave-policy-usage/${policyVersionId}`,
+    );
+    return data.referencedAllocations;
+  } catch (error) {
+    throw new Error(`Không kiểm tra được lịch sử sử dụng chính sách. ${getApiErrorMessage(error)}`);
+  }
+}
+
+export async function editPolicyVersion(policy: LeavePolicy): Promise<void> {
+  if (!policy.policyId || !policy.leaveTypeId || !policy.year || policy.daysPerYear === null) {
+    throw new Error('Thiếu thông tin phiên bản chính sách cần sửa.');
+  }
+  const year = policy.year;
+  if (year < getBusinessYear()) {
+    throw new Error('Không thể sửa chính sách của năm đã qua.');
+  }
+  if (!policy.effectiveFrom) {
+    throw new Error('Phiên bản chính sách chưa có ngày hiệu lực hợp lệ.');
+  }
+  if (policy.effectiveFrom <= getBusinessDate()) {
+    throw new Error('Không thể sửa phiên bản chính sách đã hoặc đang có hiệu lực. Hãy tạo phiên bản mới có ngày hiệu lực trong tương lai.');
+  }
+
+  const referencedAllocations = await getPolicyVersionUsage(policy.policyId);
+  if (referencedAllocations > 0) {
+    throw new Error(
+      `Không thể sửa phiên bản này vì đã được ${referencedAllocations} phân bổ nghỉ phép tham chiếu. Hãy tạo phiên bản mới.`,
+    );
+  }
+
+  if (DEMO_MODE) {
+    updateDemoState((state) => ({
+      ...state,
+      policies: state.policies.map((existing) =>
+        existing.policyId === policy.policyId
+          ? { ...existing, daysPerYear: policy.daysPerYear, reason: policy.reason }
+          : existing),
+    }));
+    return;
+  }
+
+  try {
+    await hrApi.put(`/api/v1/leave-policies/${policy.policyId}/edit`, {
+      leaveTypeId: policy.leaveTypeId,
+      year,
+      daysPerYear: policy.daysPerYear,
+      effectiveFrom: policy.effectiveFrom,
+      reason: policy.reason?.trim() || 'Cập nhật chính sách nghỉ phép',
+    });
+  } catch (error) {
+    throw new Error(`Không sửa được phiên bản chính sách. ${getApiErrorMessage(error)}`);
+  }
+}
+
+export async function deletePolicyVersion(policy: LeavePolicy): Promise<void> {
+  if (!policy.policyId || !policy.year) {
+    throw new Error('Thiếu thông tin phiên bản chính sách cần xóa.');
+  }
+  if (policy.year < getBusinessYear()) {
+    throw new Error('Không thể xóa chính sách của năm đã qua.');
+  }
+  if (!policy.effectiveFrom || policy.effectiveFrom <= getBusinessDate()) {
+    throw new Error('Không thể xóa phiên bản chính sách đã hoặc đang có hiệu lực. Hãy tạo phiên bản mới có ngày hiệu lực trong tương lai.');
+  }
+
+  const referencedAllocations = await getPolicyVersionUsage(policy.policyId);
+  if (referencedAllocations > 0) {
+    throw new Error(
+      `Không thể xóa phiên bản này vì đã được ${referencedAllocations} phân bổ nghỉ phép tham chiếu.`,
+    );
+  }
+
+  if (DEMO_MODE) {
+    updateDemoState((state) => ({
+      ...state,
+      policies: state.policies.filter((existing) => existing.policyId !== policy.policyId),
+    }));
+    return;
+  }
+
+  try {
+    await hrApi.delete(`/api/v1/leave-policies/${policy.policyId}`);
+  } catch (error) {
+    throw new Error(`Không xóa được phiên bản chính sách. ${getApiErrorMessage(error)}`);
+  }
+}
+
 export async function savePolicies(policies: LeavePolicy[]): Promise<void> {
   if (DEMO_MODE) {
     const definitions = new Map(builtInLeaveTypes.map((type) => [type.code, type]));
@@ -465,28 +939,60 @@ export async function savePolicies(policies: LeavePolicy[]): Promise<void> {
     return;
   }
   try {
-    const defaultYear = new Date().getFullYear() + 1;
-    await Promise.all(policies.map(async (policy) => {
-      if (!policy.leaveTypeId) throw new Error(`Missing leaveTypeId for ${policy.typeName}.`);
-      const definition = builtInLeaveTypes.find((type) => type.code === policy.typeCode);
-      if (!definition) throw new Error(`Unsupported leave type: ${policy.typeCode}.`);
-      await hrApi.put(`/api/v1/leave-types/${policy.leaveTypeId}`, {
-        name: definition.name,
-        isPaid: definition.isPaid,
-        deductsBalance: definition.deductsBalance,
-        isActive: policy.isActive,
-      });
-      if (definition.deductsBalance && policy.daysPerYear !== null) {
-        const body = { leaveTypeId: policy.leaveTypeId, year: policy.year ?? defaultYear, daysPerYear: policy.daysPerYear };
-        if (policy.policyId) await hrApi.put(`/api/v1/leave-policies/${policy.policyId}`, body);
-        else await hrApi.post('/api/v1/leave-policies', body);
+    const defaultYear = getBusinessYear();
+
+    // Policy version changes must not update the separate LeaveType resource.
+    // Keeping this request isolated avoids requiring leave-types.update for a
+    // user who is authorized only to manage leave-policy versions.
+    for (const policy of policies) {
+      if (!policy.leaveTypeId) {
+        throw new Error(`Missing leaveTypeId for ${policy.typeName}.`);
       }
-    }));
+
+      const definition = builtInLeaveTypes.find((type) => type.code === policy.typeCode);
+      if (!definition) {
+        throw new Error(`Unsupported leave type: ${policy.typeCode}.`);
+      }
+      if (!definition.deductsBalance || policy.daysPerYear === null) continue;
+
+      const year = policy.year ?? defaultYear;
+      if (!Number.isInteger(year) || year < getBusinessYear()) {
+        throw new Error('Chỉ có thể thay đổi chính sách của năm hiện tại hoặc tương lai.');
+      }
+      if (!policy.effectiveFrom) {
+        throw new Error('Vui lòng chọn ngày hiệu lực cho phiên bản chính sách.');
+      }
+
+      const firstDayOfPolicyYear = `${year}-01-01`;
+      const earliestAllowedDate = getBusinessDate() > firstDayOfPolicyYear
+        ? getBusinessDate()
+        : firstDayOfPolicyYear;
+      if (policy.effectiveFrom < earliestAllowedDate ||
+          policy.effectiveFrom > `${year}-12-31`) {
+        throw new Error(
+          `Ngày hiệu lực phải nằm trong năm ${year} và không trước ${earliestAllowedDate}.`,
+        );
+      }
+
+      const body = {
+        leaveTypeId: policy.leaveTypeId,
+        year,
+        daysPerYear: policy.daysPerYear,
+        effectiveFrom: policy.effectiveFrom,
+        reason: policy.reason?.trim() || 'Cập nhật chính sách nghỉ phép',
+      };
+
+      if (policy.policyId) {
+        await hrApi.put(`/api/v1/leave-policies/${policy.policyId}`, body);
+      } else {
+        await hrApi.post('/api/v1/leave-policies', body);
+      }
+    }
   } catch (error) { throw new Error(`Không lưu được chính sách. ${getApiErrorMessage(error)}`); }
 }
 
 export async function getHolidays(from?: string, to?: string): Promise<Holiday[]> {
-  const currentYear = new Date().getFullYear();
+  const currentYear = getBusinessYear();
   const start = from ?? `${currentYear}-01-01`;
   const end = to ?? `${currentYear + 1}-12-31`;
   if (DEMO_MODE) {

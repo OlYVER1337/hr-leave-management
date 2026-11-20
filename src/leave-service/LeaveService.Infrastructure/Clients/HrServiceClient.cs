@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -7,7 +8,7 @@ using LeaveService.Application.Dtos;
 
 namespace LeaveService.Infrastructure.Clients;
 
-public sealed class HrServiceClient(HttpClient httpClient) : ILeaveHrClient
+public sealed class HrServiceClient(HttpClient httpClient, HrCallMetrics? metrics = null) : ILeaveHrClient
 {
     public Task<HrEmployeeSnapshot> GetEmployeeAsync(
         Guid employeeId,
@@ -19,14 +20,14 @@ public sealed class HrServiceClient(HttpClient httpClient) : ILeaveHrClient
             "employee",
             cancellationToken);
 
-    public async Task<IReadOnlyList<HrEmployeeSnapshot>> GetTeamAsync(
+    public async Task<IReadOnlyList<Guid>> GetTeamEmployeeIdsAsync(
         Guid managerId,
         string authorization,
         CancellationToken cancellationToken = default) =>
-        await GetRequiredAsync<HrEmployeeSnapshot[]>(
-            $"/api/v1/lookup/employees/{managerId}/team",
+        await GetRequiredAsync<Guid[]>(
+            $"/api/v1/leave-scope/managers/{managerId}/employee-ids",
             authorization,
-            "team",
+            "leave team",
             cancellationToken);
 
     public Task<HrLeaveType> GetLeaveTypeAsync(
@@ -39,12 +40,24 @@ public sealed class HrServiceClient(HttpClient httpClient) : ILeaveHrClient
             "leave type",
             cancellationToken);
 
-    public async Task<IReadOnlyList<HrLeavePolicy>> GetLeavePoliciesAsync(
+    public Task<HrLeaveCatalog> GetLeaveCatalogAsync(
         int year,
         string authorization,
         CancellationToken cancellationToken = default) =>
+        GetRequiredAsync<HrLeaveCatalog>(
+            $"/api/v1/leave-catalog?year={year}&authoritative=true",
+            authorization,
+            "leave catalog",
+            cancellationToken);
+
+    // HR trả đúng một chính sách mỗi loại nghỉ có hiệu lực tại asOfDate.
+    public async Task<IReadOnlyList<HrLeavePolicy>> GetLeavePoliciesAsync(
+        int year,
+        DateOnly asOfDate,
+        string authorization,
+        CancellationToken cancellationToken = default) =>
         await GetRequiredAsync<HrLeavePolicy[]>(
-            $"/api/v1/leave-policies?year={year}&authoritative=true",
+            $"/api/v1/leave-policies?year={year}&asOfDate={asOfDate:yyyy-MM-dd}&authoritative=true",
             authorization,
             "leave policies",
             cancellationToken);
@@ -66,6 +79,7 @@ public sealed class HrServiceClient(HttpClient httpClient) : ILeaveHrClient
         string resource,
         CancellationToken cancellationToken)
     {
+        var startedAt = Stopwatch.GetTimestamp();
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, path);
@@ -104,6 +118,13 @@ public sealed class HrServiceClient(HttpClient httpClient) : ILeaveHrClient
         catch (TaskCanceledException exception) when (!cancellationToken.IsCancellationRequested)
         {
             throw new DependencyUnavailableException("HR service", exception);
+        }
+        finally
+        {
+            if (metrics?.Enabled == true)
+            {
+                metrics.Record(Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+            }
         }
     }
 }

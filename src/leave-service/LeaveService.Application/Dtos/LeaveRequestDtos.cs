@@ -10,6 +10,10 @@ public sealed record CreateLeaveRequest(
 
 public sealed record LeaveDecisionRequest(string? Note);
 
+public sealed record LeaveDecisionCommand(string Decision, string? Note);
+
+public sealed record LeaveRequestSummaryResponse(int Pending, int? Approved, int? Total);
+
 public sealed record CancelLeaveRequest(string? Note);
 
 public sealed record LeaveBalanceResponse(
@@ -18,7 +22,8 @@ public sealed record LeaveBalanceResponse(
     decimal Entitled,
     decimal Used,
     decimal Pending,
-    decimal Available);
+    decimal Available,
+    decimal PolicyDays = 0m);
 
 public sealed record LeaveRequestResponse(
     Guid Id,
@@ -57,8 +62,17 @@ public sealed record HrLeavePolicy(
     string LeaveTypeCode,
     string LeaveTypeName,
     int Year,
-    decimal DaysPerYear);
+    decimal DaysPerYear,
+    DateOnly EffectiveFrom = default,
+    DateTime CreatedAtUtc = default,
+    string Reason = "");
+
+public sealed record HrLeaveCatalog(
+    IReadOnlyList<HrLeaveType> LeaveTypes,
+    IReadOnlyList<HrLeavePolicy> LeavePolicies);
+
+public sealed record LeaveBalanceEntitlement(int LeaveTypeId, decimal Entitled, int Year = 0);
 
 public sealed record HrHoliday(int Id, DateOnly HolidayDate, string Name);
 
-public sealed record AnnualLeaveAllocation(int Year, decimal Days, decimal Entitled);
+public sealed record AnnualLeaveAllocation(int Year, decimal Days, decimal Entitled, int? PolicyVersionId = null);

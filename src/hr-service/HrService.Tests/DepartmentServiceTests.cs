@@ -10,6 +10,7 @@ namespace HrService.Tests;
 
 public sealed class DepartmentServiceTests
 {
+    // Tên phòng ban được trim trước khi lưu để tránh dữ liệu có khoảng trắng thừa.
     [Fact]
     public async Task CreateAsync_TrimsNameAndPersistsDepartment()
     {
@@ -38,6 +39,7 @@ public sealed class DepartmentServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    // Tên phòng ban trùng phải bị từ chối và không gọi SaveChanges.
     [Fact]
     public async Task CreateAsync_RejectsDuplicateNameWithoutSaving()
     {
@@ -58,6 +60,7 @@ public sealed class DepartmentServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // Không cho xóa phòng ban còn nhân viên trực thuộc để tránh làm mất liên kết nghiệp vụ.
     [Fact]
     public async Task DeleteAsync_RejectsDepartmentWithEmployees()
     {

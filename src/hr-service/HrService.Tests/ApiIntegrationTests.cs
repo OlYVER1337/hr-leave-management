@@ -1,3 +1,4 @@
+using HrService.Api.Authorization;
 using HrService.Api.Controllers;
 using HrService.Api.Middleware;
 using HrService.Application.Abstractions;
@@ -20,46 +21,204 @@ namespace HrService.Tests;
 
 public sealed class ApiIntegrationTests
 {
+    // Endpoint danh sách nhân viên phải từ chối request không có bearer token.
     [Fact]
     public async Task EmployeeList_RequiresAuthentication()
     {
         using var host = await CreateHostAsync();
         using var client = host.GetTestClient();
 
-        var response = await client.GetAsync("/api/v1/employees");
+        var response = await client.GetAsync("/api/v1/employees?page=1&pageSize=10");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    // Kiểm tra page/pageSize thiếu, bằng 0 hoặc vượt giới hạn đều bị từ chối trước khi truy vấn.
+    [Theory]
+    [InlineData("")]
+    [InlineData("?page=1")]
+    [InlineData("?pageSize=10")]
+    [InlineData("?page=0&pageSize=10")]
+    [InlineData("?page=1&pageSize=101")]
+    public async Task EmployeeList_RequiresValidPageAndPageSize(string query)
+    {
+        var employeeRepository = new Mock<IEmployeeRepository>();
+        using var host = await CreateHostAsync(employeeRepository);
+        using var client = host.GetTestClient();
+        AddPermissionHeaders(
+            client,
+            Guid.NewGuid(),
+            """[{"p":"employees.read","s":["All"]}]""");
+
+        var response = await client.GetAsync($"/api/v1/employees{query}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        employeeRepository.Verify(
+            repository => repository.ListVisiblePageAsync(
+                It.IsAny<Guid>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(),
+                It.IsAny<string?>(), It.IsAny<HrService.Domain.Entities.Role?>(),
+                It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<string>(),
+                It.IsAny<bool>(), It.IsAny<int>(), It.IsAny<int>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    // Danh sách direct reports cũng phải xác thực tham số phân trang như API danh sách nhân viên.
+    [Theory]
+    [InlineData("")]
+    [InlineData("?page=1")]
+    [InlineData("?pageSize=10")]
+    [InlineData("?page=0&pageSize=10")]
+    [InlineData("?page=1&pageSize=101")]
+    public async Task ManagerTeamList_RequiresValidPageAndPageSize(string query)
+    {
+        var employeeRepository = new Mock<IEmployeeRepository>();
+        using var host = await CreateHostAsync(employeeRepository);
+        using var client = host.GetTestClient();
+        AddPermissionHeaders(
+            client,
+            Guid.NewGuid(),
+            """[{"p":"employees.read","s":["Team"]}]""");
+
+        var response = await client.GetAsync($"/api/v1/me/team{query}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        employeeRepository.Verify(
+            repository => repository.ListDirectReportsPageAsync(
+                It.IsAny<Guid>(), It.IsAny<string?>(), It.IsAny<int>(),
+                It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    // Xác nhận route lookup team cũ đã bị gỡ, tránh khôi phục API không còn caller.
     [Fact]
-    public async Task EmployeeList_RequiresHrRole()
+    public async Task EmployeeLookupTeamRoute_IsRemoved()
+    {
+        var employeeRepository = new Mock<IEmployeeRepository>();
+        using var host = await CreateHostAsync(employeeRepository);
+        using var client = host.GetTestClient();
+        var managerId = Guid.NewGuid();
+        AddPermissionHeaders(
+            client,
+            managerId,
+            """[{"p":"employees.read","s":["Team"]}]""");
+
+        var response = await client.GetAsync(
+            $"/api/v1/lookup/employees/{managerId}/team?page=1&pageSize=10");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        employeeRepository.Verify(
+            repository => repository.ListDirectReportsPageAsync(
+                It.IsAny<Guid>(), It.IsAny<string?>(), It.IsAny<int>(),
+                It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    // Role HR cũ không tự cấp quyền; request phải có permission claim hợp lệ.
+    [Fact]
+    public async Task EmployeeList_RejectsLegacyHrRoleWithoutPermissionClaim()
     {
         using var host = await CreateHostAsync();
         using var client = host.GetTestClient();
-        client.DefaultRequestHeaders.Add("X-Test-Role", "Employee");
+        client.DefaultRequestHeaders.Add("X-Test-Role", "HR");
 
-        var response = await client.GetAsync("/api/v1/employees");
+        var response = await client.GetAsync("/api/v1/employees?page=1&pageSize=10");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+    // Scope All quyết định phạm vi truy cập, không phụ thuộc role claim legacy.
     [Fact]
-    public async Task EmployeeList_ReturnsOkForHrRole()
+    public async Task EmployeeList_ReturnsAllEmployeesForAllScopeWithoutRoleClaim()
     {
+        var actorId = Guid.NewGuid();
         var employeeRepository = new Mock<IEmployeeRepository>();
         employeeRepository
-            .Setup(repository => repository.ListAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync([]);
+            .Setup(repository => repository.ListVisiblePageAsync(
+                actorId, false, false, true,
+                It.IsAny<string?>(), It.IsAny<HrService.Domain.Entities.Role?>(),
+                It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<string>(),
+                It.IsAny<bool>(), 1, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Array.Empty<HrService.Application.Abstractions.EmployeeReadModel>(), 0));
         using var host = await CreateHostAsync(employeeRepository);
         using var client = host.GetTestClient();
-        client.DefaultRequestHeaders.Add("X-Test-Role", "HR");
+        AddPermissionHeaders(client, actorId, """[{"p":"employees.read","s":["All"]}]""");
 
-        var response = await client.GetAsync("/api/v1/employees");
+        var response = await client.GetAsync("/api/v1/employees?page=1&pageSize=10");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("[]", await response.Content.ReadAsStringAsync());
+        employeeRepository.Verify(
+            repository => repository.ListVisiblePageAsync(
+                actorId, false, false, true,
+                It.IsAny<string?>(), It.IsAny<HrService.Domain.Entities.Role?>(),
+                It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<string>(),
+                It.IsAny<bool>(), 1, 10, It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
+    // Xác nhận endpoint summary độc lập đã được gỡ vì overview trả summary cùng danh sách.
+    [Fact]
+    public async Task EmployeeSummaryRoute_IsRemoved()
+    {
+        using var host = await CreateHostAsync();
+        using var client = host.GetTestClient();
+        AddPermissionHeaders(
+            client,
+            Guid.NewGuid(),
+            """[{"p":"employees.read","s":["All"]}]""");
+
+        var response = await client.GetAsync("/api/v1/employees/summary");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    // Kết hợp quyền Self và Team chỉ trả nhân viên thuộc hai phạm vi được cấp.
+    [Fact]
+    public async Task EmployeeList_CombinesSelfAndTeamScopes()
+    {
+        var actorId = Guid.NewGuid();
+        var employeeRepository = new Mock<IEmployeeRepository>();
+        employeeRepository
+            .Setup(repository => repository.ListVisiblePageAsync(
+                actorId, true, true, false,
+                It.IsAny<string?>(), It.IsAny<HrService.Domain.Entities.Role?>(),
+                It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<string>(),
+                It.IsAny<bool>(), 1, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Array.Empty<HrService.Application.Abstractions.EmployeeReadModel>(), 0));
+        using var host = await CreateHostAsync(employeeRepository);
+        using var client = host.GetTestClient();
+        AddPermissionHeaders(client, actorId, """[{"p":"employees.read","s":["Self","Team"]}]""");
+
+        var response = await client.GetAsync("/api/v1/employees?page=1&pageSize=10");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        employeeRepository.Verify(
+            repository => repository.ListVisiblePageAsync(
+                actorId, true, true, false,
+                It.IsAny<string?>(), It.IsAny<HrService.Domain.Entities.Role?>(),
+                It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<string>(),
+                It.IsAny<bool>(), 1, 10, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    // Department scope chưa hỗ trợ trong V1 nên không được mở rộng quyền đọc.
+    [Fact]
+    public async Task EmployeeList_RejectsUnsupportedDepartmentScope()
+    {
+        using var host = await CreateHostAsync();
+        using var client = host.GetTestClient();
+        AddPermissionHeaders(
+            client,
+            Guid.NewGuid(),
+            """[{"p":"employees.read","s":["Department"]}]""");
+
+        var response = await client.GetAsync("/api/v1/employees?page=1&pageSize=10");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    // Email không tồn tại phải trả Problem Details 401 mà không tiết lộ tài khoản.
     [Fact]
     public async Task Login_WithUnknownEmail_ReturnsProblemDetailsUnauthorized()
     {
@@ -85,6 +244,7 @@ public sealed class ApiIntegrationTests
             StringComparison.OrdinalIgnoreCase);
     }
 
+    // Refresh token phải nằm trong HttpOnly cookie; response body chỉ trả access token.
     [Fact]
     public async Task Login_SetsHttpOnlyRefreshCookieAndReturnsOnlyAccessToken()
     {
@@ -109,7 +269,9 @@ public sealed class ApiIntegrationTests
             .ReturnsAsync(1);
         var tokenGenerator = new Mock<IJwtTokenGenerator>();
         tokenGenerator
-            .Setup(generator => generator.GenerateToken(employee))
+            .Setup(generator => generator.GenerateToken(
+                employee,
+                It.IsAny<HrService.Application.Dtos.EffectiveAuthorization>()))
             .Returns(new HrService.Application.Dtos.AuthenticationResponse(
                 "access-token",
                 DateTimeOffset.UtcNow.AddMinutes(15),
@@ -141,6 +303,16 @@ public sealed class ApiIntegrationTests
         Assert.DoesNotContain("refreshToken", body, StringComparison.OrdinalIgnoreCase);
     }
 
+    private static void AddPermissionHeaders(
+        HttpClient client,
+        Guid employeeId,
+        string permissions)
+    {
+        client.DefaultRequestHeaders.Add("X-Test-Employee-Id", employeeId.ToString());
+        client.DefaultRequestHeaders.Add("X-Test-Authz-Version", "1");
+        client.DefaultRequestHeaders.Add("X-Test-Permissions", permissions);
+    }
+
     private static async Task<IHost> CreateHostAsync(
         Mock<IEmployeeRepository>? employeeRepository = null,
         Mock<IPasswordHasher>? passwordHasher = null,
@@ -151,6 +323,13 @@ public sealed class ApiIntegrationTests
         employeeRepository ??= new Mock<IEmployeeRepository>();
         var departmentRepository = new Mock<IDepartmentRepository>();
         var leaveCatalogRepository = new Mock<ILeaveCatalogRepository>();
+        var authorizationRepository = new Mock<IAuthorizationRepository>();
+        authorizationRepository
+            .Setup(repository => repository.GetEffectivePermissionScopesAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<DateTime>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
         var cache = new Mock<ILeaveCatalogCache>();
         unitOfWork ??= new Mock<IUnitOfWork>();
         passwordHasher ??= new Mock<IPasswordHasher>();
@@ -175,14 +354,16 @@ public sealed class ApiIntegrationTests
                     .AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(
                         TestAuthenticationHandler.SchemeName,
                         _ => { });
-                    services.AddAuthorization();
+                    services.AddPermissionAuthorization();
                     services.AddScoped<DepartmentService>();
                     services.AddScoped<EmployeeService>();
                     services.AddScoped<LeaveCatalogService>();
+                    services.AddScoped<HrService.Application.Services.AuthorizationService>();
                     services.AddScoped<HrService.Application.Services.AuthenticationService>();
                     services.AddSingleton<IEmployeeRepository>(employeeRepository.Object);
                     services.AddSingleton<IDepartmentRepository>(departmentRepository.Object);
                     services.AddSingleton<ILeaveCatalogRepository>(leaveCatalogRepository.Object);
+                    services.AddSingleton<IAuthorizationRepository>(authorizationRepository.Object);
                     services.AddSingleton<ILeaveCatalogCache>(cache.Object);
                     services.AddSingleton<IUnitOfWork>(unitOfWork.Object);
                     services.AddSingleton<IPasswordHasher>(passwordHasher.Object);
@@ -216,16 +397,33 @@ public sealed class ApiIntegrationTests
         protected override Task<AuthenticateResult> HandleAuthenticateAsync()
         {
             var role = Request.Headers["X-Test-Role"].FirstOrDefault();
-            if (string.IsNullOrWhiteSpace(role))
+            var employeeIdValue = Request.Headers["X-Test-Employee-Id"].FirstOrDefault();
+            var authzVersion = Request.Headers["X-Test-Authz-Version"].FirstOrDefault();
+            var permissions = Request.Headers["X-Test-Permissions"].FirstOrDefault();
+
+            if (string.IsNullOrWhiteSpace(role) &&
+                string.IsNullOrWhiteSpace(employeeIdValue) &&
+                string.IsNullOrWhiteSpace(authzVersion) &&
+                string.IsNullOrWhiteSpace(permissions))
             {
                 return Task.FromResult(AuthenticateResult.NoResult());
             }
 
-            var claims = new[]
+            var employeeId = Guid.TryParse(employeeIdValue, out var parsedEmployeeId)
+                ? parsedEmployeeId
+                : Guid.NewGuid();
+            var claims = new List<Claim>
             {
-                new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()),
-                new Claim(ClaimTypes.Role, role)
+                new(ClaimTypes.NameIdentifier, employeeId.ToString())
             };
+
+            if (!string.IsNullOrWhiteSpace(role))
+                claims.Add(new Claim(ClaimTypes.Role, role));
+            if (!string.IsNullOrWhiteSpace(authzVersion))
+                claims.Add(new Claim("authz_v", authzVersion));
+            if (!string.IsNullOrWhiteSpace(permissions))
+                claims.Add(new Claim("perm", permissions));
+
             var identity = new ClaimsIdentity(claims, SchemeName);
             var principal = new ClaimsPrincipal(identity);
             var ticket = new AuthenticationTicket(principal, SchemeName);

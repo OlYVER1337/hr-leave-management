@@ -25,7 +25,7 @@ Chỉ các mối quan hệ mà cùng một service sở hữu hoàn toàn mới 
 | `Departments` | Các đơn vị tổ chức: `Id` tự tăng, `Name` bắt buộc (tối đa 100 ký tự) |
 | `Employees` | Thông tin nhân sự và tài khoản: `Id` kiểu GUID, `Code` (20), `FullName` (150), `Email` (200), `PasswordHash`, `Role` dạng chuỗi, `HireDate`, `IsActive`, `DepartmentId`, `ManagerId` tùy chọn |
 | `LeaveTypes` | Danh mục loại nghỉ: `Id` tự tăng, `Code` (20), `Name` (100), `IsPaid`, `DeductsBalance`, `IsActive` |
-| `LeavePolicies` | Chính sách số ngày nghỉ theo năm: `Id` tự tăng, `LeaveTypeId`, `Year`, `DaysPerYear` (`decimal(5,1)`) |
+| `LeavePolicies` | Các phiên bản chính sách theo loại nghỉ/năm: `Id`, `LeaveTypeId`, `Year`, `DaysPerYear` (`decimal(5,1)`), `EffectiveFrom` (`date`), `CreatedAtUtc` (`datetime2`), `Reason` (tối đa 500 ký tự). Policy cũ được chuyển thành phiên bản nền có hiệu lực từ 01/01/2000. |
 | `Holidays` | Các ngày không làm việc: `Id` tự tăng, `HolidayDate`, `Name` (150) |
 | `RefreshTokens` | Vòng đời Refresh Token đã được hash: `Id` GUID, `EmployeeId`, `TokenHash`, thời gian tạo/hết hạn/thu hồi và hash của token thay thế |
 
@@ -36,7 +36,7 @@ Chỉ các mối quan hệ mà cùng một service sở hữu hoàn toàn mới 
   - `Employees.Code`
   - `Employees.Email`
   - `LeaveTypes.Code`
-  - `LeavePolicies(LeaveTypeId, Year)`
+  - `LeavePolicies(LeaveTypeId, Year, EffectiveFrom)`
   - `Holidays.HolidayDate`
   - `RefreshTokens.TokenHash`
 
@@ -68,16 +68,44 @@ Cascade Delete
 (EmployeeId, RevokedAtUtc, ExpiresAtUtc)
 ```
 
+
+## Dynamic Authorization tables trong HR_DB
+
+Migration `20261111043715_AddDynamicAuthorizationSchema` bổ sung:
+
+| Bảng | Khóa / dữ liệu chính | Vai trò |
+|---|---|---|
+| `Roles` | `Id` int PK; `Code` nvarchar(50) unique; Name, Description, IsSystem, IsActive, CreatedAtUtc | Danh mục Role |
+| `Permissions` | `Id` int PK; `Code` nvarchar(100) unique; Name, Description, IsActive | Danh mục permission dạng resource.action |
+| `UserRoles` | `Id` bigint PK; EmployeeId, RoleId; GrantedBy/At, ExpiresAtUtc, RevokedBy/At | Assignment Role theo nhân viên, hỗ trợ expiry/revoke |
+| `RolePermissions` | Composite PK (RoleId, PermissionId); GrantedByEmployeeId, GrantedAtUtc | Permission được gắn cho Role |
+| `PermissionScopeRules` | Composite PK (PermissionId, Scope); Scope có check constraint | Scope hợp lệ theo permission |
+| `RolePermissionScopes` | Composite PK (RoleId, PermissionId, Scope) | Scope được cấp cho Role-Permission |
+| `AuthzAuditLog` | bigint PK; ActorEmployeeId, TargetEmployeeId, Action, TargetType, TargetId, BeforeJson, AfterJson, CorrelationId, CreatedAtUtc | Audit thay đổi authorization |
+
+Index và constraint quan trọng:
+- `Roles.Code`, `Permissions.Code` là unique.
+- `UserRoles(EmployeeId, RoleId)` là unique có filter `RevokedAtUtc IS NULL`; có index lookup theo EmployeeId/RevokedAtUtc/ExpiresAtUtc và RoleId.
+- `RolePermissions` có khóa ghép RoleId + PermissionId.
+- `PermissionScopeRules` và `RolePermissionScopes` giới hạn Scope bằng check constraint: Self, Team, Department, All.
+- `RolePermissionScopes` có composite FK tới RolePermission và PermissionScopeRule, ngăn cấp scope không có permission hoặc scope không hợp lệ.
+- Các FK employee/role/permission dùng Restrict theo mapping hiện tại.
+- Audit log có index theo TargetEmployeeId + CreatedAtUtc và ActorEmployeeId + CreatedAtUtc.
+
+Các Scope đang được thực thi trong API là Self, Team và All. Department tồn tại trong schema để mở rộng nhưng chưa được dùng làm điều kiện lọc dữ liệu.
+
+`Employee.Role` dạng enum/string vẫn được giữ để tương thích/backfill và UI. AuthorizationSeeder tạo baseline Role/Permission/Scope, sau đó backfill UserRoles từ Employee.Role theo hướng idempotent. Employee.Role không phải nguồn quyết định backend authorization của các endpoint đã migrate.
+
 ---
 
 # Cấu trúc Leave_DB
 
 | Bảng | Mục đích và các cột quan trọng |
 |---|---|
-| `LeaveBalances` | Số dư phép theo nhân viên/loại nghỉ/năm, bao gồm quyền được hưởng và các bộ đếm `Entitled`, `Used`, `Pending`, sử dụng `decimal(6,1)`; có SQL `rowversion` |
+| `LeaveBalances` | Số dư theo nhân viên/loại nghỉ/năm, gồm `PolicyDays`, `Used`, `Pending` (`decimal(6,1)`) và SQL `rowversion`. `Entitled` không còn là cột lưu; được suy ra là `max(PolicyDays, Used + Pending)`. |
 | `LeaveRequests` | Thông tin đơn nghỉ: ID nhân viên/người phê duyệt, snapshot phòng ban, ID loại nghỉ, khoảng thời gian nghỉ, tổng số ngày, lý do (tối đa 1.000 ký tự), trạng thái và timestamps; có SQL `rowversion` |
 | `LeaveRequestHistories` | Lịch sử thao tác/trạng thái theo kiểu append, ID người thực hiện, ghi chú tùy chọn (tối đa 1.000 ký tự), thời gian thực hiện |
-| `LeaveRequestYearAllocations` | Số ngày được phân bổ cho từng năm dương lịch đối với đơn nghỉ kéo dài qua nhiều năm |
+| `LeaveRequestYearAllocations` | Phân bổ ngày nghỉ theo từng năm, gồm `Days`, `PolicyVersionId` (scalar reference tới HR, nullable với dữ liệu lịch sử) và `PolicyDaysAtCreation` (quota snapshot lúc tạo đơn, nullable với dữ liệu lịch sử) |
 
 ### Các khóa và ràng buộc quan trọng
 
@@ -86,6 +114,13 @@ Cascade Delete
 ```text
 LeaveBalances(EmployeeId, LeaveTypeId, Year)
 ```
+
+- CHECK constraints:
+  - `CK_LeaveBalances_PolicyDays_NonNegative`: `PolicyDays >= 0`
+  - `CK_LeaveBalances_Used_NonNegative`: `Used >= 0`
+  - `CK_LeaveBalances_Pending_NonNegative`: `Pending >= 0`
+
+`Entitled = max(PolicyDays, Used + Pending)`; `Available = Entitled - Used - Pending`. Leave Service không tạo foreign key xuyên database tới HR `LeavePolicies`; `PolicyVersionId` là scalar reference do HR sở hữu.
 
 Ngăn việc tạo trùng số dư phép cho cùng:
 
@@ -155,6 +190,8 @@ EF Core Migrations được version theo từng Infrastructure Project sở hữ
 ```text
 20261026043924_InitialHrSchema
 20261102014444_AddRefreshTokens
+20261111043715_AddDynamicAuthorizationSchema
+20261118090000_AddLeavePolicyVersions
 ```
 
 ### Leave Service
@@ -162,6 +199,8 @@ EF Core Migrations được version theo từng Infrastructure Project sở hữ
 ```text
 20261027041915_InitialLeaveSchema
 20261027060954_AddApprovalAndYearAllocations
+20261117031304_AddLeaveBalanceNonNegativeConstraints
+20261118093000_AddPolicySnapshotsToLeaveBalances
 ```
 
 `DatabaseInitializer` của HR Service sẽ:
@@ -171,7 +210,7 @@ EF Core Migrations được version theo từng Infrastructure Project sở hữ
 
 Leave API cũng áp dụng migrations trước khi bắt đầu phục vụ request.
 
-Mỗi project có một **Model Snapshot**.
+Mỗi project có một **Model Snapshot**. HR model snapshot bao gồm các bảng Dynamic Authorization; Leave DB không chứa bảng Role/Permission và không tạo cross-database foreign keys.
 
 Đối với các thay đổi schema trong tương lai:
 
@@ -189,7 +228,7 @@ của từng service.
 
 # Seed Data
 
-Các Seeder có tính chất **idempotent** và sẽ không chạy nếu chưa được cấu hình bật.
+Initial HR và Demo Seeder có tính chất **idempotent** và chỉ chạy khi được bật qua cấu hình. AuthorizationSeeder chạy khi HR database khởi tạo để seed baseline Role/Permission/Scope và backfill UserRoles; không tự khôi phục assignment đã revoke/hết hạn.
 
 ## Tài khoản HR ban đầu
 

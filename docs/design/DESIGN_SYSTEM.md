@@ -1,6 +1,6 @@
 # Design System — Peopleflow HR Suite
 
-> Tài liệu nền tảng giao diện được đối chiếu với source code repository ngày 02/11/2026. Đây là baseline cho giao diện hiện tại, không phải tuyên bố rằng mọi đề xuất trong tài liệu đã được triển khai.
+> Tài liệu nền tảng giao diện được rà soát theo source branch feature/dynamic-authorization-v1 ngày 16/11/2026. Đây là mô tả UI hiện có và chuẩn hóa thiết kế; đề xuất chưa triển khai được ghi riêng.
 
 ## 1. Phạm vi và nguyên tắc
 
@@ -19,6 +19,11 @@ Sản phẩm hiển thị thương hiệu **Peopleflow HR Suite** trong Login v�
 - **Đang dùng:** giá trị hoặc pattern đọc được trực tiếp từ CSS/TSX hiện tại.
 - **Chuẩn hóa đề xuất:** token hoặc quy tắc nên thống nhất để tránh mỗi màn hình tự đặt style.
 - **Thiếu UI:** backend/API có khả năng nhưng frontend chưa cung cấp thao tác tương ứng.
+
+
+### Ghi chú phân quyền UI — 16/11/2026
+
+Backend đã chuyển sang Dynamic RBAC theo permission/scope. Tuy nhiên, điều hướng và route guard của React hiện vẫn dùng role legacy HR/Manager/Employee. Vì vậy quy tắc Role-aware trong Design System mô tả trạng thái UI hiện tại, không có nghĩa frontend đã hỗ trợ tùy biến menu theo permission động. API backend luôn phải tự kiểm tra quyền; frontend chỉ tối ưu trải nghiệm hiển thị.
 
 ## 2. Visual identity
 

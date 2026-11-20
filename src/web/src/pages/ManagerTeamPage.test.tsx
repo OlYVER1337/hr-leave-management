@@ -1,18 +1,18 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthUser, Employee } from '../types';
 import { useAuth } from '../contexts';
-import { getMyTeam } from '../services/hrService';
+import { getMyTeamPage } from '../services/hrService';
 import { ManagerTeamPage } from './ManagerTeamPage';
 
 const mocks = vi.hoisted(() => ({
   useAuth: vi.fn(),
-  getMyTeam: vi.fn(),
+  getMyTeamPage: vi.fn(),
 }));
 
 vi.mock('../contexts', () => ({ useAuth: mocks.useAuth }));
-vi.mock('../services/hrService', () => ({ getMyTeam: mocks.getMyTeam }));
+vi.mock('../services/hrService', () => ({ getMyTeamPage: mocks.getMyTeamPage }));
 
 const manager: AuthUser = {
   id: 'manager-1',
@@ -61,7 +61,22 @@ describe('ManagerTeamPage', () => {
       signIn: vi.fn(),
       signOut: vi.fn(),
     });
-    vi.mocked(getMyTeam).mockResolvedValue(team);
+    vi.mocked(getMyTeamPage).mockImplementation(async (_managerId, page, pageSize, search) => {
+      const term = search?.trim().toLocaleLowerCase('vi-VN') ?? '';
+      const filtered = team.filter((employee) =>
+        !term || [
+          employee.fullName,
+          employee.code,
+          employee.email,
+          employee.departmentName,
+        ].some((value) => value.toLocaleLowerCase('vi-VN').includes(term)),
+      );
+      const offset = (page - 1) * pageSize;
+      return {
+        items: filtered.slice(offset, offset + pageSize),
+        totalCount: filtered.length,
+      };
+    });
   });
 
   it('loads and displays only the manager team returned by the team service', async () => {
@@ -69,8 +84,8 @@ describe('ManagerTeamPage', () => {
 
     expect(await screen.findByText('Nguyễn An')).toBeInTheDocument();
     expect(screen.getByText('Trần Bình')).toBeInTheDocument();
-    expect(screen.getByText('2')).toBeInTheDocument();
-    expect(getMyTeam).toHaveBeenCalledWith(manager.id);
+    expect(screen.getByText('Tổng nhân viên phụ trách').parentElement?.textContent).toContain('2');
+    expect(getMyTeamPage).toHaveBeenCalledWith(manager.id, 1, 20, undefined);
   });
 
   it('filters the manager team and opens a read-only employee detail dialog', async () => {
@@ -80,8 +95,8 @@ describe('ManagerTeamPage', () => {
     await screen.findByText('Nguyễn An');
     await user.type(screen.getByRole('textbox', { name: 'Tìm nhân viên phụ trách' }), 'binh');
 
-    expect(screen.getByText('Trần Bình')).toBeInTheDocument();
-    expect(screen.queryByText('Nguyễn An')).not.toBeInTheDocument();
+    expect(await screen.findByText('Trần Bình')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Nguyễn An')).not.toBeInTheDocument());
 
     await user.click(screen.getByRole('button', { name: 'Xem hồ sơ Trần Bình' }));
     expect(screen.getByRole('dialog', { name: 'Thông tin nhân viên' })).toBeInTheDocument();
@@ -91,7 +106,7 @@ describe('ManagerTeamPage', () => {
   });
 
   it('shows an empty state when the manager has no assigned active employees', async () => {
-    vi.mocked(getMyTeam).mockResolvedValue([]);
+    vi.mocked(getMyTeamPage).mockResolvedValue({ items: [], totalCount: 0 });
     render(<ManagerTeamPage />);
 
     expect(await screen.findByText('Bạn chưa có nhân viên được phân công')).toBeInTheDocument();

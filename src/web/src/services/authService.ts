@@ -1,6 +1,6 @@
 import type { AuthUser, UserRole } from '../types';
 import { DEMO_MODE, TOKEN_STORAGE_KEY, USER_STORAGE_KEY } from './config';
-import { hrApi } from './apiClient';
+import { getApiErrorMessage, hrApi } from './apiClient';
 import { loadDemoState } from './mockStore';
 
 interface LoginResponse {
@@ -100,10 +100,9 @@ export async function changePassword(currentPassword: string, newPassword: strin
     if (newPassword.length < 12 || newPassword.length > 30) throw new Error('Mật khẩu phải có từ 12 đến 30 ký tự.');
     throw new Error('Chế độ dùng thử không lưu thay đổi mật khẩu. Hãy kết nối HR API để cập nhật thông tin tài khoản.');
   }
-  const { hrApi } = await import('./apiClient');
-  try { await hrApi.put('/api/v1/me/password', { currentPassword, newPassword }); }
-  catch (error) {
-    const { getApiErrorMessage } = await import('./apiClient');
+  try {
+    await hrApi.put('/api/v1/me/password', { currentPassword, newPassword });
+  } catch (error) {
     throw new Error(getApiErrorMessage(error));
   }
 }

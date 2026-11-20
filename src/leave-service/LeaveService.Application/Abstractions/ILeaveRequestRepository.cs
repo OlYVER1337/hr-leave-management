@@ -14,21 +14,69 @@ public interface ILeaveRequestRepository
     Task<IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>>
         ListByEmployeeAsync(Guid employeeId, CancellationToken cancellationToken = default);
 
+    Task<(IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> Items, int TotalCount)>
+        ListByEmployeePageAsync(
+            Guid employeeId,
+            LeaveRequestStatus? status,
+            int? leaveTypeId,
+            string? search,
+            int page,
+            int pageSize,
+            CancellationToken cancellationToken = default);
+
     Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)?> GetByIdAsync(
         Guid employeeId,
         Guid requestId,
         CancellationToken cancellationToken = default);
 
+    Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)?> GetVisibleByIdAsync(
+        Guid employeeId,
+        Guid requestId,
+        LeaveAccess access,
+        IReadOnlyCollection<Guid> teamEmployeeIds,
+        CancellationToken cancellationToken = default);
+
+    Task<(int Pending, int Approved, int Total)> GetSummaryAsync(
+        Guid employeeId,
+        LeaveAccess access,
+        IReadOnlyCollection<Guid> teamEmployeeIds,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>>
-        ListPendingAsync(Guid? approverId, CancellationToken cancellationToken = default);
+        ListPendingAsync(CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>>
         ListVisibleAsync(
             Guid employeeId,
-            bool isHr,
+            LeaveAccess access,
+            IReadOnlyCollection<Guid> teamEmployeeIds,
             bool calendarOnly,
             DateOnly? from,
             DateOnly? to,
+            CancellationToken cancellationToken = default);
+
+    Task<(IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> Items, int TotalCount)>
+        ListVisiblePageAsync(
+            Guid employeeId,
+            LeaveAccess access,
+            IReadOnlyCollection<Guid> teamEmployeeIds,
+            bool calendarOnly,
+            DateOnly? from,
+            DateOnly? to,
+            LeaveRequestStatus? status,
+            int? leaveTypeId,
+            string? search,
+            int page,
+            int pageSize,
+            CancellationToken cancellationToken = default);
+
+    Task<(IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> Items, int TotalCount)>
+        ListPendingPageAsync(
+            IReadOnlyCollection<Guid> employeeIds,
+            bool includeAll,
+            string? search,
+            int page,
+            int pageSize,
             CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>>
@@ -41,23 +89,36 @@ public interface ILeaveRequestRepository
     Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> TransitionAsync(
         Guid requestId,
         Guid actorId,
-        bool isHr,
+        LeaveAccess access,
         LeaveRequestStatus status,
         string? note,
         DateTime decidedAtUtc,
         Guid? verifiedApproverId = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        IReadOnlyList<LeaveBalanceEntitlement>? currentPolicyDays = null);
 
     Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> CancelAsync(
         Guid employeeId,
         Guid requestId,
         string? note,
         DateTime cancelledAtUtc,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        IReadOnlyList<LeaveBalanceEntitlement>? currentPolicyDays = null);
 
     Task<IReadOnlyList<LeaveBalance>> ListBalancesAsync(
         Guid employeeId,
         int year,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<LeaveBalance>> SynchronizeBalancesAsync(
+        Guid employeeId,
+        int year,
+        IReadOnlyList<LeaveBalanceEntitlement> entitlements,
+        CancellationToken cancellationToken = default);
+
+    // Đếm số phân bổ năm đang tham chiếu tới phiên bản chính sách.
+    Task<int> CountPolicyVersionReferencesAsync(
+        int policyVersionId,
         CancellationToken cancellationToken = default);
 }
 
@@ -68,7 +129,7 @@ public interface ILeaveHrClient
         string authorization,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<HrEmployeeSnapshot>> GetTeamAsync(
+    Task<IReadOnlyList<Guid>> GetTeamEmployeeIdsAsync(
         Guid managerId,
         string authorization,
         CancellationToken cancellationToken = default);
@@ -78,8 +139,14 @@ public interface ILeaveHrClient
         string authorization,
         CancellationToken cancellationToken = default);
 
+    Task<HrLeaveCatalog> GetLeaveCatalogAsync(
+        int year,
+        string authorization,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<HrLeavePolicy>> GetLeavePoliciesAsync(
         int year,
+        DateOnly asOfDate,
         string authorization,
         CancellationToken cancellationToken = default);
 
@@ -88,4 +155,5 @@ public interface ILeaveHrClient
         DateOnly to,
         string authorization,
         CancellationToken cancellationToken = default);
+
 }

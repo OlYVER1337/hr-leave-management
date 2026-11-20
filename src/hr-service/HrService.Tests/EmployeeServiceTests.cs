@@ -1,4 +1,5 @@
 using System.Reflection;
+using HrService.Api.Authorization;
 using HrService.Api.Controllers;
 using HrService.Application.Abstractions;
 using HrService.Application.Common;
@@ -13,8 +14,149 @@ namespace HrService.Tests;
 
 public sealed class EmployeeServiceTests
 {
+    // Đảm bảo endpoint overview dùng permission policy động thay vì role legacy.
     [Fact]
-    public void GetTeamEndpoint_RequiresManagerRole()
+    public void EmployeeOverviewEndpointUsesExistingDynamicReadPolicy()
+    {
+        var method = typeof(EmployeesController).GetMethod(nameof(EmployeesController.GetOverview));
+        Assert.NotNull(method);
+
+        var authorization = method!.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>();
+        Assert.Contains(authorization, attribute =>
+            attribute.Policy == PermissionPolicies.EmployeesRead && attribute.Roles is null);
+    }
+
+    // Kết quả nhân viên phải là hợp của Self và Team, không vượt phạm vi được cấp.
+    [Fact]
+    public async Task GetVisibleAsync_CombinesSelfAndTeamScopes()
+    {
+        var actorId = Guid.NewGuid();
+        var employees = new[]
+        {
+            CreateEmployee(actorId),
+            CreateEmployee(Guid.NewGuid(), actorId)
+        };
+        var repository = new Mock<IEmployeeRepository>();
+        repository
+            .Setup(item => item.ListVisibleAsync(
+                actorId, true, true, false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(employees);
+        var authorization = new EffectiveAuthorization(
+        [
+            new EffectivePermission("employees.read", ["Self"]),
+            new EffectivePermission("employees.read", ["Team"])
+        ]);
+        var service = CreateService(repository);
+
+        var result = await service.GetVisibleAsync(actorId, authorization);
+
+        Assert.Equal(2, result.Count);
+        repository.Verify(
+            item => item.ListVisibleAsync(
+                actorId, true, true, false, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    // Danh sách phân trang và summary phải cùng tuân theo authorization scope của caller.
+    [Fact]
+    public async Task GetVisibleOverviewPagedAsync_ReturnsPageAndScopedSummary()
+    {
+        var actorId = Guid.NewGuid();
+        var employee = CreateEmployee(Guid.NewGuid(), actorId);
+        var repository = new Mock<IEmployeeRepository>();
+        repository
+            .Setup(item => item.ListVisiblePageAsync(
+                actorId,
+                true,
+                true,
+                false,
+                null,
+                null,
+                null,
+                null,
+                "fullName",
+                false,
+                1,
+                10,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((
+                Items: (IReadOnlyList<EmployeeReadModel>)new[]
+                {
+                    new EmployeeReadModel(
+                        employee.Id,
+                        employee.Code,
+                        employee.FullName,
+                        employee.Email,
+                        employee.Role,
+                        employee.HireDate,
+                        employee.IsActive,
+                        employee.DepartmentId,
+                        employee.Department!.Name,
+                        employee.ManagerId,
+                        null)
+                },
+                TotalCount: 1));
+        repository
+            .Setup(item => item.GetVisibleSummaryAsync(
+                actorId, true, true, false, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Total: 4, Active: 3, Managers: 1));
+        var authorization = new EffectiveAuthorization(
+        [
+            new EffectivePermission("employees.read", ["Self"]),
+            new EffectivePermission("employees.read", ["Team"])
+        ]);
+        var service = CreateService(repository);
+
+        var overview = await service.GetVisibleOverviewPagedAsync(
+            actorId,
+            authorization,
+            1,
+            10,
+            null,
+            null,
+            null,
+            null,
+            "fullName",
+            "asc");
+
+        var item = Assert.Single(overview.Items);
+        Assert.Equal(employee.Id, item.Id);
+        Assert.Equal(1, overview.TotalCount);
+        Assert.Equal(new EmployeeSummaryResponse(4, 3, 1), overview.Summary);
+        repository.Verify(item => item.ListVisiblePageAsync(
+            actorId, true, true, false, null, null, null, null,
+            "fullName", false, 1, 10, It.IsAny<CancellationToken>()), Times.Once);
+        repository.Verify(item => item.GetVisibleSummaryAsync(
+            actorId, true, true, false, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    // Không có read scope được hỗ trợ thì không được trả dữ liệu nhân viên.
+    [Fact]
+    public async Task GetVisibleAsync_RejectsAuthorizationWithoutSupportedReadScope()
+    {
+        var actorId = Guid.NewGuid();
+        var repository = new Mock<IEmployeeRepository>();
+        var authorization = new EffectiveAuthorization(
+            [new EffectivePermission("employees.read", ["Department"])]);
+        var service = CreateService(repository);
+
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => service.GetVisibleAsync(actorId, authorization));
+
+        repository.Verify(
+            item => item.ListVisibleAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<bool>(),
+                It.IsAny<bool>(),
+                It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    // API Team yêu cầu đúng permission employees.read với scope Team.
+    [Fact]
+    public void GetTeamEndpoint_RequiresEmployeesReadTeamScope()
     {
         var method = typeof(CurrentEmployeeController).GetMethod(nameof(CurrentEmployeeController.GetTeam));
         Assert.NotNull(method);
@@ -22,9 +164,11 @@ public sealed class EmployeeServiceTests
         var authorization = method!.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
             .Cast<AuthorizeAttribute>();
 
-        Assert.Contains(authorization, attribute => attribute.Roles == "Manager");
+        Assert.Contains(authorization, attribute =>
+            attribute.Policy == PermissionPolicies.EmployeesReadTeam && attribute.Roles is null);
     }
 
+    // Không cho lookup nhân viên nằm ngoài phạm vi của người gọi.
     [Fact]
     public async Task GetLookupAsync_RejectsUserOutsideEmployeeScope()
     {
@@ -32,13 +176,17 @@ public sealed class EmployeeServiceTests
         var service = CreateService(repository);
 
         await Assert.ThrowsAsync<ForbiddenException>(
-            () => service.GetLookupAsync(Guid.NewGuid(), Guid.NewGuid(), requesterIsHr: false));
+            () => service.GetLookupAsync(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                EffectiveAuthorization.Empty));
 
         repository.Verify(
             item => item.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
+    // Manager chỉ xem direct report và response chỉ chứa các trường lookup cần thiết.
     [Fact]
     public async Task GetLookupAsync_AllowsDirectManagerAndReturnsOnlyLookupFields()
     {
@@ -57,7 +205,9 @@ public sealed class EmployeeServiceTests
             .ReturnsAsync(employee);
         var service = CreateService(repository);
 
-        var result = await service.GetLookupAsync(employeeId, managerId, requesterIsHr: false);
+        var managerAuthorization = new EffectiveAuthorization(
+            [new EffectivePermission("employees.read", ["Team"])]);
+        var result = await service.GetLookupAsync(employeeId, managerId, managerAuthorization);
 
         Assert.Equal(employeeId, result.Id);
         Assert.Equal(employee.Code, result.Code);
@@ -65,6 +215,30 @@ public sealed class EmployeeServiceTests
         Assert.DoesNotContain("Email", typeof(EmployeeLookupResponse).GetProperties().Select(property => property.Name));
     }
 
+    // Scope All cho phép lookup không cần quan hệ manager trực tiếp.
+    [Fact]
+    public async Task GetLookupAsync_AllowsAllScopeWithoutManagerRelationship()
+    {
+        var employeeId = Guid.NewGuid();
+        var requesterId = Guid.NewGuid();
+        var employee = CreateEmployee(employeeId);
+        var repository = new Mock<IEmployeeRepository>();
+        repository.Setup(item => item.GetByIdAsync(employeeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(employee);
+        var service = CreateService(repository);
+        var authorization = new EffectiveAuthorization(
+            [new EffectivePermission("employees.read", ["All"])]);
+
+        var result = await service.GetLookupAsync(employeeId, requesterId, authorization);
+
+        Assert.Equal(employeeId, result.Id);
+        repository.Verify(
+            item => item.IsDirectManagerOfAsync(
+                It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
+            Times.Never);
+    }
+
+    // Danh sách Team phải được giới hạn vào các nhân viên báo cáo trực tiếp cho Manager.
     [Fact]
     public async Task GetTeamAsync_ReturnsEmployeesFromManagersDirectReports()
     {
@@ -89,6 +263,7 @@ public sealed class EmployeeServiceTests
             Times.Once);
     }
 
+    // Đổi mật khẩu phải xác minh mật khẩu hiện tại trước khi lưu mật khẩu mới.
     [Fact]
     public async Task ChangePasswordAsync_VerifiesCurrentPasswordHashesNewPasswordAndSaves()
     {
@@ -118,6 +293,7 @@ public sealed class EmployeeServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    // Mật khẩu hiện tại sai thì không được thay đổi dữ liệu.
     [Fact]
     public async Task ChangePasswordAsync_RejectsIncorrectCurrentPasswordWithoutSaving()
     {
@@ -145,6 +321,7 @@ public sealed class EmployeeServiceTests
             Times.Never);
     }
 
+    // Mật khẩu reset phải tuân theo giới hạn độ dài cấu hình.
     [Theory]
     [InlineData("short")]
     [InlineData("1234567890123456789012345678901")]
@@ -166,6 +343,7 @@ public sealed class EmployeeServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // Chuẩn hóa thông tin nhân viên và bảo đảm password được xử lý qua password hasher.
     [Fact]
     public async Task CreateAsync_NormalizesEmployeeFieldsAndHashesPassword()
     {
@@ -219,6 +397,7 @@ public sealed class EmployeeServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    // Gọi deactivate nhiều lần cho nhân viên đã inactive không tạo thêm thay đổi.
     [Fact]
     public async Task DeactivateAsync_IsIdempotentForAlreadyInactiveEmployee()
     {
@@ -247,6 +426,7 @@ public sealed class EmployeeServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // Khi deactivate phải thu hồi refresh token để tài khoản không tiếp tục refresh phiên.
     [Fact]
     public async Task DeactivateAsync_RevokesAllRefreshTokensWhenDeactivatingEmployee()
     {
@@ -274,6 +454,7 @@ public sealed class EmployeeServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    // Không cho bỏ role Manager khi nhân viên vẫn đang quản lý direct reports.
     [Fact]
     public async Task UpdateAsync_RejectsRemovingManagerRoleWhenEmployeeHasDirectReports()
     {
@@ -324,6 +505,7 @@ public sealed class EmployeeServiceTests
         unitOfWork.Verify(item => item.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    // Không cho nhân viên tự gán chính mình làm Manager.
     [Fact]
     public async Task UpdateAsync_RejectsSelfAsManagerWithoutSaving()
     {

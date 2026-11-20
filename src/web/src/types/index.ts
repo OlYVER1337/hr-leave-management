@@ -51,6 +51,7 @@ export interface LeaveBalance {
   code: string;
   name: string;
   entitled: number | null;
+  policyDays?: number;
   used: number;
   pending: number;
   available: number | null;
@@ -75,4 +76,8 @@ export interface LeavePolicy {
   leaveTypeId?: number;
   policyId?: number;
   year?: number;
+  effectiveFrom?: string;
+  reason?: string;
+  versionNumber?: number;
+  versionMissing?: boolean;
 }

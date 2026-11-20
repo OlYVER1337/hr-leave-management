@@ -2,6 +2,7 @@ using HrService.Application.Abstractions;
 using HrService.Application.Common;
 using HrService.Application.Dtos;
 using HrService.Domain.Entities;
+using HrService.Domain.Rules;
 
 namespace HrService.Application.Services;
 
@@ -42,6 +43,28 @@ public sealed class LeaveCatalogService(
         return includeInactive
             ? builtInTypes.ToArray()
             : builtInTypes.Where(leaveType => leaveType.IsActive).ToArray();
+    }
+
+    public async Task<LeaveCatalogResponse> GetLeaveCatalogAsync(
+        int? year,
+        bool includeInactive,
+        CancellationToken cancellationToken = default)
+    {
+        // DbContext is scoped and cannot execute concurrent operations.
+        // Keep these cache/database reads sequential while exposing one HTTP call.
+        var leaveTypes = await GetLeaveTypesAsync(includeInactive, cancellationToken);
+        var leavePolicies = await GetLeavePoliciesAsync(year, cancellationToken);
+        return new LeaveCatalogResponse(leaveTypes, leavePolicies);
+    }
+
+    public async Task<LeaveCatalogResponse> GetAuthoritativeLeaveCatalogAsync(
+        int? year,
+        bool includeInactive,
+        CancellationToken cancellationToken = default)
+    {
+        var leaveTypes = await GetAuthoritativeLeaveTypesAsync(includeInactive, cancellationToken);
+        var leavePolicies = await GetAuthoritativeLeavePoliciesAsync(year, cancellationToken);
+        return new LeaveCatalogResponse(leaveTypes, leavePolicies);
     }
 
     public async Task<IReadOnlyList<LeaveTypeResponse>> GetAuthoritativeLeaveTypesAsync(
@@ -186,14 +209,35 @@ public sealed class LeaveCatalogService(
         return policy;
     }
 
+    public Task<IReadOnlyList<LeavePolicyResponse>> GetAuthoritativeLeavePoliciesAsync(
+        int? year,
+        CancellationToken cancellationToken = default) =>
+        GetAuthoritativeLeavePoliciesAsync(year, asOfDate: null, cancellationToken);
+
     public async Task<IReadOnlyList<LeavePolicyResponse>> GetAuthoritativeLeavePoliciesAsync(
         int? year,
+        DateOnly? asOfDate,
         CancellationToken cancellationToken = default)
     {
         ValidateYear(year);
-        var policies = await repository.ListLeavePoliciesAsync(year, cancellationToken);
+        var policies = (await repository.ListLeavePoliciesAsync(year, cancellationToken))
+            .Where(policy => policy.LeaveType is not null && IsBuiltInLeaveType(policy.LeaveType.Code));
+
+        if (!asOfDate.HasValue)
+        {
+            return policies.Select(ToResponse).ToArray();
+        }
+
         return policies
-            .Where(policy => policy.LeaveType is not null && IsBuiltInLeaveType(policy.LeaveType.Code))
+            .Where(policy =>
+                policy.EffectiveFrom >= new DateOnly(policy.Year, 1, 1) &&
+                policy.EffectiveFrom <= asOfDate.Value)
+            .GroupBy(policy => new { policy.LeaveTypeId, policy.Year })
+            .Select(group => group
+                .OrderByDescending(policy => policy.EffectiveFrom)
+                .ThenByDescending(policy => policy.CreatedAtUtc)
+                .ThenByDescending(policy => policy.Id)
+                .First())
             .Select(ToResponse)
             .ToArray();
     }
@@ -217,7 +261,13 @@ public sealed class LeaveCatalogService(
         CancellationToken cancellationToken = default)
     {
         ValidatePolicy(request);
-        EnsureFuturePolicyYear(request.Year);
+        EnsureEditablePolicyYear(request.Year);
+
+        var today = GetBusinessToday();
+        var firstPolicyDate = new DateOnly(request.Year, 1, 1);
+        var effectiveFrom = request.EffectiveFrom
+            ?? (today > firstPolicyDate ? today : firstPolicyDate);
+        EnsurePolicyEffectiveFrom(effectiveFrom, request.Year);
 
         var leaveType = await repository.GetLeaveTypeForUpdateByIdAsync(
             request.LeaveTypeId,
@@ -225,27 +275,21 @@ public sealed class LeaveCatalogService(
             ?? throw new NotFoundException($"Leave type with id '{request.LeaveTypeId}' was not found.");
 
         if (!IsBuiltInLeaveType(leaveType.Code))
-        {
             throw Problems.Invalid("leaveTypeId", "Policies are limited to the built-in leave types.");
-        }
-
         if (!leaveType.IsActive)
-        {
             throw Problems.Invalid("leaveTypeId", "A policy cannot be created for an inactive leave type.");
-        }
-
         if (!leaveType.DeductsBalance)
-        {
             throw Problems.Invalid("leaveTypeId", "Policies are only available for leave types that deduct a balance.");
-        }
 
-        if (await repository.ExistsLeavePolicyAsync(
+        // Mỗi thay đổi chính sách là một phiên bản mới; chỉ chặn trùng ngày hiệu lực.
+        if (await repository.ExistsLeavePolicyVersionAsync(
                 request.LeaveTypeId,
                 request.Year,
-                cancellationToken: cancellationToken))
+                effectiveFrom,
+                cancellationToken))
         {
             throw new ConflictException(
-                $"A policy for leave type '{request.LeaveTypeId}' and year '{request.Year}' already exists.");
+                $"A policy version for leave type '{request.LeaveTypeId}' in {request.Year} starting on {effectiveFrom:yyyy-MM-dd} already exists.");
         }
 
         var policy = new LeavePolicy
@@ -253,7 +297,10 @@ public sealed class LeaveCatalogService(
             LeaveType = leaveType,
             LeaveTypeId = leaveType.Id,
             Year = request.Year,
-            DaysPerYear = request.DaysPerYear
+            DaysPerYear = request.DaysPerYear,
+            EffectiveFrom = effectiveFrom,
+            CreatedAtUtc = timeProvider.GetUtcNow().UtcDateTime,
+            Reason = NormalizePolicyReason(request.Reason, "Khởi tạo chính sách")
         };
         repository.Add(policy);
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -267,55 +314,149 @@ public sealed class LeaveCatalogService(
         CancellationToken cancellationToken = default)
     {
         ValidatePolicy(request);
+        var original = await repository.GetLeavePolicyForUpdateByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException($"Leave policy with id '{id}' was not found.");
+        if (original.LeaveType is null || !IsBuiltInLeaveType(original.LeaveType.Code))
+            throw new NotFoundException($"Leave policy with id '{id}' was not found.");
+
+        EnsureEditablePolicyYear(original.Year);
+        if (request.Year != original.Year)
+            throw Problems.Invalid("year", "A policy version cannot be moved to another year.");
+
+        if (request.LeaveTypeId != original.LeaveTypeId)
+        {
+            var requestedType = await repository.GetLeaveTypeForUpdateByIdAsync(
+                request.LeaveTypeId,
+                cancellationToken)
+                ?? throw new NotFoundException($"Leave type with id '{request.LeaveTypeId}' was not found.");
+
+            if (!IsBuiltInLeaveType(requestedType.Code) ||
+                !requestedType.IsActive ||
+                !requestedType.DeductsBalance)
+            {
+                throw Problems.Invalid("leaveTypeId", "Policies require an active built-in leave type that deducts a balance.");
+            }
+
+            throw Problems.Invalid("leaveTypeId", "A policy version cannot be moved to another leave type.");
+        }
+
+        var leaveType = await repository.GetLeaveTypeForUpdateByIdAsync(
+            original.LeaveTypeId,
+            cancellationToken)
+            ?? throw new NotFoundException($"Leave type with id '{original.LeaveTypeId}' was not found.");
+
+        if (!leaveType.IsActive || !leaveType.DeductsBalance)
+            throw Problems.Invalid("leaveTypeId", "A policy version requires an active leave type that deducts a balance.");
+
+        var today = GetBusinessToday();
+        var firstPolicyDate = new DateOnly(original.Year, 1, 1);
+        var effectiveFrom = request.EffectiveFrom
+            ?? (today > firstPolicyDate ? today : firstPolicyDate);
+        EnsurePolicyEffectiveFrom(effectiveFrom, original.Year);
+
+        var versions = await repository.ListLeavePoliciesAsync(original.Year, cancellationToken);
+        var timeline = versions
+            .Where(item => item.LeaveTypeId == original.LeaveTypeId)
+            .Select(item => new PolicyVersion(item.EffectiveFrom, item.DaysPerYear));
+        if (LeavePolicyTimeline.HasSameEffectiveDate(timeline, effectiveFrom))
+        {
+            throw new ConflictException(
+                $"A policy version for leave type '{original.LeaveTypeId}' and effective date '{effectiveFrom}' already exists.");
+        }
+
+        var version = new LeavePolicy
+        {
+            LeaveType = leaveType,
+            LeaveTypeId = leaveType.Id,
+            Year = original.Year,
+            DaysPerYear = request.DaysPerYear,
+            EffectiveFrom = effectiveFrom,
+            CreatedAtUtc = timeProvider.GetUtcNow().UtcDateTime,
+            Reason = NormalizePolicyReason(request.Reason, "Cập nhật chính sách")
+        };
+        repository.Add(version);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await cache.RemoveAsync(LeavePoliciesCacheKey, cancellationToken);
+        return ToResponse(version);
+    }
+
+    // Chỉnh sửa trực tiếp version chưa được dùng; không thay đổi năm hoặc ngày hiệu lực.
+    public async Task<LeavePolicyResponse> EditLeavePolicyVersionAsync(
+        int id,
+        LeavePolicyRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ValidatePolicy(request);
         var policy = await repository.GetLeavePolicyForUpdateByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException($"Leave policy with id '{id}' was not found.");
-        if (policy.LeaveType is null || !IsBuiltInLeaveType(policy.LeaveType.Code))
+
+        if (policy.LeaveType is null || !IsBuiltInLeaveType(policy.LeaveType.Code) ||
+            !policy.LeaveType.DeductsBalance)
         {
             throw new NotFoundException($"Leave policy with id '{id}' was not found.");
         }
 
-        // Check both the existing and requested year so an old policy cannot be moved forward.
-        EnsureFuturePolicyYear(policy.Year);
-        EnsureFuturePolicyYear(request.Year);
+        EnsureEditablePolicyYear(policy.Year);
 
-        var leaveType = await repository.GetLeaveTypeForUpdateByIdAsync(
-            request.LeaveTypeId,
-            cancellationToken)
-            ?? throw new NotFoundException($"Leave type with id '{request.LeaveTypeId}' was not found.");
-
-        if (!IsBuiltInLeaveType(leaveType.Code))
-        {
-            throw Problems.Invalid("leaveTypeId", "Policies are limited to the built-in leave types.");
-        }
-
-        if (!leaveType.IsActive)
-        {
-            throw Problems.Invalid("leaveTypeId", "A policy cannot be assigned to an inactive leave type.");
-        }
-
-        if (!leaveType.DeductsBalance)
-        {
-            throw Problems.Invalid("leaveTypeId", "Policies are only available for leave types that deduct a balance.");
-        }
-
-        if (await repository.ExistsLeavePolicyAsync(
-                request.LeaveTypeId,
-                request.Year,
-                id,
-                cancellationToken))
+        // A version that has already taken effect is immutable business history.
+        if (policy.EffectiveFrom <= GetBusinessToday())
         {
             throw new ConflictException(
-                $"A policy for leave type '{request.LeaveTypeId}' and year '{request.Year}' already exists.");
+                "A policy version that is already effective cannot be edited. Create a new future version instead.");
         }
 
-        policy.LeaveType = leaveType;
-        policy.LeaveTypeId = leaveType.Id;
-        policy.Year = request.Year;
+        if (request.Year != policy.Year)
+            throw Problems.Invalid("year", "A policy version cannot be moved to another year.");
+        if (request.LeaveTypeId != policy.LeaveTypeId)
+            throw Problems.Invalid("leaveTypeId", "A policy version cannot be moved to another leave type.");
+        if (request.EffectiveFrom.HasValue && request.EffectiveFrom.Value != policy.EffectiveFrom)
+            throw Problems.Invalid("effectiveFrom", "The effective date cannot be changed when editing an existing version.");
+
         policy.DaysPerYear = request.DaysPerYear;
+        policy.Reason = NormalizePolicyReason(request.Reason, "Cập nhật chính sách");
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await cache.RemoveAsync(LeavePoliciesCacheKey, cancellationToken);
         return ToResponse(policy);
+    }
+
+    // Chỉ xóa version thuộc năm hiện tại hoặc tương lai; UI phải kiểm tra không có allocation tham chiếu trước khi gọi.
+    public async Task EnsureVersionDeletableAsync(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        var policy = await repository.GetLeavePolicyForUpdateByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException($"Leave policy with id '{id}' was not found.");
+
+        if (policy.LeaveType is null || !IsBuiltInLeaveType(policy.LeaveType.Code) ||
+            !policy.LeaveType.DeductsBalance)
+        {
+            throw new NotFoundException($"Leave policy with id '{id}' was not found.");
+        }
+
+        EnsureEditablePolicyYear(policy.Year);
+
+        // A policy version whose effective date has arrived is historical/current
+        // business data and must never be deleted, even when no allocation references it.
+        var today = GetBusinessToday();
+        if (policy.EffectiveFrom <= today)
+        {
+            throw new ConflictException(
+                "A policy version that is already effective cannot be deleted. Create a new future version instead.");
+        }
+    }
+
+    public async Task DeleteLeavePolicyVersionAsync(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureVersionDeletableAsync(id, cancellationToken);
+        var policy = await repository.GetLeavePolicyForUpdateByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException($"Leave policy with id '{id}' was not found.");
+
+        repository.Remove(policy);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await cache.RemoveAsync(LeavePoliciesCacheKey, cancellationToken);
     }
 
     public async Task<IReadOnlyList<HolidayResponse>> GetHolidaysAsync(
@@ -485,16 +626,51 @@ public sealed class LeaveCatalogService(
         return name;
     }
 
-    private void EnsureFuturePolicyYear(int year)
+    private int GetCurrentBusinessYear() => GetBusinessToday().Year;
+
+    private DateOnly GetBusinessToday() =>
+        DateOnly.FromDateTime(timeProvider.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).DateTime);
+
+    private void EnsureEditablePolicyYear(int year)
     {
-        // Business calendar uses Vietnam time (UTC+07:00), independent of the container timezone.
-        var currentYear = timeProvider.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).Year;
-        if (year <= currentYear)
+        var currentYear = GetCurrentBusinessYear();
+        if (year < currentYear)
         {
             throw Problems.Invalid(
                 "year",
-                $"Leave policies can only be created or changed for future years. Current year: {currentYear}.");
+                $"Leave policies can only be created or changed for the current or future years. Current year: {currentYear}.");
         }
+    }
+
+    private void EnsurePolicyEffectiveFrom(DateOnly effectiveFrom, int policyYear)
+    {
+        var today = GetBusinessToday();
+        var firstPolicyDate = new DateOnly(policyYear, 1, 1);
+        var earliestAllowedDate = today > firstPolicyDate ? today : firstPolicyDate;
+
+        if (LeavePolicyTimeline.CanAddVersion(effectiveFrom, earliestAllowedDate, policyYear))
+        {
+            return;
+        }
+
+        if (effectiveFrom < earliestAllowedDate)
+        {
+            throw Problems.Invalid(
+                "effectiveFrom",
+                $"A policy version for {policyYear} cannot take effect before {earliestAllowedDate:yyyy-MM-dd}.");
+        }
+
+        throw Problems.Invalid(
+            "effectiveFrom",
+            "A policy version cannot take effect after the end of its policy year.");
+    }
+
+    private static string NormalizePolicyReason(string? value, string fallback)
+    {
+        var reason = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+        if (reason.Length > 500)
+            throw Problems.Invalid("reason", "Reason cannot exceed 500 characters.");
+        return reason;
     }
 
     private static void ValidatePolicy(LeavePolicyRequest request)
@@ -519,6 +695,10 @@ public sealed class LeaveCatalogService(
             errors.Add("daysPerYear", "Days per year can have at most one decimal place.");
         }
 
+        if (request.EffectiveFrom == DateOnly.MinValue)
+            errors.Add("effectiveFrom", "Effective date must be a valid calendar date.");
+        if (!string.IsNullOrWhiteSpace(request.Reason) && request.Reason.Trim().Length > 500)
+            errors.Add("reason", "Reason cannot exceed 500 characters.");
         errors.ThrowIfAny();
     }
 
@@ -564,7 +744,10 @@ public sealed class LeaveCatalogService(
             policy.LeaveType!.Code,
             policy.LeaveType.Name,
             policy.Year,
-            policy.DaysPerYear);
+            policy.DaysPerYear,
+            policy.EffectiveFrom,
+            policy.CreatedAtUtc,
+            policy.Reason);
 
     private static HolidayResponse ToResponse(Holiday holiday) =>
         new(holiday.Id, holiday.HolidayDate, holiday.Name);

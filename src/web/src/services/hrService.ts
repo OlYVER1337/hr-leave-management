@@ -14,12 +14,121 @@ export interface EmployeeInput {
   managerId: string | null;
 }
 
-export async function getEmployees(): Promise<Employee[]> {
-  if (DEMO_MODE) return loadDemoState().employees;
+export interface EmployeePageQuery {
+  page: number;
+  pageSize: number;
+  search?: string;
+  role?: UserRole;
+  isActive?: boolean;
+  departmentId?: number;
+  sortBy?: 'fullName' | 'code' | 'departmentName' | 'role' | 'managerName' | 'hireDate' | 'isActive';
+  sortDirection?: 'asc' | 'desc';
+}
+
+export interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+}
+
+export interface EmployeeSummary {
+  total: number;
+  active: number;
+  managers: number;
+}
+
+function getDemoEmployeeSummary(): EmployeeSummary {
+  const employees = loadDemoState().employees;
+  const activeEmployees = employees.filter((employee) => employee.isActive);
+  return {
+    total: employees.length,
+    active: activeEmployees.length,
+    managers: activeEmployees.filter((employee) => employee.role === 'Manager').length,
+  };
+}
+
+export interface EmployeeOverview extends PagedResult<Employee> {
+  summary: EmployeeSummary;
+}
+
+export async function getEmployeeOverviewPage(
+  query: EmployeePageQuery,
+): Promise<EmployeeOverview> {
+  const page = Math.max(1, query.page);
+  const pageSize = Math.min(100, Math.max(1, query.pageSize));
+
+  if (DEMO_MODE) {
+    const [result, summary] = await Promise.all([
+      getEmployeePage({ ...query, page, pageSize }),
+      getDemoEmployeeSummary(),
+    ]);
+    return { ...result, summary };
+  }
+
   try {
-    const { data } = await hrApi.get<Employee[]>('/api/v1/employees');
+    const { data } = await hrApi.get<EmployeeOverview>('/api/v1/employees/overview', {
+      params: {
+        page,
+        pageSize,
+        search: query.search || undefined,
+        role: query.role,
+        isActive: query.isActive,
+        departmentId: query.departmentId,
+        sortBy: query.sortBy ?? 'fullName',
+        sortDirection: query.sortDirection ?? 'asc',
+      },
+    });
     return data;
   } catch (error) { throw new Error(getApiErrorMessage(error)); }
+}
+
+export async function getEmployeePage(query: EmployeePageQuery): Promise<PagedResult<Employee>> {
+  const page = Math.max(1, query.page);
+  const pageSize = Math.min(100, Math.max(1, query.pageSize));
+  if (DEMO_MODE) {
+    const state = loadDemoState();
+    const search = query.search?.trim().toLocaleLowerCase('vi-VN') ?? '';
+    const filtered = state.employees.filter((employee) => {
+      const matchesSearch = !search || [
+        employee.fullName, employee.code, employee.email, employee.departmentName ?? '',
+      ].some((value) => value.toLocaleLowerCase('vi-VN').includes(search));
+      return matchesSearch &&
+        (!query.role || employee.role === query.role) &&
+        (query.isActive === undefined || employee.isActive === query.isActive) &&
+        (query.departmentId === undefined || employee.departmentId === query.departmentId);
+    });
+    const collator = new Intl.Collator('vi', { sensitivity: 'base', numeric: true });
+    const direction = query.sortDirection === 'desc' ? -1 : 1;
+    const sortBy = query.sortBy ?? 'fullName';
+    const sorted = [...filtered].sort((left, right) => {
+      const values: Record<typeof sortBy, [string, string]> = {
+        fullName: [left.fullName, right.fullName],
+        code: [left.code, right.code],
+        departmentName: [left.departmentName ?? '', right.departmentName ?? ''],
+        role: [left.role, right.role],
+        managerName: [left.managerName ?? '', right.managerName ?? ''],
+        hireDate: [left.hireDate, right.hireDate],
+        isActive: [String(left.isActive), String(right.isActive)],
+      };
+      return collator.compare(values[sortBy][0], values[sortBy][1]) * direction || left.id.localeCompare(right.id);
+    });
+    const offset = (page - 1) * pageSize;
+    return { items: sorted.slice(offset, offset + pageSize), totalCount: sorted.length };
+  }
+  try {
+    const { data, headers } = await hrApi.get<Employee[]>('/api/v1/employees', {
+      params: {
+        page, pageSize, search: query.search || undefined, role: query.role,
+        isActive: query.isActive, departmentId: query.departmentId,
+        sortBy: query.sortBy ?? 'fullName', sortDirection: query.sortDirection ?? 'asc',
+      },
+    });
+    return { items: data, totalCount: Number(headers['x-total-count'] ?? data.length) };
+  } catch (error) { throw new Error(getApiErrorMessage(error)); }
+}
+
+// Compatibility helper for small dropdowns and summary widgets: the query is still bounded.
+export async function getEmployees(): Promise<Employee[]> {
+  return (await getEmployeePage({ page: 1, pageSize: 100 })).items;
 }
 
 export async function saveEmployee(input: EmployeeInput, id?: string): Promise<Employee> {
@@ -116,6 +225,34 @@ export async function deleteDepartment(id: number): Promise<void> {
   catch (error) { throw new Error(getApiErrorMessage(error)); }
 }
 
+export async function getMyTeamPage(
+  managerId: string,
+  page: number,
+  pageSize: number,
+  search?: string,
+): Promise<PagedResult<Employee>> {
+  const normalizedPage = Math.max(1, page);
+  const normalizedSize = Math.min(100, Math.max(1, pageSize));
+  if (DEMO_MODE) {
+    const state = loadDemoState();
+    const term = search?.trim().toLocaleLowerCase('vi-VN') ?? '';
+    const visible = state.employees
+      .filter((employee) => employee.managerId === managerId && employee.isActive)
+      .filter((employee) => !term || [
+        employee.fullName, employee.code, employee.email, employee.departmentName ?? '',
+      ].some((value) => value.toLocaleLowerCase('vi-VN').includes(term)))
+      .sort((left, right) => left.fullName.localeCompare(right.fullName));
+    const offset = (normalizedPage - 1) * normalizedSize;
+    return { items: visible.slice(offset, offset + normalizedSize), totalCount: visible.length };
+  }
+  try {
+    const { data, headers } = await hrApi.get<Employee[]>('/api/v1/me/team', {
+      params: { page: normalizedPage, pageSize: normalizedSize, search: search || undefined },
+    });
+    return { items: data, totalCount: Number(headers?.['x-total-count'] ?? data.length) };
+  } catch (error) { throw new Error(getApiErrorMessage(error)); }
+}
+
 export async function getMyTeam(managerId: string): Promise<Employee[]> {
   if (DEMO_MODE) {
     return loadDemoState().employees
@@ -123,7 +260,7 @@ export async function getMyTeam(managerId: string): Promise<Employee[]> {
       .sort((a, b) => a.fullName.localeCompare(b.fullName));
   }
   try {
-    const { data } = await hrApi.get<Employee[]>('/api/v1/me/team');
+    const { data } = await hrApi.get<Employee[]>('/api/v1/me/team', { params: { page: 1, pageSize: 100 } });
     return data;
   } catch (error) { throw new Error(getApiErrorMessage(error)); }
 }

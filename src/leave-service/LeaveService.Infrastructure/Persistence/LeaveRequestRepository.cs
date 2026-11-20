@@ -51,9 +51,14 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
                     EmployeeId = request.EmployeeId,
                     LeaveTypeId = request.LeaveTypeId,
                     Year = allocation.Year,
-                    Entitled = allocation.Entitled
+                    PolicyDays = allocation.Entitled
                 };
                 context.LeaveBalances.Add(balance);
+            }
+            else
+            {
+                // Lower policy days do not invalidate existing usage or pending reservations.
+                balance.PolicyDays = allocation.Entitled;
             }
 
             var available = balance.Entitled - balance.Used - balance.Pending;
@@ -74,7 +79,9 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
             {
                 LeaveRequestId = request.Id,
                 Year = allocation.Year,
-                Days = allocation.Days
+                Days = allocation.Days,
+                PolicyVersionId = allocation.PolicyVersionId,
+                PolicyDaysAtCreation = allocation.Entitled
             });
         }
 
@@ -98,12 +105,13 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
     public Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> TransitionAsync(
         Guid requestId,
         Guid actorId,
-        bool isHr,
+        LeaveAccess access,
         LeaveRequestStatus status,
         string? note,
         DateTime decidedAtUtc,
         Guid? verifiedApproverId = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyList<LeaveBalanceEntitlement>? currentPolicyDays = null)
     {
         if (status is not (LeaveRequestStatus.Approved or LeaveRequestStatus.Rejected))
         {
@@ -112,7 +120,7 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
 
         return ExecuteWithRetryAsync(
             () => TransitionOnceAsync(
-                requestId, actorId, isHr, status, note, decidedAtUtc, verifiedApproverId, cancellationToken),
+                requestId, actorId, access, status, note, decidedAtUtc, verifiedApproverId, currentPolicyDays, cancellationToken),
             "Leave request changed concurrently; retry the decision.",
             cancellationToken);
     }
@@ -122,9 +130,10 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
         Guid requestId,
         string? note,
         DateTime cancelledAtUtc,
-        CancellationToken cancellationToken = default) =>
+        CancellationToken cancellationToken = default,
+        IReadOnlyList<LeaveBalanceEntitlement>? currentPolicyDays = null) =>
         ExecuteWithRetryAsync(
-            () => CancelOnceAsync(employeeId, requestId, note, cancelledAtUtc, cancellationToken),
+            () => CancelOnceAsync(employeeId, requestId, note, cancelledAtUtc, currentPolicyDays, cancellationToken),
             "Leave request changed concurrently; retry the cancellation.",
             cancellationToken);
 
@@ -168,6 +177,51 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
         }).ToArray();
     }
 
+    public async Task<(IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> Items, int TotalCount)>
+        ListByEmployeePageAsync(
+            Guid employeeId,
+            LeaveRequestStatus? status,
+            int? leaveTypeId,
+            string? search,
+            int page,
+            int pageSize,
+            CancellationToken cancellationToken = default)
+    {
+        var query = context.LeaveRequests
+            .AsNoTracking()
+            .Where(item => item.EmployeeId == employeeId);
+
+        if (status.HasValue)
+            query = query.Where(item => item.Status == status.Value);
+        if (leaveTypeId.HasValue)
+            query = query.Where(item => item.LeaveTypeId == leaveTypeId.Value);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            if (Guid.TryParse(term, out var requestId))
+                query = query.Where(item => item.Id == requestId || item.Reason.Contains(term));
+            else
+                query = query.Where(item => item.Reason.Contains(term));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var normalizedSize = Math.Clamp(pageSize, 1, 100);
+        var offset = ((long)Math.Max(1, page) - 1L) * normalizedSize;
+        if (offset >= totalCount)
+            return (Array.Empty<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>(), totalCount);
+
+        var requests = await query
+            .Include(item => item.YearAllocations)
+            .OrderByDescending(item => item.CreatedAtUtc)
+            .ThenBy(item => item.Id)
+            .Skip((int)offset)
+            .Take(normalizedSize)
+            .ToArrayAsync(cancellationToken);
+
+        var rows = await WithBalancesAsync(requests, cancellationToken);
+        return (rows, totalCount);
+    }
+
     public async Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)?> GetByIdAsync(
         Guid employeeId,
         Guid requestId,
@@ -193,23 +247,263 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
         return (request, balances);
     }
 
+    public async Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)?> GetVisibleByIdAsync(
+        Guid employeeId,
+        Guid requestId,
+        LeaveAccess access,
+        IReadOnlyCollection<Guid> teamEmployeeIds,
+        CancellationToken cancellationToken = default)
+    {
+        IQueryable<LeaveRequest> query = context.LeaveRequests
+            .AsNoTracking()
+            .Where(item => item.Id == requestId);
+
+        if (!access.CanReadAll)
+        {
+            var self = access.CanReadSelf;
+            var teamIds = access.CanReadTeam
+                ? teamEmployeeIds.Distinct().ToArray()
+                : Array.Empty<Guid>();
+            var team = teamIds.Length > 0;
+
+            if (self && team)
+            {
+                query = query.Where(item =>
+                    item.EmployeeId == employeeId || teamIds.Contains(item.EmployeeId));
+            }
+            else if (team)
+            {
+                query = query.Where(item => teamIds.Contains(item.EmployeeId));
+            }
+            else if (self)
+            {
+                query = query.Where(item => item.EmployeeId == employeeId);
+            }
+            else
+            {
+                query = query.Where(item => false);
+            }
+        }
+
+        var request = await query.SingleOrDefaultAsync(cancellationToken);
+        if (request is null)
+        {
+            return null;
+        }
+
+        // The visible request may belong to a Team member or any employee under All.
+        // Load balances for the request owner, not for the caller.
+        var balances = await context.LeaveBalances
+            .AsNoTracking()
+            .Where(item => item.EmployeeId == request.EmployeeId &&
+                           item.LeaveTypeId == request.LeaveTypeId &&
+                           item.Year >= request.StartDate.Year &&
+                           item.Year <= request.EndDate.Year)
+            .ToArrayAsync(cancellationToken);
+
+        return (request, balances);
+    }
+
+    public async Task<(int Pending, int Approved, int Total)> GetSummaryAsync(
+        Guid employeeId,
+        LeaveAccess access,
+        IReadOnlyCollection<Guid> teamEmployeeIds,
+        CancellationToken cancellationToken = default)
+    {
+        var teamIds = teamEmployeeIds.Distinct().ToArray();
+        var canReadAll = access.CanReadAll;
+        var canReadSelf = access.CanReadSelf;
+        var canReadTeam = access.CanReadTeam && teamIds.Length > 0;
+        var canDecideAll = access.CanDecideAll;
+        var canDecideTeam = access.CanDecideTeam && teamIds.Length > 0;
+
+        var result = await context.LeaveRequests
+            .AsNoTracking()
+            .GroupBy(_ => 1)
+            .Select(group => new
+            {
+                Pending = group.Count(item =>
+                    item.Status == LeaveRequestStatus.Pending &&
+                    (canDecideAll || (canDecideTeam && teamIds.Contains(item.EmployeeId)))),
+                Approved = group.Count(item =>
+                    item.Status == LeaveRequestStatus.Approved &&
+                    (canReadAll ||
+                     (canReadSelf && item.EmployeeId == employeeId) ||
+                     (canReadTeam && teamIds.Contains(item.EmployeeId)))),
+                Total = group.Count(item =>
+                    canReadAll ||
+                    (canReadSelf && item.EmployeeId == employeeId) ||
+                    (canReadTeam && teamIds.Contains(item.EmployeeId)))
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        return result is null
+            ? (0, 0, 0)
+            : (result.Pending, result.Approved, result.Total);
+    }
+
     public async Task<IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>>
-        ListPendingAsync(Guid? approverId, CancellationToken cancellationToken = default)
+        ListPendingAsync(CancellationToken cancellationToken = default)
     {
         var requests = await context.LeaveRequests
             .AsNoTracking()
             .Include(item => item.YearAllocations)
-            .Where(item => item.Status == LeaveRequestStatus.Pending &&
-                           (!approverId.HasValue || item.ApproverId == approverId.Value))
+            .Where(item => item.Status == LeaveRequestStatus.Pending)
             .OrderBy(item => item.CreatedAtUtc)
             .ToArrayAsync(cancellationToken);
         return await WithBalancesAsync(requests, cancellationToken);
     }
 
+    public async Task<(IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> Items, int TotalCount)>
+        ListVisiblePageAsync(
+            Guid employeeId,
+            LeaveAccess access,
+            IReadOnlyCollection<Guid> teamEmployeeIds,
+            bool calendarOnly,
+            DateOnly? from,
+            DateOnly? to,
+            LeaveRequestStatus? status,
+            int? leaveTypeId,
+            string? search,
+            int page,
+            int pageSize,
+            CancellationToken cancellationToken = default)
+    {
+        var query = context.LeaveRequests.AsNoTracking().AsQueryable();
+
+        if (!access.CanReadAll)
+        {
+            var self = access.CanReadSelf;
+            var team = access.CanReadTeam && teamEmployeeIds.Count > 0;
+            // Remove duplicate IDs before EF translates the collection into SQL parameters.
+            var teamIds = team
+                ? teamEmployeeIds.Distinct().ToArray()
+                : Array.Empty<Guid>();
+
+            if (self && team)
+            {
+                query = query.Where(item => item.EmployeeId == employeeId || teamIds.Contains(item.EmployeeId));
+            }
+            else if (team)
+            {
+                query = query.Where(item => teamIds.Contains(item.EmployeeId));
+            }
+            else if (self)
+            {
+                query = query.Where(item => item.EmployeeId == employeeId);
+            }
+            else
+            {
+                query = query.Where(item => false);
+            }
+        }
+
+        if (calendarOnly)
+        {
+            query = query.Where(item =>
+                item.Status == LeaveRequestStatus.Pending ||
+                item.Status == LeaveRequestStatus.Approved);
+        }
+
+        if (from.HasValue)
+        {
+            query = query.Where(item => item.EndDate >= from.Value);
+        }
+
+        if (to.HasValue)
+        {
+            query = query.Where(item => item.StartDate <= to.Value);
+        }
+
+        if (status.HasValue)
+            query = query.Where(item => item.Status == status.Value);
+
+        if (leaveTypeId.HasValue)
+            query = query.Where(item => item.LeaveTypeId == leaveTypeId.Value);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            if (Guid.TryParse(term, out var requestId))
+                query = query.Where(item => item.Id == requestId || item.Reason.Contains(term));
+            else
+                query = query.Where(item => item.Reason.Contains(term));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        // Không để page lớn gây tràn số khi tính OFFSET.
+        var normalizedSize = Math.Clamp(pageSize, 1, 100);
+        var offset = ((long)Math.Max(1, page) - 1L) * normalizedSize;
+        if (offset >= totalCount)
+            return (Array.Empty<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>(), totalCount);
+
+        // Chỉ tải đúng một trang đơn và balances của các đơn trong trang đó.
+        var requests = await query
+            .Include(item => item.YearAllocations)
+            .OrderByDescending(item => item.CreatedAtUtc)
+            .ThenBy(item => item.Id)
+            .Skip((int)offset)
+            .Take(normalizedSize)
+            .ToArrayAsync(cancellationToken);
+
+        var rows = await WithBalancesAsync(requests, cancellationToken);
+        return (rows, totalCount);
+    }
+
+    public async Task<(IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> Items, int TotalCount)>
+        ListPendingPageAsync(
+            IReadOnlyCollection<Guid> employeeIds,
+            bool includeAll,
+            string? search,
+            int page,
+            int pageSize,
+            CancellationToken cancellationToken = default)
+    {
+        var query = context.LeaveRequests
+            .AsNoTracking()
+            .Where(item => item.Status == LeaveRequestStatus.Pending);
+
+        if (!includeAll)
+        {
+            var teamIds = employeeIds.Distinct().ToArray();
+            query = teamIds.Length == 0
+                ? query.Where(item => false)
+                : query.Where(item => teamIds.Contains(item.EmployeeId));
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            if (Guid.TryParse(term, out var requestId))
+                query = query.Where(item => item.Id == requestId || item.Reason.Contains(term));
+            else
+                query = query.Where(item => item.Reason.Contains(term));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var normalizedSize = Math.Clamp(pageSize, 1, 100);
+        var offset = ((long)Math.Max(1, page) - 1L) * normalizedSize;
+        if (offset >= totalCount)
+            return (Array.Empty<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>(), totalCount);
+
+        var requests = await query
+            .Include(item => item.YearAllocations)
+            .OrderBy(item => item.CreatedAtUtc)
+            .ThenBy(item => item.Id)
+            .Skip((int)offset)
+            .Take(normalizedSize)
+            .ToArrayAsync(cancellationToken);
+
+        var rows = await WithBalancesAsync(requests, cancellationToken);
+        return (rows, totalCount);
+    }
+
     public async Task<IReadOnlyList<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)>>
         ListVisibleAsync(
             Guid employeeId,
-            bool isHr,
+            LeaveAccess access,
+            IReadOnlyCollection<Guid> teamEmployeeIds,
             bool calendarOnly,
             DateOnly? from,
             DateOnly? to,
@@ -220,9 +514,30 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
             .Include(item => item.YearAllocations)
             .AsQueryable();
 
-        if (!isHr)
+        if (!access.CanReadAll)
         {
-            query = query.Where(item => item.EmployeeId == employeeId || item.ApproverId == employeeId);
+            // Team membership comes from HR (current manager), never from the ApproverId snapshot.
+            // Self and Team are OR-ed; an empty team never widens access.
+            var self = access.CanReadSelf;
+            var team = access.CanReadTeam && teamEmployeeIds.Count > 0;
+            var teamIds = team ? teamEmployeeIds.ToArray() : Array.Empty<Guid>();
+
+            if (self && team)
+            {
+                query = query.Where(item => item.EmployeeId == employeeId || teamIds.Contains(item.EmployeeId));
+            }
+            else if (team)
+            {
+                query = query.Where(item => teamIds.Contains(item.EmployeeId));
+            }
+            else if (self)
+            {
+                query = query.Where(item => item.EmployeeId == employeeId);
+            }
+            else
+            {
+                query = query.Where(item => false);
+            }
         }
 
         if (calendarOnly)
@@ -273,16 +588,18 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
         CancellationToken cancellationToken = default) =>
         context.LeaveRequests
             .AsNoTracking()
+            .Include(item => item.YearAllocations)
             .SingleOrDefaultAsync(item => item.Id == requestId, cancellationToken);
 
     private async Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)> TransitionOnceAsync(
         Guid requestId,
         Guid actorId,
-        bool isHr,
+        LeaveAccess access,
         LeaveRequestStatus status,
         string? note,
         DateTime decidedAtUtc,
         Guid? verifiedApproverId,
+        IReadOnlyList<LeaveBalanceEntitlement>? currentPolicyDays,
         CancellationToken cancellationToken)
     {
         await using var transaction = await context.Database.BeginTransactionAsync(
@@ -293,22 +610,25 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
             .SingleOrDefaultAsync(item => item.Id == requestId, cancellationToken)
             ?? throw new LeaveNotFoundException($"Leave request with id '{requestId}' was not found.");
         EnsurePending(request);
-        if (!isHr)
+        if (!access.CanDecideAll)
         {
-            // The approver is the employee's current manager according to HR; the stored value
-            // is only a snapshot taken at creation time and may be stale after a reassignment.
-            var currentApproverId = verifiedApproverId ?? request.ApproverId;
-            if (currentApproverId != actorId)
+            // Team decisions must carry a successful live HR verification.
+            // Never fall back to ApproverId: it is only a historical snapshot.
+            if (!access.CanDecideTeam ||
+                !verifiedApproverId.HasValue ||
+                verifiedApproverId.Value != actorId)
             {
-                throw new LeaveForbiddenException("Only the assigned manager or HR can decide this request.");
+                throw new LeaveForbiddenException(
+                    "A current HR manager verification is required to decide a Team request.");
             }
 
-            request.ApproverId = currentApproverId;
+            request.ApproverId = verifiedApproverId.Value;
         }
 
         var balances = await UpdateBalancesAsync(
             request,
             approve: status == LeaveRequestStatus.Approved,
+            currentPolicyDays,
             cancellationToken);
         var previousStatus = request.Status;
         request.Status = status;
@@ -334,6 +654,7 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
         Guid requestId,
         string? note,
         DateTime cancelledAtUtc,
+        IReadOnlyList<LeaveBalanceEntitlement>? currentPolicyDays,
         CancellationToken cancellationToken = default)
     {
         await using var transaction = await context.Database.BeginTransactionAsync(
@@ -347,7 +668,7 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
             ?? throw new LeaveNotFoundException($"Leave request with id '{requestId}' was not found.");
         EnsurePending(request);
 
-        var balances = await UpdateBalancesAsync(request, approve: false, cancellationToken);
+        var balances = await UpdateBalancesAsync(request, approve: false, currentPolicyDays, cancellationToken);
         var previousStatus = request.Status;
         request.Status = LeaveRequestStatus.Cancelled;
         request.DecidedAtUtc = cancelledAtUtc;
@@ -380,9 +701,69 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
             .ConfigureAwait(false);
     }
 
+    public Task<IReadOnlyList<LeaveBalance>> SynchronizeBalancesAsync(
+        Guid employeeId,
+        int year,
+        IReadOnlyList<LeaveBalanceEntitlement> entitlements,
+        CancellationToken cancellationToken = default) =>
+        ExecuteWithRetryAsync(
+            () => SynchronizeBalancesOnceAsync(employeeId, year, entitlements, cancellationToken),
+            "Leave balances changed concurrently; retry the synchronization.",
+            cancellationToken);
+
+    private async Task<IReadOnlyList<LeaveBalance>> SynchronizeBalancesOnceAsync(
+        Guid employeeId,
+        int year,
+        IReadOnlyList<LeaveBalanceEntitlement> entitlements,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = await context.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
+        var balances = await context.LeaveBalances
+            .Where(item => item.EmployeeId == employeeId && item.Year == year)
+            .ToListAsync(cancellationToken);
+        var balancesByType = balances.ToDictionary(item => item.LeaveTypeId);
+
+        foreach (var entitlement in entitlements)
+        {
+            if (entitlement.LeaveTypeId <= 0 || entitlement.Entitled < 0m)
+            {
+                throw new LeaveConflictException("The HR catalog contains an invalid leave entitlement.");
+            }
+
+            if (!balancesByType.TryGetValue(entitlement.LeaveTypeId, out var balance))
+            {
+                balance = new LeaveBalance
+                {
+                    EmployeeId = employeeId,
+                    LeaveTypeId = entitlement.LeaveTypeId,
+                    Year = year,
+                    PolicyDays = entitlement.Entitled
+                };
+                context.LeaveBalances.Add(balance);
+                balances.Add(balance);
+                balancesByType.Add(entitlement.LeaveTypeId, balance);
+                continue;
+            }
+
+            // The policy snapshot can be lower than historical usage; Entitled is derived.
+            balance.PolicyDays = entitlement.Entitled;
+        }
+
+        await context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return balances
+            .OrderBy(item => item.LeaveTypeId)
+            .ToArray();
+    }
+
     private async Task<IReadOnlyList<LeaveBalance>> UpdateBalancesAsync(
         LeaveRequest request,
         bool approve,
+        IReadOnlyList<LeaveBalanceEntitlement>? currentPolicyDays,
         CancellationToken cancellationToken)
     {
         var balances = new List<LeaveBalance>();
@@ -395,6 +776,26 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
                 cancellationToken)
                 ?? throw new InvalidOperationException(
                     $"Leave balance for {allocation.Year} is missing for request '{request.Id}'.");
+
+            if (currentPolicyDays is not null)
+            {
+                var policy = currentPolicyDays.SingleOrDefault(item =>
+                    item.Year == allocation.Year &&
+                    item.LeaveTypeId == request.LeaveTypeId);
+                if (policy is null)
+                {
+                    throw new LeaveConflictException(
+                        $"The current policy snapshot is missing for leave type '{request.LeaveTypeId}' in {allocation.Year}.");
+                }
+
+                if (policy.Entitled < 0m || policy.Entitled > 366m ||
+                    decimal.Round(policy.Entitled, 1) != policy.Entitled)
+                {
+                    throw new LeaveConflictException("The current policy snapshot is invalid.");
+                }
+
+                balance.PolicyDays = policy.Entitled;
+            }
 
             if (balance.Pending < allocation.Days)
             {
@@ -437,13 +838,26 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
                            years.Contains(item.Year))
             .ToArrayAsync(cancellationToken);
 
-        return requests.Select(request => (
-            request,
-            (IReadOnlyList<LeaveBalance>)balances
-                .Where(balance => balance.EmployeeId == request.EmployeeId &&
-                                  balance.LeaveTypeId == request.LeaveTypeId &&
-                                  request.YearAllocations.Any(allocation => allocation.Year == balance.Year))
-                .ToArray())).ToArray();
+        // Build a lookup once instead of scanning the whole balance result for every request.
+        // This keeps in-memory mapping O(requests + balances), not O(requests × balances).
+        var balancesByKey = balances.ToDictionary(
+            balance => (balance.EmployeeId, balance.LeaveTypeId, balance.Year));
+
+        return requests.Select(request =>
+        {
+            var requestBalances = new List<LeaveBalance>(request.YearAllocations.Count);
+            foreach (var allocation in request.YearAllocations)
+            {
+                if (balancesByKey.TryGetValue(
+                    (request.EmployeeId, request.LeaveTypeId, allocation.Year),
+                    out var balance))
+                {
+                    requestBalances.Add(balance);
+                }
+            }
+
+            return (request, (IReadOnlyList<LeaveBalance>)requestBalances.ToArray());
+        }).ToArray();
     }
 
     private static void EnsurePending(LeaveRequest request)
@@ -498,4 +912,11 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
 
         return false;
     }
+
+    public Task<int> CountPolicyVersionReferencesAsync(
+        int policyVersionId,
+        CancellationToken cancellationToken = default) =>
+        context.LeaveRequestYearAllocations
+            .AsNoTracking()
+            .CountAsync(item => item.PolicyVersionId == policyVersionId, cancellationToken);
 }

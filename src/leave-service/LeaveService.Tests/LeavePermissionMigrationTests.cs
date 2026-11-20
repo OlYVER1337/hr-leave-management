@@ -1,0 +1,134 @@
+using System.Reflection;
+using LeaveService.Api.Controllers;
+using LeaveService.Application.Dtos;
+using LeaveService.Application.Services;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
+using Xunit;
+
+namespace LeaveService.Tests;
+
+public sealed class LeavePermissionMigrationTests
+{
+    // Các endpoint nghỉ phép phải dùng permission policy mới thay vì role legacy.
+    [Theory]
+    [InlineData(nameof(LeaveRequestsController.GetVisible), "permission:leaves.read")]
+    [InlineData(nameof(LeaveRequestsController.GetCalendar), "permission:leaves.read")]
+    [InlineData(nameof(LeaveRequestsController.GetById), "permission:leaves.read")]
+    [InlineData(nameof(LeaveRequestsController.GetMine), "permission:leaves.read:self-or-all")]
+    [InlineData(nameof(LeaveRequestsController.GetSummary), "permission:leaves.summary")]
+    [InlineData(nameof(LeaveRequestsController.Decide), "permission:leaves.decide")]
+    [InlineData(nameof(LeaveRequestsController.Create), "permission:leaves.create")]
+    [InlineData(nameof(LeaveRequestsController.GetPendingApproval), "permission:leaves.decide")]
+    [InlineData(nameof(LeaveRequestsController.Cancel), "permission:leaves.cancel")]
+    public void LeaveEndpoint_UsesPermissionPolicyWithoutLegacyRole(
+        string actionName,
+        string expectedPolicy)
+    {
+        var method = typeof(LeaveRequestsController).GetMethod(actionName);
+        Assert.NotNull(method);
+        var authorization = method!.GetCustomAttributes<AuthorizeAttribute>(inherit: true).ToArray();
+        Assert.Contains(authorization, attribute =>
+            attribute.Policy == expectedPolicy && attribute.Roles is null);
+        Assert.DoesNotContain(authorization, attribute => !string.IsNullOrWhiteSpace(attribute.Roles));
+    }
+
+    // API balance cá nhân chỉ được gọi khi token có leaves.read với scope Self hoặc All.
+    [Fact]
+    public void PersonalBalanceEndpoint_RequiresSelfOrAllReadScope()
+    {
+        var method = typeof(LeaveBalancesController).GetMethod(nameof(LeaveBalancesController.GetMine));
+        Assert.NotNull(method);
+
+        var authorization = method!.GetCustomAttributes<AuthorizeAttribute>(inherit: true).ToArray();
+        Assert.Contains(authorization, attribute =>
+            attribute.Policy == "permission:leaves.read:self-or-all" && attribute.Roles is null);
+    }
+
+    // Application service không nhận cờ IsHr vì quyền phải lấy từ effective permission.
+    [Fact]
+    public void LeaveRequestService_DoesNotAcceptIsHrFlag()
+    {
+        AssertNoBooleanParameters(nameof(LeaveRequestService.GetVisibleAsync));
+        AssertNoBooleanParameters(nameof(LeaveRequestService.GetPendingAsync));
+        AssertNoBooleanParameters(nameof(LeaveRequestService.DecideAsync));
+    }
+
+    // LeaveAccess phải được tạo từ permission/scope claim có cấu trúc trong JWT.
+    [Fact]
+    public void LeaveRequestService_UsesLeaveAccessFromApplicationPermissions()
+    {
+        var accessType = typeof(LeaveRequestService).Assembly.GetType(
+            "LeaveService.Application.Dtos.LeaveAccess");
+        Assert.NotNull(accessType);
+
+        Assert.Contains(accessType!.GetProperties(), property =>
+            property.Name == "CanReadAll" && property.PropertyType == typeof(bool));
+        Assert.Contains(accessType.GetProperties(), property =>
+            property.Name == "CanDecideAll" && property.PropertyType == typeof(bool));
+        Assert.Contains(accessType.GetProperties(), property =>
+            property.Name == "CanDecideTeam" && property.PropertyType == typeof(bool));
+    }
+
+    // Kiểm tra LeaveAccess đọc đúng authz version và danh sách permission/scope.
+    [Fact]
+    public void LeaveAccess_ReadsPermissionAndScopeFromVersionedJwtClaims()
+    {
+        var claims = new[]
+        {
+            new Claim("authz_v", "1"),
+            new Claim("perm", """[{"p":"leaves.read","s":["Self","All"]},{"p":"leaves.decide","s":["Team"]}]""")
+        };
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+
+        var access = LeaveAccess.FromClaims(principal);
+
+        Assert.True(access.CanReadSelf);
+        Assert.True(access.CanReadAll);
+        Assert.True(access.CanDecideTeam);
+        Assert.False(access.CanDecideAll);
+    }
+
+    // Claim sai cấu trúc hoặc thiếu version không được coi là quyền hợp lệ.
+    [Fact]
+    public void LeaveAccess_RejectsInvalidOrUnversionedPermissionClaims()
+    {
+        var invalidPrincipal = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim("authz_v", "1"),
+            new Claim("perm", "not-json")
+        ], "test"));
+        var oldTokenPrincipal = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim("perm", """[{"p":"leaves.decide","s":["All"]}]""")
+        ], "test"));
+
+        Assert.False(LeaveAccess.FromClaims(invalidPrincipal).CanDecide);
+        Assert.False(LeaveAccess.FromClaims(oldTokenPrincipal).CanDecide);
+    }
+
+
+    // Role HR legacy không tự cấp quyền truy cập trong Leave Service.
+    [Fact]
+    public void LeaveAccess_DoesNotGrantAccessFromLegacyHrRoleClaim()
+    {
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+        [
+            new Claim(ClaimTypes.Role, "HR"),
+            new Claim("role", "HR")
+        ], "test"));
+
+        var access = LeaveAccess.FromClaims(principal);
+
+        Assert.False(access.CanReadAll);
+        Assert.False(access.CanDecideAll);
+        Assert.False(access.CanDecide);
+    }
+
+    private static void AssertNoBooleanParameters(string methodName)
+    {
+        var method = typeof(LeaveRequestService).GetMethod(methodName);
+        Assert.NotNull(method);
+        Assert.DoesNotContain(method!.GetParameters(), parameter => parameter.Name == "isHr");
+    }
+}

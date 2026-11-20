@@ -13,12 +13,14 @@ namespace HrService.Tests;
 
 public sealed class RedisLeaveCatalogCacheTests
 {
+    // TTL mặc định của catalog cache phải là 30 phút nếu không cấu hình khác.
     [Fact]
     public void CacheOptions_DefaultExpirationIsThirtyMinutes()
     {
         Assert.Equal(1800, new CacheOptions().ExpirationSeconds);
     }
 
+    // Redis timeout được xem là cache miss để service có thể fallback sang SQL.
     [Fact]
     public async Task GetAsync_ReturnsCacheMissWhenRedisTimesOut()
     {
@@ -36,6 +38,7 @@ public sealed class RedisLeaveCatalogCacheTests
         Assert.Null(result);
     }
 
+    // Lỗi ghi cache không được làm hỏng thao tác nghiệp vụ vốn đã có dữ liệu từ SQL.
     [Fact]
     public async Task SetAsync_DoesNotThrowWhenRedisTimesOut()
     {
@@ -55,6 +58,7 @@ public sealed class RedisLeaveCatalogCacheTests
         await cache.SetAsync("catalog-key", "value");
     }
 
+    // Khi Redis timeout, HR phải đọc leave types từ SQL thay vì trả lỗi.
     [Fact]
     public async Task GetLeaveTypesAsync_LoadsFromSqlWhenRedisIsUnavailable()
     {
@@ -90,6 +94,7 @@ public sealed class RedisLeaveCatalogCacheTests
             Times.Once);
     }
 
+    // Trường hợp Redis không kết nối được cũng phải fallback sang SQL.
     [Fact]
     public async Task GetLeaveTypesAsync_LoadsFromSqlWhenRedisConnectionIsUnavailable()
     {
@@ -120,6 +125,7 @@ public sealed class RedisLeaveCatalogCacheTests
             Times.Once);
     }
 
+    // Không để lỗi invalidation Redis chặn luồng cập nhật dữ liệu SQL.
     [Fact]
     public async Task RemoveAsync_DoesNotFailWhenRedisIsUnavailable()
     {

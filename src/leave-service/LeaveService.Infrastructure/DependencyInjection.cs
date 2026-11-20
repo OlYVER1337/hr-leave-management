@@ -20,6 +20,7 @@ public static class DependencyInjection
 
         services.AddDbContext<LeaveDbContext>(options => options.UseSqlServer(connectionString));
         services.AddScoped<ILeaveRequestRepository, LeaveRequestRepository>();
+        services.AddScoped<HrCallMetrics>();
         services.AddHttpClient<ILeaveHrClient, HrServiceClient>(client =>
         {
             client.BaseAddress = new Uri(hrServiceUrl);

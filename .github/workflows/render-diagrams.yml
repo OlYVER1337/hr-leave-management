@@ -1,0 +1,76 @@
+name: Render architecture diagrams
+
+on:
+  push:
+    branches:
+      - feature/dynamic-authorization-v1
+    paths:
+      - "docs/architecture/diagrams/mermaid/**"
+      - ".github/workflows/render-diagrams.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: render-diagrams-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render:
+    name: Render Mermaid to PNG and SVG
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Mermaid CLI
+        run: npm install --global @mermaid-js/mermaid-cli@12.2.0
+
+      - name: Render every Mermaid diagram
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p docs/architecture/diagrams/png docs/architecture/diagrams/svg
+
+          shopt -s nullglob
+          sources=(docs/architecture/diagrams/mermaid/*.mmd)
+          if (( ${#sources[@]} == 0 )); then
+            echo "No Mermaid source files found."
+            exit 1
+          fi
+
+          for source in "${sources[@]}"; do
+            name="$(basename "$source" .mmd)"
+            echo "Rendering $name"
+
+            mmdc \
+              --input "$source" \
+              --output "docs/architecture/diagrams/svg/$name.svg" \
+              --theme neutral \
+              --backgroundColor white \
+              --puppeteerConfigFile .github/workflows/puppeteer-config.json
+
+            mmdc \
+              --input "$source" \
+              --output "docs/architecture/diagrams/png/$name.png" \
+              --theme neutral \
+              --backgroundColor white \
+              --scale 2 \
+              --puppeteerConfigFile .github/workflows/puppeteer-config.json
+          done
+
+      - name: Commit rendered diagrams
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Tạo lại ảnh sơ đồ kiến trúc và luồng API"
+          file_pattern: "docs/architecture/diagrams/png/*.png docs/architecture/diagrams/svg/*.svg"

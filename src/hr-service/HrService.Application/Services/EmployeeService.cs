@@ -25,6 +25,155 @@ public sealed class EmployeeService(
         return employees.Select(ToResponse).ToArray();
     }
 
+    public async Task<IReadOnlyList<EmployeeResponse>> GetVisibleAsync(
+        Guid actorId,
+        EffectiveAuthorization authorization,
+        CancellationToken cancellationToken = default)
+    {
+        var scopes = GetEmployeeReadScopes(actorId, authorization);
+        var employees = await employeeRepository.ListVisibleAsync(
+            actorId,
+            scopes.IncludeSelf,
+            scopes.IncludeTeam,
+            scopes.IncludeAll,
+            cancellationToken);
+        return employees.Select(ToResponse).ToArray();
+    }
+
+    public async Task<EmployeeSummaryResponse> GetVisibleSummaryAsync(
+        Guid actorId,
+        EffectiveAuthorization authorization,
+        CancellationToken cancellationToken = default)
+    {
+        var scopes = GetEmployeeReadScopes(actorId, authorization);
+        var counts = await employeeRepository.GetVisibleSummaryAsync(
+            actorId,
+            scopes.IncludeSelf,
+            scopes.IncludeTeam,
+            scopes.IncludeAll,
+            cancellationToken);
+
+        return new EmployeeSummaryResponse(
+            counts.Total,
+            counts.Active,
+            counts.Managers);
+    }
+
+    public async Task<PagedEmployeeResponse> GetVisiblePagedAsync(
+        Guid actorId,
+        EffectiveAuthorization authorization,
+        int page,
+        int pageSize,
+        string? search,
+        string? role,
+        bool? isActive,
+        int? departmentId,
+        string? sortBy,
+        string? sortDirection,
+        CancellationToken cancellationToken = default)
+    {
+        var scopes = GetEmployeeReadScopes(actorId, authorization);
+        var normalizedPage = Math.Max(1, page);
+        var normalizedSize = Math.Clamp(pageSize, 1, 100);
+        Role? roleFilter = null;
+        if (!string.IsNullOrWhiteSpace(role))
+        {
+            if (!Enum.TryParse<Role>(role, ignoreCase: true, out var parsedRole) || !Enum.IsDefined(parsedRole))
+                throw Problems.Invalid("role", "Role must be HR, Manager, or Employee.");
+            roleFilter = parsedRole;
+        }
+
+        var descending = string.Equals(sortDirection, "desc", StringComparison.OrdinalIgnoreCase);
+        var (items, totalCount) = await employeeRepository.ListVisiblePageAsync(
+            actorId,
+            scopes.IncludeSelf,
+            scopes.IncludeTeam,
+            scopes.IncludeAll,
+            search,
+            roleFilter,
+            isActive,
+            departmentId,
+            sortBy ?? "fullName",
+            descending,
+            normalizedPage,
+            normalizedSize,
+            cancellationToken);
+
+        return new PagedEmployeeResponse(items.Select(item => ToResponse(item)).ToArray(), totalCount);
+    }
+
+    public async Task<EmployeeOverviewResponse> GetVisibleOverviewPagedAsync(
+        Guid actorId,
+        EffectiveAuthorization authorization,
+        int page,
+        int pageSize,
+        string? search,
+        string? role,
+        bool? isActive,
+        int? departmentId,
+        string? sortBy,
+        string? sortDirection,
+        CancellationToken cancellationToken = default)
+    {
+        var paged = await GetVisiblePagedAsync(
+            actorId, authorization, page, pageSize, search, role, isActive,
+            departmentId, sortBy, sortDirection, cancellationToken);
+        var summary = await GetVisibleSummaryAsync(actorId, authorization, cancellationToken);
+
+        return new EmployeeOverviewResponse(paged.Items, paged.TotalCount, summary);
+    }
+
+    public async Task<IReadOnlyList<EmployeeLookupResponse>> GetLookupsAsync(
+        IReadOnlyCollection<Guid> employeeIds,
+        Guid requesterId,
+        EffectiveAuthorization authorization,
+        CancellationToken cancellationToken = default)
+    {
+        var scopes = GetEmployeeReadScopes(requesterId, authorization);
+        if (employeeIds.Count > 100)
+            throw Problems.Invalid("ids", "At most 100 employee IDs can be requested at once.");
+
+        var employees = await employeeRepository.ListVisibleByIdsAsync(
+            requesterId,
+            scopes.IncludeSelf,
+            scopes.IncludeTeam,
+            scopes.IncludeAll,
+            employeeIds,
+            cancellationToken);
+
+        return employees.Select(employee => new EmployeeLookupResponse(
+            employee.Id,
+            employee.Code,
+            employee.FullName,
+            employee.Role.ToString(),
+            employee.IsActive,
+            employee.DepartmentId,
+            employee.ManagerId,
+            employee.DepartmentName,
+            employee.ManagerName)).ToArray();
+    }
+
+    public async Task<EmployeeResponse> GetVisibleByIdAsync(
+        Guid id,
+        Guid actorId,
+        EffectiveAuthorization authorization,
+        CancellationToken cancellationToken = default)
+    {
+        var scopes = GetEmployeeReadScopes(actorId, authorization);
+        var employee = await employeeRepository.GetByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException($"Employee with id '{id}' was not found.");
+
+        var isVisible =
+            scopes.IncludeAll ||
+            (scopes.IncludeSelf && employee.Id == actorId) ||
+            (scopes.IncludeTeam && employee.IsActive && employee.ManagerId == actorId);
+
+        if (!isVisible)
+            throw new NotFoundException($"Employee with id '{id}' was not found.");
+
+        return ToResponse(employee);
+    }
+
     public async Task<EmployeeResponse> GetByIdAsync(
         Guid id,
         CancellationToken cancellationToken = default)
@@ -38,12 +187,18 @@ public sealed class EmployeeService(
     public async Task<EmployeeLookupResponse> GetLookupAsync(
         Guid id,
         Guid requesterId,
-        bool requesterIsHr,
+        EffectiveAuthorization authorization,
         CancellationToken cancellationToken = default)
     {
-        if (!requesterIsHr &&
-            requesterId != id &&
-            !await employeeRepository.IsDirectManagerOfAsync(requesterId, id, cancellationToken))
+        var scopes = authorization.GetScopes("employees.read");
+        var canReadAll = scopes.Contains("All", StringComparer.OrdinalIgnoreCase);
+        var canReadSelf = scopes.Contains("Self", StringComparer.OrdinalIgnoreCase);
+        var canReadTeam = scopes.Contains("Team", StringComparer.OrdinalIgnoreCase);
+        var isSelf = requesterId == id;
+        var isDirectReport = canReadTeam &&
+            await employeeRepository.IsDirectManagerOfAsync(requesterId, id, cancellationToken);
+
+        if (!canReadAll && !(canReadSelf && isSelf) && !isDirectReport)
         {
             throw new ForbiddenException();
         }
@@ -58,6 +213,33 @@ public sealed class EmployeeService(
     {
         var employees = await GetTeamAsync(managerId, cancellationToken);
         return employees.Select(ToLookupResponse).ToArray();
+    }
+
+    public Task<IReadOnlyList<Guid>> GetTeamEmployeeIdsAsync(
+        Guid managerId,
+        CancellationToken cancellationToken = default) =>
+        employeeRepository.GetDirectReportIdsAsync(managerId, cancellationToken);
+
+    public async Task<PagedEmployeeResponse> GetTeamPagedAsync(
+        Guid managerId,
+        int page,
+        int pageSize,
+        string? search,
+        CancellationToken cancellationToken = default)
+    {
+        if (managerId == Guid.Empty)
+            throw new ForbiddenException();
+
+        var (items, totalCount) = await employeeRepository.ListDirectReportsPageAsync(
+            managerId,
+            search,
+            Math.Max(page, 1),
+            Math.Clamp(pageSize, 1, 100),
+            cancellationToken);
+
+        return new PagedEmployeeResponse(
+            items.Select(ToResponse).ToArray(),
+            totalCount);
     }
 
     public async Task<IReadOnlyList<EmployeeResponse>> GetTeamAsync(
@@ -160,12 +342,13 @@ public sealed class EmployeeService(
         {
             manager = await employeeRepository.GetActiveManagerByIdAsync(
                 request.ManagerId.Value,
+                timeProvider.GetUtcNow().UtcDateTime,
                 cancellationToken);
             if (manager is null)
             {
                 throw new RequestValidationException(new Dictionary<string, string[]>
                 {
-                    ["managerId"] = ["Manager must reference an active employee with the Manager role."]
+                    ["managerId"] = ["Manager must be active and have leaves.decide with Team or All scope."]
                 });
             }
         }
@@ -275,10 +458,11 @@ public sealed class EmployeeService(
 
             manager = await employeeRepository.GetActiveManagerByIdAsync(
                 request.ManagerId.Value,
+                timeProvider.GetUtcNow().UtcDateTime,
                 cancellationToken);
             if (manager is null)
             {
-                throw Problems.Invalid("managerId", "Manager must reference an active employee with the Manager role.");
+                throw Problems.Invalid("managerId", "Manager must be active and have leaves.decide with Team or All scope.");
             }
         }
 
@@ -343,6 +527,29 @@ public sealed class EmployeeService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
+    private static EmployeeReadScopes GetEmployeeReadScopes(
+        Guid actorId,
+        EffectiveAuthorization authorization)
+    {
+        if (actorId == Guid.Empty || !authorization.HasPermission("employees.read"))
+            throw new ForbiddenException();
+
+        var scopes = authorization.GetScopes("employees.read");
+        var includeSelf = scopes.Contains("Self", StringComparer.OrdinalIgnoreCase);
+        var includeTeam = scopes.Contains("Team", StringComparer.OrdinalIgnoreCase);
+        var includeAll = scopes.Contains("All", StringComparer.OrdinalIgnoreCase);
+
+        if (!includeSelf && !includeTeam && !includeAll)
+            throw new ForbiddenException();
+
+        return new EmployeeReadScopes(includeSelf, includeTeam, includeAll);
+    }
+
+    private readonly record struct EmployeeReadScopes(
+        bool IncludeSelf,
+        bool IncludeTeam,
+        bool IncludeAll);
+
     private static bool IsValidEmail(string email)
     {
         try
@@ -369,6 +576,20 @@ public sealed class EmployeeService(
             employee.ManagerId,
             employee.Manager?.FullName);
 
+    private static EmployeeResponse ToResponse(EmployeeReadModel employee) =>
+        new(
+            employee.Id,
+            employee.Code,
+            employee.FullName,
+            employee.Email,
+            employee.Role.ToString(),
+            employee.HireDate,
+            employee.IsActive,
+            employee.DepartmentId,
+            employee.DepartmentName,
+            employee.ManagerId,
+            employee.ManagerName);
+
     private static EmployeeLookupResponse ToLookupResponse(EmployeeResponse employee) =>
         new(
             employee.Id,
@@ -377,8 +598,12 @@ public sealed class EmployeeService(
             employee.Role,
             employee.IsActive,
             employee.DepartmentId,
-            employee.ManagerId);
+            employee.ManagerId,
+            employee.DepartmentName,
+            employee.ManagerName);
 
     private static string CreateEmployeeCode(Guid employeeId) =>
         $"EMP-{employeeId:N}"[..20].ToUpperInvariant();
 }
+
+public sealed record PagedEmployeeResponse(IReadOnlyList<EmployeeResponse> Items, int TotalCount);

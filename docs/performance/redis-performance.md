@@ -158,6 +158,57 @@ Kết quả smoke-test 1 VU/10 giây là 45 request, 0 lỗi; không dùng smoke
 thay thế cho các lượt 5 phút. Tóm tắt có thể tái kiểm tra tại
 [workforce load summary](../testing/evidence/workforce-load-summary.json).
 
+### Đo số lần gọi và thời gian HR Service
+
+Trong Compose override cho load test, Leave Service bật
+`LoadTest__EnableHrCallMetrics=true`. HrServiceClient đo thời gian mỗi HTTP call
+đến HR Service; middleware trả các giá trị theo từng request của Leave API qua
+`X-HR-Call-Count` và `X-HR-Call-Durations-Ms`. Cấu hình thường không bật
+telemetry này và không thêm các response header trên.
+
+`workforce.js` tổng hợp riêng:
+- `hr_direct_requests`, `hr_direct_avg_ms`, `hr_direct_p95_ms`: các request
+  trực tiếp vào HR API, ví dụ GET employees.
+- `leave_to_hr_calls`, `leave_to_hr_total_time_ms`, `leave_to_hr_avg_ms`,
+  `leave_to_hr_p95_ms`: số lượng và thời gian các HTTP call nội bộ từ Leave
+  Service sang HR Service. Route manager_approvals sẽ gọi HR để lấy Team hiện tại.
+
+Để đo HR lookup tại thời điểm approve, dùng thêm
+`scripts/load-test/approval.js`. Script lấy danh sách đơn LOADTEST đang Pending
+trong setup, sau đó mỗi VU duyệt các request ID riêng biệt. Mỗi lần approve của
+Manager phải gọi HR Service để xác minh ManagerId hiện tại. Mặc định mỗi VU duyệt
+10 đơn; với 50 VU là 500 quyết định và 100 VU là 1.000 quyết định. Script không
+lặp lại một request đã duyệt. Hãy chạy lại seed SQL trước mỗi lượt approval để
+khôi phục các đơn Pending; 1.000 nhân viên × 5 request tạo khoảng 1.250 đơn
+Pending theo fixture hiện tại.
+
+Chạy workforce reads 50 và 100 VU:
+
+```powershell
+docker compose @compose run --rm -e VUS=50 -e DURATION=5m k6 run /scripts/workforce.js
+docker compose @compose run --rm -e VUS=100 -e DURATION=5m k6 run /scripts/workforce.js
+```
+
+Chạy decision/approval 50 VU; trước lượt 100 VU, seed lại dữ liệu để khôi phục
+trạng thái Pending:
+
+```powershell
+docker compose @compose run --rm -e VUS=50 -e ITERATIONS_PER_VU=10 -e DURATION=5m k6 run /scripts/approval.js
+
+docker compose @compose cp .\scripts\load-test\seed-scale-data.sql sqlserver:/tmp/seed-scale-data.sql
+docker compose @compose exec -T sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P $env:SA_PASSWORD -C -d master -i /tmp/seed-scale-data.sql
+
+docker compose @compose run --rm -e VUS=100 -e ITERATIONS_PER_VU=10 -e DURATION=5m k6 run /scripts/approval.js
+```
+
+Cả hai script in JSON summary có số HR call, tổng thời gian, trung bình và p95.
+Khi ghi báo cáo 50/100 VU, giữ kết quả workforce và approval thành hai workload
+riêng: workload đầu đo HR team-scope lookup cho hộp chờ qua
+`GET /api/v1/leave-scope/managers/{managerId}/employee-ids`, workload sau đo lookup
+nhân viên khi quyết định (`GET /api/v1/lookup/employees/{employeeId}`). Không cộng
+hai tập số liệu thành một RPS chung vì số operation
+và hành vi DB khác nhau.
+
 Sau khi đổi `CACHE_ENABLED`, cần đợi `hr-service` healthy. Khôi phục cache ON cho
 stack benchmark rồi chỉ xóa Compose project `hrbench` cùng các volume của project:
 
@@ -208,3 +259,20 @@ của container trong cùng workload. Chỉ sau khi có số đo mới cân nh�
 index, connection pooling hoặc chiến lược cache. Các thao tác cập nhật số dư và
 quyết định phê duyệt phải tiếp tục dựa trên transaction SQL, không đánh đổi tính
 đúng đắn để tăng cache hit.
+
+
+## 6. Workforce paged-v2 bổ sung — 16/11/2026
+
+Workforce benchmark mới nhất được thực hiện với kịch bản paged-v2, page size 50, 5 phút/lượt, trên sáu lần chạy (50 và 100 VU, mỗi mức ba lần). Kết quả:
+
+| VU | RPS trung bình | P50 trung bình | P95 trung bình | HTTP errors |
+|---:|---:|---:|---:|---:|
+| 50 | 454,07 | 9,37 ms | 17,85 ms | 0 |
+| 100 | 764,14 | 23,66 ms | 73,28 ms | 0 |
+
+Đây là workload Workforce đọc dữ liệu có phân trang, **không phải phép đo Redis ON/OFF**. Sáu JSON mới có metadata page_size=50 và duration=5m nhưng git_sha/image_tag đều not-provided, nên chưa gắn được với một binary revision cố định.
+
+Các bảng Catalog Redis ON/OFF ở mục 4 vẫn là benchmark riêng cho ba catalog endpoints. Không dùng kết quả Catalog để kết luận Redis làm tăng/giảm throughput của Workforce paged-v2. Cũng không lấy Workforce paged-v2 làm phép so sánh với các Workforce request không phân trang ở lượt cũ, vì API contract hiện bắt buộc page/pageSize.
+
+Chi tiết từng lượt và phân tích p95 nằm trong [Dynamic Authorization benchmark report](../testing/dynamic-authorization-benchmark-results.md). Nếu cần đánh giá cache ảnh hưởng tới Workforce, phải chạy một cặp ON/OFF từ cùng Git SHA, cùng image, dataset, page size, VU, duration và resource limits.
+
