@@ -39,7 +39,7 @@ sequenceDiagram
   end
   opt Request có yearly allocation trừ quota
     loop Mỗi năm trong YearAllocations
-      LV->>HR: GET /api/v1/leave-policies?year=&asOfDate={today UTC+07}&authoritative=true
+      LV->>HR: GET /api/v1/leave-policies?year=&asOfDate={max(today UTC+07, 01/01 allocation year)}&authoritative=true
       HR->>HDB: Lấy policy version hiện hành
       HDB-->>HR: PolicyDays mới nhất
       HR-->>LV: PolicyDays hiện hành
