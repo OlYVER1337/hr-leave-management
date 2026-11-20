@@ -486,6 +486,36 @@ public sealed class LeaveCatalogServiceTests
 
     // Policy mới chỉ được tạo cho leave type active và cache phải bị invalidation sau khi lưu.
     [Fact]
+    public async Task CreateLeavePolicyAsync_RejectsVersionWithSameEffectiveDate()
+    {
+        var leaveType = new LeaveType
+        {
+            Id = 4,
+            Code = "ANNUAL",
+            Name = "Annual leave",
+            IsActive = true
+        };
+        var repository = new Mock<ILeaveCatalogRepository>();
+        var unitOfWork = new Mock<IUnitOfWork>();
+        repository
+            .Setup(item => item.GetLeaveTypeForUpdateByIdAsync(4, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(leaveType);
+        repository
+            .Setup(item => item.ExistsLeavePolicyVersionAsync(
+                4,
+                2025,
+                new DateOnly(2025, 7, 1),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        var service = CreateService(repository, new InMemoryLeaveCatalogCache(), unitOfWork);
+
+        await Assert.ThrowsAsync<ConflictException>(() => service.CreateLeavePolicyAsync(
+            new LeavePolicyRequest(4, 2025, 12m, new DateOnly(2025, 7, 1), "Duplicate date")));
+
+        repository.Verify(item => item.Add(It.IsAny<LeavePolicy>()), Times.Never);
+    }
+
+    [Fact]
     public async Task CreateLeavePolicyAsync_AddsPolicyForActiveTypeAndInvalidatesCache()
     {
         var leaveType = new LeaveType
@@ -504,10 +534,10 @@ public sealed class LeaveCatalogServiceTests
             .Setup(item => item.GetLeaveTypeForUpdateByIdAsync(4, It.IsAny<CancellationToken>()))
             .ReturnsAsync(leaveType);
         repository
-            .Setup(item => item.ExistsLeavePolicyAsync(
+            .Setup(item => item.ExistsLeavePolicyVersionAsync(
                 4,
                 2025,
-                null,
+                new DateOnly(2025, 7, 1),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
         repository

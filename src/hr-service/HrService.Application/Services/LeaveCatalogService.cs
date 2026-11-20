@@ -281,13 +281,15 @@ public sealed class LeaveCatalogService(
         if (!leaveType.DeductsBalance)
             throw Problems.Invalid("leaveTypeId", "Policies are only available for leave types that deduct a balance.");
 
-        if (await repository.ExistsLeavePolicyAsync(
+        // Mỗi thay đổi chính sách là một phiên bản mới; chỉ chặn trùng ngày hiệu lực.
+        if (await repository.ExistsLeavePolicyVersionAsync(
                 request.LeaveTypeId,
                 request.Year,
-                cancellationToken: cancellationToken))
+                effectiveFrom,
+                cancellationToken))
         {
             throw new ConflictException(
-                $"A policy for leave type '{request.LeaveTypeId}' and year '{request.Year}' already exists. Append a new version instead.");
+                $"A policy version for leave type '{request.LeaveTypeId}' in {request.Year} starting on {effectiveFrom:yyyy-MM-dd} already exists.");
         }
 
         var policy = new LeavePolicy

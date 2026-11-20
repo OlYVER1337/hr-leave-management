@@ -17,10 +17,11 @@ public interface ILeaveCatalogRepository
         int? year,
         CancellationToken cancellationToken = default);
     Task<LeavePolicy?> GetLeavePolicyForUpdateByIdAsync(int id, CancellationToken cancellationToken = default);
-    Task<bool> ExistsLeavePolicyAsync(
+    // Đã có phiên bản chính sách cùng loại nghỉ, năm và ngày hiệu lực này chưa.
+    Task<bool> ExistsLeavePolicyVersionAsync(
         int leaveTypeId,
         int year,
-        int? excludeId = null,
+        DateOnly effectiveFrom,
         CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Holiday>> ListHolidaysAsync(
         DateOnly? from,

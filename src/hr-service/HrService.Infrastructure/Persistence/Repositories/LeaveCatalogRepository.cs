@@ -84,23 +84,18 @@ public sealed class LeaveCatalogRepository(HrDbContext dbContext) : ILeaveCatalo
             .FirstOrDefaultAsync(policy => policy.Id == id, cancellationToken);
     }
 
-    public Task<bool> ExistsLeavePolicyAsync(
+    public Task<bool> ExistsLeavePolicyVersionAsync(
         int leaveTypeId,
         int year,
-        int? excludeId = null,
-        CancellationToken cancellationToken = default)
-    {
-        var query = dbContext.LeavePolicies
+        DateOnly effectiveFrom,
+        CancellationToken cancellationToken = default) =>
+        dbContext.LeavePolicies
             .AsNoTracking()
-            .Where(policy => policy.LeaveTypeId == leaveTypeId && policy.Year == year);
-
-        if (excludeId.HasValue)
-        {
-            query = query.Where(policy => policy.Id != excludeId.Value);
-        }
-
-        return query.AnyAsync(cancellationToken);
-    }
+            .AnyAsync(
+                policy => policy.LeaveTypeId == leaveTypeId &&
+                          policy.Year == year &&
+                          policy.EffectiveFrom == effectiveFrom,
+                cancellationToken);
 
     public async Task<IReadOnlyList<Holiday>> ListHolidaysAsync(
         DateOnly? from,
