@@ -225,7 +225,7 @@ Outbox, asynchronous read model, backfill/reconciliation giữa hai service khô
 - Không tin cậy role/scope do client gửi trong query hoặc body.
 
 
-## As-built boundary và phần chưa triển khai (17/11/2026)
+## As-built boundary và phần chưa triển khai (20/11/2026)
 
 ### Đã có trong backend
 - HR migration AddDynamicAuthorizationSchema và các bảng Roles, Permissions, UserRoles, RolePermissions, PermissionScopeRules, RolePermissionScopes, AuthzAuditLog.
@@ -243,3 +243,8 @@ Outbox, asynchronous read model, backfill/reconciliation giữa hai service khô
 - Access JWT đã phát không bị thu hồi tức thời khi gán/thu hồi Role hoặc deactivate; permission mới áp dụng sau login/refresh, token cũ còn hiệu lực đến expiry.
 
 Không nên mô tả V1 là hệ thống có thể tạo Role/Permission tùy ý end-to-end cho tới khi catalog CRUD và permission-driven frontend được triển khai.
+
+
+### Trạng thái source sau merge
+
+Dynamic Authorization V1 trong tài liệu này đã được tích hợp vào `master` qua PR #6, merge commit `81b987043ce4663ad11800bb331ffdbc013bd1d2` ngày 20/11/2026. Trạng thái merge không làm thay đổi các giới hạn V1 nêu trên: React vẫn dùng legacy Role cho navigation/route guard, Department scope chưa được thực thi, và Role/Permission catalog CRUD chưa có.
