@@ -12,7 +12,7 @@ sequenceDiagram
   LV->>LV: Lấy EmployeeId từ JWT và xác minh request thuộc caller, còn Pending
   opt Request có yearly allocation trừ quota
     loop Mỗi năm trong YearAllocations
-      LV->>HR: GET /api/v1/leave-policies?year=&asOfDate={today UTC+07}&authoritative=true
+      LV->>HR: GET /api/v1/leave-policies?year=&asOfDate={max(today UTC+07, 01/01 allocation year)}&authoritative=true
       HR->>HDB: Lấy policy version hiện hành
       HDB-->>HR: PolicyDays hiện hành
       HR-->>LV: PolicyDays theo năm
