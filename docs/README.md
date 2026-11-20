@@ -1,6 +1,6 @@
 # Tài liệu dự án HR Leave Management
 
-Mục lục này tách **yêu cầu ban đầu**, **mô tả hệ thống đã triển khai**, **bằng chứng kiểm thử** và **kế hoạch tiếp theo**. Khi các tài liệu khác nhau, mã nguồn ở branch đang bàn giao và EF Core migrations là nguồn đối chiếu cuối cùng.
+Mục lục này tách **yêu cầu ban đầu**, **mô tả hệ thống đã triển khai**, **bằng chứng kiểm thử** và **kế hoạch tiếp theo**. Khi các tài liệu khác nhau, mã nguồn trên `master` sau merge PR #6 và EF Core migrations là nguồn đối chiếu cuối cùng.
 
 ## 1. Bắt đầu và phạm vi
 
@@ -34,7 +34,7 @@ Mục lục này tách **yêu cầu ban đầu**, **mô tả hệ thống đã t
 ## 5. Hướng dẫn chạy hệ thống
 
 - [README dự án](../README.md): cấu hình môi trường, Docker Compose, tài khoản khởi tạo và lệnh test.
-- [Handover checklist](HANDOFF.md): trạng thái bàn giao, bằng chứng đã có và việc còn lại trước sign-off.
+- [Handover checklist](HANDOFF.md): trạng thái bàn giao sau merge PR #6, bằng chứng đã có và việc còn lại trước sign-off.
 
 ## Quy ước cập nhật
 
