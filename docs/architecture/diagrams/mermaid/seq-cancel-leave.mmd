@@ -9,18 +9,27 @@ sequenceDiagram
 
   E->>W: Hủy đơn Pending của mình
   W->>LV: POST /leave-api/api/v1/leave-requests/{id}/cancel
-  LV->>LV: Lấy EmployeeId từ JWT; xác minh request thuộc caller và Pending
-  loop Mỗi năm trong YearAllocations
-    LV->>HR: GET /api/v1/leave-policies?year=&asOfDate={today UTC+07}&authoritative=true
-    HR->>HDB: Lấy policy version hiện hành
-    HDB-->>HR: PolicyDays hiện hành
-    HR-->>LV: PolicyDays theo năm
+  LV->>LV: Lấy EmployeeId từ JWT và xác minh request thuộc caller, còn Pending
+  opt Request có yearly allocation trừ quota
+    loop Mỗi năm trong YearAllocations
+      LV->>HR: GET /api/v1/leave-policies?year=&asOfDate={today UTC+07}&authoritative=true
+      HR->>HDB: Lấy policy version hiện hành
+      HDB-->>HR: PolicyDays hiện hành
+      HR-->>LV: PolicyDays theo năm
+    end
   end
-  Note over LV,HR: HR outage hoặc thiếu policy hiệu lực => fail closed, không đổi đơn.
+  Note over LV,HR: HR outage hoặc thiếu policy hiệu lực thì fail closed, không đổi đơn.
   LV->>LDB: BEGIN SERIALIZABLE
   LV->>LDB: Đọc lại request thuộc caller và kiểm tra Pending
-  LV->>LDB: Refresh PolicyDays; Pending -= allocation days; Used giữ nguyên
-  LV->>LDB: Status = Cancelled; append LeaveRequestHistory
+  opt Request có yearly allocation trừ quota
+    loop Mỗi allocation
+      LV->>LDB: Refresh PolicyDays
+      LV->>LDB: Giảm Pending theo allocation days
+      LV->>LDB: Giữ nguyên Used
+    end
+  end
+  LV->>LDB: Cập nhật Status Cancelled và DecidedAtUtc
+  LV->>LDB: Append LeaveRequestHistory
   LV->>LDB: SAVE CHANGES + COMMIT
   LV-->>W: 200 request Cancelled + balance mới
   W-->>E: Cập nhật trạng thái đơn
