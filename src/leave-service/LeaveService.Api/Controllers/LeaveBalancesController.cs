@@ -28,12 +28,17 @@ public sealed class LeaveBalancesController(
             return Unauthorized();
         }
 
-        var balances = await leaveBalanceService.SynchronizeMineAsync(
+        var result = await leaveBalanceService.SynchronizeMineWithMissingPoliciesAsync(
             employeeId,
             year,
             authorization,
             cancellationToken);
-        return Ok(balances);
+        if (result.MissingPolicyLeaveTypes.Count > 0)
+        {
+            Response.Headers["X-Leave-Policy-Missing"] = string.Join(",", result.MissingPolicyLeaveTypes);
+        }
+
+        return Ok(result.Balances);
     }
 
     [HttpPost("mine/synchronize")]

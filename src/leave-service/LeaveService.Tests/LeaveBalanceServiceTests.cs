@@ -204,9 +204,9 @@ public sealed class LeaveBalanceServiceTests
         Assert.Equal(2m, balance.Available);
     }
 
-    // Leave type active nhưng thiếu policy cho năm yêu cầu: phải báo conflict trước khi gọi repository.
+    // Leave type active nhưng thiếu policy: bỏ qua loại đó, vẫn đồng bộ các loại còn lại và báo lại.
     [Fact]
-    public async Task SynchronizeMineAsync_RejectsMissingPolicyBeforeWriting()
+    public async Task SynchronizeMineWithMissingPolicies_SkipsTypeWithoutPolicyAndReportsIt()
     {
         var employeeId = Guid.NewGuid();
         var repository = new Mock<ILeaveRequestRepository>();
@@ -217,13 +217,22 @@ public sealed class LeaveBalanceServiceTests
                 []));
         var service = new LeaveBalanceService(repository.Object, hrClient.Object, TimeProvider.System);
 
-        await Assert.ThrowsAsync<LeaveConflictException>(() =>
-            service.SynchronizeMineAsync(employeeId, 2027, "Bearer token"));
+        repository
+            .Setup(item => item.SynchronizeBalancesAsync(
+                It.IsAny<Guid>(),
+                It.IsAny<int>(),
+                It.IsAny<IReadOnlyList<LeaveBalanceEntitlement>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<LeaveBalance>());
+        var result = await service.SynchronizeMineWithMissingPoliciesAsync(employeeId, 2027, "Bearer token");
+
+        Assert.Equal(["ANNUAL"], result.MissingPolicyLeaveTypes);
+        Assert.Empty(result.Balances);
 
         repository.Verify(item => item.SynchronizeBalancesAsync(
             It.IsAny<Guid>(),
             It.IsAny<int>(),
-            It.IsAny<IReadOnlyList<LeaveBalanceEntitlement>>(),
+            It.Is<IReadOnlyList<LeaveBalanceEntitlement>>(list => list.Count == 0),
             It.IsAny<CancellationToken>()), Times.Never);
     }
 
