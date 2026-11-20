@@ -4,6 +4,8 @@ Hệ thống quản lý nhân sự và nghỉ phép, được xây dựng theo k
 
 ## Trạng thái triển khai hiện tại
 
+Source Dynamic Authorization V1 đã được merge vào `master` qua [Pull Request #6](https://github.com/OlYVER1337/hr-leave-management/pull/6), merge commit `81b987043ce4663ad11800bb331ffdbc013bd1d2`. Đây là trạng thái source trên Git, không phải xác nhận đã triển khai production. Trạng thái test, benchmark và các gap còn lại được cập nhật trong [Handover checklist](docs/HANDOFF.md).
+
 Backend đã triển khai Dynamic RBAC V1: HR_DB quản lý Roles, Permissions, UserRoles, Permission Scopes và audit log; login/refresh tính lại quyền hiệu lực rồi phát JWT có authz_v=1 và perm JSON. HR và Leave API kiểm tra permission/scope. Các scope đang thực thi là Self, Team, All; Department chưa có bộ lọc nghiệp vụ.
 
 Frontend hiện vẫn dùng Role legacy HR/Manager/Employee cho menu và route guard, chưa có màn hình quản trị Role assignment hoặc Role/Permission catalog. Đây là giới hạn UI, không thay đổi việc backend phải tự kiểm tra quyền cho mọi API.
