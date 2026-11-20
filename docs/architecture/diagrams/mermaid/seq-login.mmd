@@ -1,24 +1,37 @@
 sequenceDiagram
   autonumber
   actor U as Người dùng
-  participant W as React (Nginx)
+  participant W as React / Nginx
   participant HR as HR Service
   participant DB as HR_DB
-  U->>W: Nhập email, mật khẩu
+
+  U->>W: Nhập email và mật khẩu
   W->>HR: POST /hr-api/api/v1/auth/login
-  HR->>DB: Tìm Employee theo Email và IsActive
+  HR->>DB: Tìm Employee theo normalized Email, IsActive=true
   DB-->>HR: Employee + password hash
   HR->>HR: Verify mật khẩu
-  HR->>DB: Lấy UserRoles còn hiệu lực + RolePermissions + Scopes
-  DB-->>HR: Effective grants nguồn HR_DB
-  HR->>HR: Tạo JWT authz_v=1, perm JSON + legacy role claim
-  HR->>DB: Lưu hash RefreshToken
-  HR-->>W: 200 AccessToken + HttpOnly refresh cookie
-  W->>W: Lưu access token và hiển thị menu theo legacy role
-  Note over W,HR: Refresh token không trả trong JSON, access token được gửi Bearer.
-  Note over W,HR: Backend API kiểm tra permission/scope, UI role guard chỉ là UX.
-  U->>W: Khi access token hết hạn, yêu cầu refresh
+  HR->>DB: Đọc UserRoles còn hiệu lực + Role/Permission/Scope
+  DB-->>HR: Effective grants từ các role hợp lệ
+  HR->>HR: Hợp permission/scope từ nhiều role
+  HR->>DB: Lưu SHA-256 hash của refresh token
+  HR-->>W: Access JWT (authz_v=1, perm, legacy role claim)
+  HR-->>W: Set refresh token trong HttpOnly cookie (15 ngày)
+  W->>W: Lưu access token; menu vẫn dùng legacy role
+
+  Note over W,HR: API backend mới là enforcement; frontend role guard chỉ phục vụ UX.
+  Note over W,HR: Access JWT được các service xác thực cục bộ, không introspect HR mỗi request.
+
+  U->>W: Access token hết hạn
   W->>HR: POST /hr-api/api/v1/auth/refresh + HttpOnly cookie
-  HR->>DB: Xác minh/rotate refresh token, đọc authorization mới
-  DB-->>HR: Refresh token state + effective grants hiện tại
-  HR-->>W: Access JWT mới với perm được tính lại
+  HR->>DB: Rotate token hash cũ sang token hash mới
+  DB-->>HR: Employee của refresh token hợp lệ
+  HR->>DB: Tính lại effective authorization hiện tại
+  DB-->>HR: Role assignments và grants hiện tại
+  HR-->>W: JWT mới với perm được tính lại
+  HR-->>W: Set refresh cookie mới
+
+  U->>W: Đăng xuất
+  W->>HR: POST /hr-api/api/v1/auth/logout + cookie
+  HR->>DB: Thu hồi refresh token hash
+  HR-->>W: 204 và xóa cookie
+  Note over HR,DB: Revoke refresh token không thu hồi ngay access JWT đã phát; JWT cũ còn hiệu lực đến expiry.
