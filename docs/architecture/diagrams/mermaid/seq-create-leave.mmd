@@ -31,7 +31,7 @@ sequenceDiagram
     end
   end
 
-  Note over LV,HR: HR outage/timeout hoặc thiếu policy hiệu lực => fail; chưa ghi Leave_DB.
+  Note over LV,HR: HR outage/timeout hoặc thiếu policy hiệu lực => fail, chưa ghi Leave_DB.
   LV->>LV: Tạo yearly allocations và snapshot PolicyVersionId/PolicyDaysAtCreation
   LV->>LDB: BEGIN SERIALIZABLE
   LV->>LDB: Kiểm tra overlap Pending/Approved
