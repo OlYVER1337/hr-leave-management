@@ -66,7 +66,7 @@ describe('CalendarPage', () => {
 
   it('shows approved leave and holidays on the selected day', async () => {
     render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter>
         <CalendarPage />
       </MemoryRouter>,
     );

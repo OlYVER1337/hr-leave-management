@@ -103,7 +103,7 @@ function request(overrides: Partial<LeaveRequest> = {}): LeaveRequest {
 
 function renderDashboard() {
   return render(
-    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <MemoryRouter>
       <DashboardPage />
     </MemoryRouter>,
   );

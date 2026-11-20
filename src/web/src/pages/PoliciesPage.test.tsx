@@ -81,7 +81,7 @@ const holidays: Holiday[] = [];
 
 function renderPoliciesPage() {
   return render(
-    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <MemoryRouter>
       <PoliciesPage />
     </MemoryRouter>,
   );

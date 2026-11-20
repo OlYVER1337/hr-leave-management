@@ -86,7 +86,7 @@ describe('ApprovalsPage', () => {
   it('approves a pending request and refreshes the inbox', async () => {
     const user = userEvent.setup();
     render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter>
         <ApprovalsPage />
       </MemoryRouter>,
     );
@@ -123,7 +123,7 @@ describe('ApprovalsPage', () => {
     });
 
     render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter>
         <ApprovalsPage />
       </MemoryRouter>,
     );
@@ -136,7 +136,7 @@ describe('ApprovalsPage', () => {
     const user = userEvent.setup();
     vi.mocked(decideLeaveRequest).mockRejectedValue(new Error('Đơn đã được xử lý.'));
     render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter>
         <ApprovalsPage />
       </MemoryRouter>,
     );
@@ -165,7 +165,7 @@ describe('ApprovalsPage', () => {
     vi.mocked(getLeaveRequestsPage).mockImplementation(pageResult);
     vi.mocked(getApprovalsInboxPage).mockImplementation(pageResult);
     render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter>
         <ApprovalsPage />
       </MemoryRouter>,
     );
@@ -200,7 +200,7 @@ describe('ApprovalsPage', () => {
     vi.mocked(getApprovalsInboxPage).mockImplementation(pageResult);
     vi.mocked(decideLeaveRequest).mockImplementation(async () => { currentRequests = remainingRequests; });
     render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter>
         <ApprovalsPage />
       </MemoryRouter>,
     );

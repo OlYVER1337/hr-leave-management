@@ -66,7 +66,6 @@ describe('RequestLeavePage', () => {
     render(
       <MemoryRouter
         initialEntries={['/request']}
-        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
           <Route path="/request" element={<RequestLeavePage />} />
@@ -99,7 +98,6 @@ describe('RequestLeavePage', () => {
     render(
       <MemoryRouter
         initialEntries={['/request']}
-        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <Routes>
           <Route path="/request" element={<RequestLeavePage />} />

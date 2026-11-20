@@ -63,7 +63,7 @@ describe('LeaveRequestsPage', () => {
   it('opens request details in an accessible dialog and closes with Escape', async () => {
     const user = userEvent.setup();
     render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter>
         <LeaveRequestsPage />
       </MemoryRouter>,
     );
@@ -88,7 +88,7 @@ describe('LeaveRequestsPage', () => {
 
   it('marks report export unavailable instead of offering a non-working action', async () => {
     render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter>
         <LeaveRequestsPage />
       </MemoryRouter>,
     );
@@ -99,7 +99,7 @@ describe('LeaveRequestsPage', () => {
   it('shows a loading state while leave requests are being fetched', () => {
     vi.mocked(getLeaveRequestsPage).mockReturnValue(new Promise(() => {}));
     render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter>
         <LeaveRequestsPage />
       </MemoryRouter>,
     );
@@ -110,7 +110,7 @@ describe('LeaveRequestsPage', () => {
   it('shows the request loading error', async () => {
     vi.mocked(getLeaveRequestsPage).mockRejectedValue(new Error('Không thể tải đơn nghỉ.'));
     render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter>
         <LeaveRequestsPage />
       </MemoryRouter>,
     );
@@ -121,7 +121,7 @@ describe('LeaveRequestsPage', () => {
   it('shows the empty state when no leave requests exist', async () => {
     vi.mocked(getLeaveRequestsPage).mockResolvedValue({ items: [], totalCount: 0 });
     render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <MemoryRouter>
         <LeaveRequestsPage />
       </MemoryRouter>,
     );
