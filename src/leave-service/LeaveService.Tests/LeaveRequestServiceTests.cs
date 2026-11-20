@@ -116,6 +116,139 @@ public sealed class LeaveRequestServiceTests
             Times.Once);
     }
 
+    // Đơn được tạo sau ngày policy mới có hiệu lực phải sử dụng policy mới,
+// kể cả khi ngày nghỉ nằm trong tương lai.
+[Fact]
+public async Task CreateAsync_UsesPolicyEffectiveOnCreationDate()
+{
+    var employeeId = Guid.NewGuid();
+    var managerId = Guid.NewGuid();
+
+    var employee = new HrEmployeeSnapshot(
+        employeeId, "E1", "Employee", "Employee", true, 7, managerId);
+
+    var leaveType = new HrLeaveType(
+        1, "ANNUAL", "Annual leave", true, true, true);
+
+    var repository = new Mock<ILeaveRequestRepository>();
+    var hrClient = new Mock<ILeaveHrClient>();
+
+    // Mô phỏng lưu đơn và allocation vào repository.
+    repository
+        .Setup(item => item.CreateAsync(
+            It.IsAny<LeaveRequest>(),
+            It.IsAny<IReadOnlyList<AnnualLeaveAllocation>>(),
+            It.IsAny<LeaveRequestHistory>(),
+            It.IsAny<CancellationToken>()))
+        .ReturnsAsync((
+            LeaveRequest request,
+            IReadOnlyList<AnnualLeaveAllocation> allocations,
+            LeaveRequestHistory _,
+            CancellationToken _) =>
+        {
+            var balances = allocations.Select(allocation => new LeaveBalance
+            {
+                EmployeeId = employeeId,
+                LeaveTypeId = leaveType.Id,
+                Year = allocation.Year,
+                Entitled = allocation.Entitled,
+                Pending = allocation.Days
+            }).ToArray();
+
+            return (request, (IReadOnlyList<LeaveBalance>)balances);
+        });
+
+    hrClient
+        .Setup(item => item.GetEmployeeAsync(
+            employeeId, "Bearer token", It.IsAny<CancellationToken>()))
+        .ReturnsAsync(employee);
+
+    hrClient
+        .Setup(item => item.GetLeaveTypeAsync(
+            leaveType.Id, "Bearer token", It.IsAny<CancellationToken>()))
+        .ReturnsAsync(leaveType);
+
+    // 10/05/2027 là thứ Hai, không phải ngày lễ.
+    hrClient
+        .Setup(item => item.GetHolidaysAsync(
+            new DateOnly(2027, 5, 10),
+            new DateOnly(2027, 5, 10),
+            "Bearer token",
+            It.IsAny<CancellationToken>()))
+        .ReturnsAsync([]);
+
+    // HR trả về ba phiên bản chính sách.
+    hrClient
+        .Setup(item => item.GetLeavePoliciesAsync(
+            2027,
+            It.IsAny<DateOnly>(),
+            "Bearer token",
+            It.IsAny<CancellationToken>()))
+        .ReturnsAsync((
+            int year,
+            DateOnly asOfDate,
+            string authorization,
+            CancellationToken cancellationToken) =>
+            EffectiveForHr(year, asOfDate, [
+                new HrLeavePolicy(
+                    3004, 1, "ANNUAL", "Annual leave",
+                    2027, 10m, new DateOnly(2027, 1, 1)),
+
+                new HrLeavePolicy(
+                    3003, 1, "ANNUAL", "Annual leave",
+                    2027, 10m, new DateOnly(2027, 3, 1)),
+
+                new HrLeavePolicy(
+                    3006, 1, "ANNUAL", "Annual leave",
+                    2027, 12m, new DateOnly(2027, 4, 1))
+            ]));
+
+    // Giả lập ngày tạo đơn là 02/04/2027.
+    var service = new LeaveRequestService(
+        repository.Object,
+        hrClient.Object,
+        new FixedTimeProvider(
+            new DateTimeOffset(2027, 4, 2, 0, 0, 0, TimeSpan.Zero)));
+
+    // Ngày nghỉ là 10/05/2027.
+    var result = await service.CreateAsync(
+        employeeId,
+        "Bearer token",
+        new CreateLeaveRequest(
+            1,
+            new DateOnly(2027, 5, 10),
+            new DateOnly(2027, 5, 10),
+            "Policy version test"));
+
+    Assert.Equal(1m, result.TotalDays);
+    Assert.Equal(LeaveRequestStatus.Pending, result.Status);
+
+    // Xác nhận HR được hỏi chính sách tại ngày tạo đơn 02/04/2027.
+    hrClient.Verify(
+        item => item.GetLeavePoliciesAsync(
+            2027,
+            new DateOnly(2027, 4, 2),
+            "Bearer token",
+            It.IsAny<CancellationToken>()),
+        Times.Once);
+
+    // Xác nhận allocation lưu PolicyVersionId 3006 và định mức 12 ngày.
+    repository.Verify(
+        item => item.CreateAsync(
+            It.Is<LeaveRequest>(request =>
+                request.EmployeeId == employeeId &&
+                request.StartDate == new DateOnly(2027, 5, 10) &&
+                request.Status == LeaveRequestStatus.Pending),
+            It.Is<IReadOnlyList<AnnualLeaveAllocation>>(allocations =>
+                allocations.Count == 1 &&
+                allocations[0].Year == 2027 &&
+                allocations[0].Days == 1m &&
+                allocations[0].Entitled == 12m &&
+                allocations[0].PolicyVersionId == 3006),
+            It.IsAny<LeaveRequestHistory>(),
+            It.IsAny<CancellationToken>()),
+        Times.Once);
+}
     // Khoảng ngày không hợp lệ phải bị chặn trước khi gọi HR để tránh request dependency thừa.
     [Fact]
     public async Task CreateAsync_RejectsInvalidDateRangeBeforeCallingHr()
