@@ -19,7 +19,7 @@ sequenceDiagram
   else Caller có All scope
     Note over LV: Không cần HR Team lookup cho inbox
   end
-  LV->>LDB: Query Pending theo scope + pagination
+  LV->>LDB: Query Pending theo scope và pagination
   LDB-->>LV: Request rows + total count
   LV-->>W: 200 list + X-Total-Count
 
@@ -37,22 +37,29 @@ sequenceDiagram
   else All scope
     LV->>LV: Xác minh leaves.decide:All
   end
-  loop Mỗi năm trong YearAllocations
-    LV->>HR: GET /api/v1/leave-policies?year=&asOfDate={today UTC+07}&authoritative=true
-    HR->>HDB: Lấy policy version hiện hành
-    HDB-->>HR: PolicyDays mới nhất
-    HR-->>LV: PolicyDays hiện hành
+  opt Request có yearly allocation trừ quota
+    loop Mỗi năm trong YearAllocations
+      LV->>HR: GET /api/v1/leave-policies?year=&asOfDate={today UTC+07}&authoritative=true
+      HR->>HDB: Lấy policy version hiện hành
+      HDB-->>HR: PolicyDays mới nhất
+      HR-->>LV: PolicyDays hiện hành
+    end
   end
-  Note over LV,HR: Team lookup hoặc policy lookup lỗi => fail closed, không đổi trạng thái.
+  Note over LV,HR: Team lookup hoặc policy lookup lỗi thì fail closed, không đổi trạng thái.
   LV->>LDB: BEGIN SERIALIZABLE
   LV->>LDB: Đọc lại request và kiểm tra Pending
-  LV->>LDB: Refresh balance.PolicyDays, giữ nguyên Used/Pending trước transition
-  LV->>LDB: Pending -= allocation days
-  alt Approve
-    LV->>LDB: Used += allocation days; Status = Approved
-  else Reject
-    LV->>LDB: Status = Rejected; không tăng Used
+  opt Request có yearly allocation trừ quota
+    loop Mỗi allocation
+      LV->>LDB: Refresh balance.PolicyDays
+      LV->>LDB: Pending giảm theo allocation days
+      alt Approve
+        LV->>LDB: Used tăng theo allocation days
+      else Reject
+        LV->>LDB: Không tăng Used
+      end
+    end
   end
+  LV->>LDB: Cập nhật Status Approved hoặc Rejected và DecidedAtUtc
   LV->>LDB: INSERT LeaveRequestHistory
   LV->>LDB: SAVE CHANGES + COMMIT
   LV-->>W: 200 + request/balance mới
