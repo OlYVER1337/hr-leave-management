@@ -19,7 +19,7 @@ sequenceDiagram
 
   opt Sửa trực tiếp một version chưa hiệu lực
     W->>HR: PUT /api/v1/leave-policies/{id}/edit
-    HR->>HR: Chỉ cho version EffectiveFrom > hôm nay; giữ nguyên Year, LeaveTypeId, EffectiveFrom
+    HR->>HR: Chỉ cho version EffectiveFrom > hôm nay, giữ nguyên Year, LeaveTypeId, EffectiveFrom
     HR->>HDB: UPDATE DaysPerYear/Reason
     HR->>R: Invalidate leave-policies cache
     HR-->>W: 200 version đã sửa
@@ -33,15 +33,15 @@ sequenceDiagram
     LDB-->>LV: Reference count
     LV-->>HR: referencedAllocations
     alt Có allocation tham chiếu
-      HR-->>W: 409 Conflict; không xóa version
+      HR-->>W: 409 Conflict, không xóa version
     else Không có reference
       HR->>HDB: DELETE LeavePolicy version
       HR->>R: Invalidate leave-policies cache
       HR-->>W: 204 No Content
     end
     Note over HR,LV: Leave outage/HTTP error => fail closed, không xóa.
-    Note over HR,HDB: Có race window nhỏ giữa COUNT reference và DELETE; không có distributed transaction.
+    Note over HR,HDB: Có race window nhỏ giữa COUNT reference và DELETE, không có distributed transaction.
   end
 
   Note over HR,HDB: Policy đã effective (EffectiveFrom <= business today) là historical/current và không thể xóa.
-  Note over LV,LDB: LeaveRequestYearAllocations lưu PolicyVersionId + PolicyDaysAtCreation; ID policy là scalar cross-service reference, không phải FK.
+  Note over LV,LDB: LeaveRequestYearAllocations lưu PolicyVersionId + PolicyDaysAtCreation, ID policy là scalar cross-service reference, không phải FK.
