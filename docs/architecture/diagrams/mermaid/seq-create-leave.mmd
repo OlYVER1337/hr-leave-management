@@ -1,45 +1,53 @@
 sequenceDiagram
   autonumber
   actor E as Employee / Manager
-  participant W as React (Nginx)
+  participant W as React / Nginx
   participant LV as Leave Service
   participant HR as HR Service
-  participant DB as Leave_DB
-  E->>W: Chọn loại nghỉ, ngày và lý do
+  participant HDB as HR_DB
+  participant LDB as Leave_DB
+
+  E->>W: Chọn loại nghỉ, khoảng ngày và lý do
   W->>LV: POST /leave-api/api/v1/leave-requests (Bearer JWT)
-  LV->>LV: Validate JWT, leaves.create:Self và input
+  LV->>LV: Xác thực JWT + leaves.create:Self + validate input
   LV->>HR: GET /api/v1/lookup/employees/{callerId}
   HR-->>LV: Employee active, ManagerId, DepartmentId
   LV->>HR: GET /api/v1/leave-types/{id}?authoritative=true
-  HR-->>LV: LeaveType active, DeductsBalance
+  HR->>HDB: Đọc LeaveType từ SQL (bypass Redis)
+  HDB-->>HR: LeaveType
+  HR-->>LV: LeaveType active + DeductsBalance
   LV->>HR: GET /api/v1/holidays?from=&to=&authoritative=true
-  HR-->>LV: Holidays trong date range
-  opt Leave type trừ quota
-    LV->>HR: GET /api/v1/leave-policies?year={year}&authoritative=true
-    HR-->>LV: Policy quota authoritative cho từng năm
-  end
-  Note over LV,HR: HR authoritative reads bypass Redis, HTTP timeout 5 giây.
-  opt HR lỗi hoặc timeout
-    LV-->>W: 503 Dependency unavailable, không ghi Leave DB
-  end
-  LV->>LV: Tính weekdays trừ holidays và yearly allocations
-  LV->>DB: BEGIN SERIALIZABLE transaction
-  LV->>DB: Kiểm tra overlap Pending/Approved
-  LV->>DB: Đọc hoặc tạo LeaveBalance theo Employee/LeaveType/Year
-  LV->>DB: Refresh Entitled từ policy HR authoritative
-  LV->>DB: Giữ nguyên Used/Pending, kiểm tra quota mới >= Used + Pending
-  LV->>DB: Kiểm tra Entitled - Used - Pending
-  alt Overlap, thiếu quota hoặc concurrent conflict
-    LV->>DB: ROLLBACK
-    LV-->>W: 409 / 422 ProblemDetails
-  else Hợp lệ
-    LV->>DB: INSERT LeaveRequest (Pending, HR snapshot)
-    LV->>DB: INSERT LeaveRequestYearAllocation theo năm
-    opt Leave type trừ quota
-      LV->>DB: UPDATE LeaveBalance: Pending += allocation days
+  HR->>HDB: Đọc holidays từ SQL (bypass Redis)
+  HDB-->>HR: Holidays trong khoảng ngày
+  HR-->>LV: Holiday list
+  LV->>LV: Tính weekdays và chia ngày theo từng năm
+
+  opt Leave type có DeductsBalance
+    loop Mỗi năm có ngày nghỉ
+      LV->>HR: GET /api/v1/leave-policies?year=&asOfDate={ngày tạo UTC+07}&authoritative=true
+      HR->>HDB: Chọn policy version hiệu lực tại asOfDate
+      HDB-->>HR: Policy version mới nhất theo LeaveType/Year
+      HR-->>LV: Policy ID + DaysPerYear + EffectiveFrom
     end
-    LV->>DB: INSERT LeaveRequestHistory (Created)
-    LV->>DB: COMMIT
-    LV-->>W: 201 Created + response
+  end
+
+  Note over LV,HR: HR outage/timeout hoặc thiếu policy hiệu lực => fail; chưa ghi Leave_DB.
+  LV->>LV: Tạo yearly allocations và snapshot PolicyVersionId/PolicyDaysAtCreation
+  LV->>LDB: BEGIN SERIALIZABLE
+  LV->>LDB: Kiểm tra overlap Pending/Approved
+  LV->>LDB: Đọc/tạo LeaveBalance theo Employee + LeaveType + Year
+  LV->>LDB: Cập nhật PolicyDays từ policy snapshot đã lấy
+  LV->>LV: Tính Entitled = max(PolicyDays, Used + Pending)
+  LV->>LV: Kiểm tra Available >= ngày yêu cầu
+  alt Overlap, thiếu quota hoặc concurrency conflict
+    LV->>LDB: ROLLBACK
+    LV-->>W: ProblemDetails (conflict/validation)
+  else Hợp lệ
+    LV->>LDB: Tăng Pending theo allocation
+    LV->>LDB: INSERT LeaveRequest
+    LV->>LDB: INSERT LeaveRequestYearAllocations (PolicyVersionId + PolicyDaysAtCreation)
+    LV->>LDB: INSERT LeaveRequestHistories (Created)
+    LV->>LDB: SAVE CHANGES + COMMIT
+    LV-->>W: 201 Created + balances
   end
   W-->>E: Hiển thị kết quả
