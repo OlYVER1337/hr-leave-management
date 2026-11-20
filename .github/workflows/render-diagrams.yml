@@ -3,7 +3,9 @@ name: Render architecture diagrams
 on:
   push:
     branches:
+      - master
       - feature/dynamic-authorization-v1
+      - "docs/**"
     paths:
       - "docs/architecture/diagrams/mermaid/**"
       - ".github/workflows/render-diagrams.yml"

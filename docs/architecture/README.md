@@ -13,11 +13,13 @@
 | Luồng tạo đơn nghỉ và giữ số dư | [PNG](diagrams/png/seq-create-leave.png) | [SVG](diagrams/svg/seq-create-leave.svg) | [Source](diagrams/mermaid/seq-create-leave.mmd) |
 | Luồng lấy hộp thư và duyệt/từ chối đơn | [PNG](diagrams/png/seq-approve-leave.png) | [SVG](diagrams/svg/seq-approve-leave.svg) | [Source](diagrams/mermaid/seq-approve-leave.mmd) |
 | Luồng khởi tạo/đồng bộ số dư cá nhân | [PNG](diagrams/png/seq-balance-sync.png) | [SVG](diagrams/svg/seq-balance-sync.svg) | [Source](diagrams/mermaid/seq-balance-sync.mmd) |
+| Luồng nhân viên hủy đơn Pending | [PNG](diagrams/png/seq-cancel-leave.png) | [SVG](diagrams/svg/seq-cancel-leave.svg) | [Source](diagrams/mermaid/seq-cancel-leave.mmd) |
+| Tạo, sửa, thêm phiên bản và xóa phiên bản chính sách nghỉ | [PNG](diagrams/png/seq-policy-version.png) | [SVG](diagrams/svg/seq-policy-version.svg) | [Source](diagrams/mermaid/seq-policy-version.mmd) |
 
 ## Quy tắc cập nhật
 
 - Sửa file `.mmd` trong `diagrams/mermaid/`.
-- Push thay đổi lên branch `feature/dynamic-authorization-v1`; workflow `.github/workflows/render-diagrams.yml` sẽ render tất cả sơ đồ sang PNG và SVG.
-- Workflow commit các ảnh được sinh ra vào chính branch này.
+- Push thay đổi lên `master`, `feature/dynamic-authorization-v1` hoặc nhánh `docs/**`; workflow `.github/workflows/render-diagrams.yml` sẽ render tất cả sơ đồ sang PNG và SVG.
+- Workflow commit các ảnh được sinh ra vào chính branch chứa Mermaid source.
 - `legacy-png/` chỉ lưu các hình cũ để tham khảo lịch sử, không dùng làm sơ đồ hiện hành.
 - Nếu workflow thất bại, xem log ở tab Actions và không coi các ảnh cũ là đã đồng bộ với Mermaid source.

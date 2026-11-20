@@ -1,16 +1,18 @@
 erDiagram
-  DEPARTMENTS ||--o{ EMPLOYEES : "có"
+  DEPARTMENTS ||--o{ EMPLOYEES : "phòng ban"
   EMPLOYEES |o--o{ EMPLOYEES : "quản lý trực tiếp"
-  EMPLOYEES ||--o{ USER_ROLES : "được gán"
+  EMPLOYEES ||--o{ REFRESH_TOKENS : "refresh token"
+  EMPLOYEES ||--o{ USER_ROLES : "được gán role"
   ROLES ||--o{ USER_ROLES : "được gán cho"
-  ROLES ||--o{ ROLE_PERMISSIONS : "có quyền"
+  ROLES ||--o{ ROLE_PERMISSIONS : "có permission"
   PERMISSIONS ||--o{ ROLE_PERMISSIONS : "được cấp"
-  PERMISSIONS ||--o{ PERMISSION_SCOPE_RULES : "cho phép scope"
-  ROLE_PERMISSIONS ||--o{ ROLE_PERMISSION_SCOPES : "được giới hạn"
-  PERMISSION_SCOPE_RULES ||--o{ ROLE_PERMISSION_SCOPES : "scope hợp lệ"
+  PERMISSIONS ||--o{ PERMISSION_SCOPE_RULES : "scope hợp lệ"
+  ROLE_PERMISSIONS ||--o{ ROLE_PERMISSION_SCOPES : "scope được cấp"
+  PERMISSION_SCOPE_RULES ||--o{ ROLE_PERMISSION_SCOPES : "scope được giới hạn"
   EMPLOYEES ||--o{ AUTHZ_AUDIT_LOG : "actor"
-  EMPLOYEES |o--o{ AUTHZ_AUDIT_LOG : "target"
-  LEAVE_TYPES ||--o{ LEAVE_POLICIES : "định nghĩa"
+  EMPLOYEES |o--o{ AUTHZ_AUDIT_LOG : "target tùy chọn"
+  LEAVE_TYPES ||--o{ LEAVE_POLICIES : "có phiên bản policy"
+
   DEPARTMENTS {
     int Id PK
     string Name UK
@@ -27,10 +29,20 @@ erDiagram
     int DepartmentId FK
     guid ManagerId FK
   }
+  REFRESH_TOKENS {
+    guid Id PK
+    guid EmployeeId FK
+    string TokenHash UK
+    datetime CreatedAtUtc
+    datetime ExpiresAtUtc
+    datetime RevokedAtUtc
+    string ReplacedByTokenHash
+  }
   ROLES {
     int Id PK
     string Code UK
     string Name
+    string Description
     bool IsSystem
     bool IsActive
     datetime CreatedAtUtc
@@ -39,27 +51,28 @@ erDiagram
     int Id PK
     string Code UK
     string Name
+    string Description
     bool IsActive
   }
   USER_ROLES {
     bigint Id PK
     guid EmployeeId FK
     int RoleId FK
-    guid GrantedByEmployeeId
+    guid GrantedByEmployeeId FK
     datetime GrantedAtUtc
     datetime ExpiresAtUtc
-    guid RevokedByEmployeeId
+    guid RevokedByEmployeeId FK
     datetime RevokedAtUtc
   }
   ROLE_PERMISSIONS {
     int RoleId PK,FK
     int PermissionId PK,FK
-    guid GrantedByEmployeeId
+    guid GrantedByEmployeeId FK
     datetime GrantedAtUtc
   }
   PERMISSION_SCOPE_RULES {
     int PermissionId PK,FK
-    string Scope PK "Self, Team, Department, All"
+    string Scope PK "Self Team Department All"
   }
   ROLE_PERMISSION_SCOPES {
     int RoleId PK,FK
@@ -69,7 +82,7 @@ erDiagram
   AUTHZ_AUDIT_LOG {
     bigint Id PK
     guid ActorEmployeeId FK
-    guid TargetEmployeeId FK
+    guid TargetEmployeeId FK "nullable"
     string Action
     string TargetType
     string TargetId
@@ -80,7 +93,7 @@ erDiagram
   }
   LEAVE_TYPES {
     int Id PK
-    string Code UK "ANNUAL, SICK, UNPAID"
+    string Code UK
     string Name
     bool IsPaid
     bool DeductsBalance
@@ -91,6 +104,9 @@ erDiagram
     int LeaveTypeId FK
     int Year
     decimal DaysPerYear
+    date EffectiveFrom
+    datetime CreatedAtUtc
+    string Reason
   }
   HOLIDAYS {
     int Id PK

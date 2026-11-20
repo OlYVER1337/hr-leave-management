@@ -102,10 +102,10 @@ Các Scope đang được thực thi trong API là Self, Team và All. Departmen
 
 | Bảng | Mục đích và các cột quan trọng |
 |---|---|
-| `LeaveBalances` | Số dư theo nhân viên/loại nghỉ/năm, gồm `PolicyDays`, `Used`, `Pending` (`decimal(6,1)`) và SQL `rowversion`. `Entitled` không còn là cột lưu; được suy ra là `max(PolicyDays, Used + Pending)`. |
+| `LeaveBalances` | Số dư theo nhân viên/loại nghỉ/năm, gồm `PolicyDays`, `Used`, `Pending` (`decimal(6,1)`) và SQL `rowversion`. SQL không lưu `Entitled` hoặc `Available`; đây là thuộc tính `[NotMapped]`: `Entitled = max(PolicyDays, Used + Pending)`, `Available = Entitled - Used - Pending`. |
 | `LeaveRequests` | Thông tin đơn nghỉ: ID nhân viên/người phê duyệt, snapshot phòng ban, ID loại nghỉ, khoảng thời gian nghỉ, tổng số ngày, lý do (tối đa 1.000 ký tự), trạng thái và timestamps; có SQL `rowversion` |
 | `LeaveRequestHistories` | Lịch sử thao tác/trạng thái theo kiểu append, ID người thực hiện, ghi chú tùy chọn (tối đa 1.000 ký tự), thời gian thực hiện |
-| `LeaveRequestYearAllocations` | Phân bổ ngày nghỉ theo từng năm, gồm `Days`, `PolicyVersionId` (scalar reference tới HR, nullable với dữ liệu lịch sử) và `PolicyDaysAtCreation` (quota snapshot lúc tạo đơn, nullable với dữ liệu lịch sử) |
+| `LeaveRequestYearAllocations` | PK ghép `(LeaveRequestId, Year)`; phân bổ `Days` theo từng năm, gồm `PolicyVersionId` (scalar reference tới HR, nullable với dữ liệu lịch sử) và `PolicyDaysAtCreation` (quota snapshot lúc tạo đơn, nullable với dữ liệu lịch sử). FK duy nhất của bảng là `LeaveRequestId` tới `LeaveRequests` với Cascade. |
 
 ### Các khóa và ràng buộc quan trọng
 
@@ -325,3 +325,12 @@ EF Core Configuration + Migrations
     ↓
 Nguồn quyết định schema thực tế
 ```
+## Policy version và snapshot giữa HR_DB / Leave_DB
+
+- HR Service sở hữu `LeavePolicies`; mỗi version có `LeaveTypeId`, `Year`, `DaysPerYear`, `EffectiveFrom`, `CreatedAtUtc`, `Reason`.
+- Unique index `(LeaveTypeId, Year, EffectiveFrom)` cho phép nhiều version trong cùng năm nhưng không cho hai version cùng ngày hiệu lực.
+- Policy GET với `asOfDate` trả phiên bản hiệu lực mới nhất theo loại nghỉ/năm tại ngày được yêu cầu. Nghiệp vụ Leave gửi `authoritative=true` để bỏ qua Redis cache.
+- POST và PUT `/api/v1/leave-policies/{id}` tạo version mới; PUT `/{id}/edit` chỉ chỉnh version chưa hiệu lực và không thay đổi năm, loại nghỉ hoặc ngày hiệu lực. Policy năm quá khứ không được sửa; version đã effective không được edit/delete.
+- DELETE version tương lai yêu cầu Leave Service đếm số `LeaveRequestYearAllocations.PolicyVersionId` tham chiếu. Có allocation tham chiếu thì HR từ chối 409; Leave không khả dụng thì thao tác fail closed. Giữa bước COUNT ở Leave và DELETE ở HR vẫn có race window nhỏ vì hai database không dùng distributed transaction.
+- Leave lưu `PolicyVersionId` và `PolicyDaysAtCreation` ở yearly allocation như snapshot lịch sử. Đây không phải FK vì HR và Leave sở hữu database riêng; xóa version đã được tham chiếu bị ngăn qua kiểm tra liên service.
+- `LeaveBalances.PolicyDays` là quota hiện hành, không phải quota snapshot lịch sử. Khi policy giảm thấp hơn `Used + Pending`, Leave cập nhật `PolicyDays` nhưng không giảm `Used/Pending`; `Entitled` được suy ra để vẫn bao phủ số ngày đã dùng/đang chờ.

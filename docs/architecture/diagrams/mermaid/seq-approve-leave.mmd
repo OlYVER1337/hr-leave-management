@@ -1,52 +1,67 @@
 sequenceDiagram
   autonumber
   actor M as Manager / HR
-  participant W as React (Nginx)
+  participant W as React / Nginx
   participant LV as Leave Service
   participant HR as HR Service
-  participant DB as Leave_DB
+  participant HDB as HR_DB
+  participant LDB as Leave_DB
+
   M->>W: Mở hộp thư phê duyệt
   W->>LV: GET /leave-api/api/v1/leave-requests/pending-approval?page=&pageSize=
   LV->>LV: Kiểm tra leaves.decide:Team/All
   alt Caller có Team scope
     LV->>HR: GET /api/v1/leave-scope/managers/{callerId}/employee-ids
-    HR->>HR: Xác nhận managerId trùng caller và scope phù hợp
-    HR-->>LV: Direct report IDs hiện tại
+    HR->>HR: Xác thực caller chỉ hỏi Team của chính mình
+    HR->>HDB: Query direct reports theo ManagerId hiện tại
+    HDB-->>HR: Direct report IDs hiện tại
+    HR-->>LV: Team employee IDs
   else Caller có All scope
-    Note over LV: Không cần lấy danh sách Team
+    Note over LV: Không cần HR Team lookup cho inbox
   end
-  LV->>DB: Query Pending trong visibility scope + pagination
-  DB-->>LV: Pending requests
+  LV->>LDB: Query Pending theo scope và pagination
+  LDB-->>LV: Request rows + total count
   LV-->>W: 200 list + X-Total-Count
+
   M->>W: Gửi quyết định approve/reject
-  W->>LV: PATCH /leave-requests/{id}/decision
-  LV->>LV: Kiểm tra leaves.decide và request Pending
+  W->>LV: PATCH /leave-api/api/v1/leave-requests/{id}/decision
+  LV->>LDB: Đọc request + YearAllocations
+  LDB-->>LV: Request hiện tại
+  LV->>LV: Kiểm tra Pending và chặn tự duyệt
   alt Team scope
-    LV->>HR: GET /api/v1/lookup/employees/{employeeId}
-    HR-->>LV: Employee active + ManagerId hiện tại
-    LV->>LV: Xác minh ManagerId = caller và không cho tự duyệt
+    LV->>HR: GET /api/v1/lookup/employees/{request.EmployeeId}
+    HR->>HDB: Đọc trạng thái Employee + ManagerId
+    HDB-->>HR: Employee snapshot hiện tại
+    HR-->>LV: Employee active + ManagerId
+    LV->>LV: Xác minh ManagerId hiện tại = caller
   else All scope
-    LV->>LV: Xác minh quyền All và chặn tự duyệt
+    LV->>LV: Xác minh leaves.decide:All
   end
-  opt HR lookup lỗi với thao tác Team
-    LV-->>W: 503 Dependency unavailable, không đổi trạng thái
+  opt Request có yearly allocation trừ quota
+    loop Mỗi năm trong YearAllocations
+      LV->>HR: GET /api/v1/leave-policies?year=&asOfDate={max(today UTC+07, 01/01 allocation year)}&authoritative=true
+      HR->>HDB: Lấy policy version hiện hành
+      HDB-->>HR: PolicyDays mới nhất
+      HR-->>LV: PolicyDays hiện hành
+    end
   end
-  LV->>DB: BEGIN SERIALIZABLE transaction
-  LV->>DB: Đọc request + LeaveBalance/YearAllocations
-  alt Request không còn Pending hoặc concurrency conflict
-    LV->>DB: ROLLBACK
-    LV-->>W: 409 Conflict
-  else Approve
-    LV->>DB: Status = Approved
-    LV->>DB: Balance Pending -= days, Used += days
-    LV->>DB: INSERT LeaveRequestHistory
-    LV->>DB: COMMIT
-    LV-->>W: 200 OK
-  else Reject
-    LV->>DB: Status = Rejected
-    LV->>DB: Balance Pending -= days
-    LV->>DB: INSERT LeaveRequestHistory
-    LV->>DB: COMMIT
-    LV-->>W: 200 OK
+  Note over LV,HR: Team lookup hoặc policy lookup lỗi thì fail closed, không đổi trạng thái.
+  LV->>LDB: BEGIN SERIALIZABLE
+  LV->>LDB: Đọc lại request và kiểm tra Pending
+  opt Request có yearly allocation trừ quota
+    loop Mỗi allocation
+      LV->>LDB: Refresh balance.PolicyDays
+      LV->>LDB: Pending giảm theo allocation days
+      alt Approve
+        LV->>LDB: Used tăng theo allocation days
+      else Reject
+        LV->>LDB: Không tăng Used
+      end
+    end
   end
-  Note over LV,DB: Employee cancel Pending: cancel:Self, giải phóng Pending và ghi history cùng transaction.
+  LV->>LDB: Cập nhật Status Approved hoặc Rejected và DecidedAtUtc
+  LV->>LDB: INSERT LeaveRequestHistory
+  LV->>LDB: SAVE CHANGES + COMMIT
+  LV-->>W: 200 + request/balance mới
+
+  Note over LV,LDB: Team authority lấy từ reporting line hiện tại, không tin ApproverId snapshot.

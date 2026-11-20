@@ -1,15 +1,19 @@
 flowchart TB
-  U["Trình duyệt<br/>Employee / Manager / HR"] -->|HTTPS hoặc HTTP local| W["Web React + TypeScript<br/>Nginx :3000"]
-  W -->|"/hr-api/*"| HR["HR Service :8081<br/>Auth, Employees, Departments,<br/>RBAC, Leave Catalog"]
-  W -->|"/leave-api/*"| LV["Leave Service :8082<br/>Leave Requests, Balances,<br/>Calendar, Approval"]
-  LV -->|"REST + Bearer JWT<br/>timeout 5 giây"| HR
-  HR --> HRDB[("HR_DB<br/>Employees, Roles, Permissions,<br/>UserRoles, Scopes, Audit,<br/>Leave Types/Policies, Holidays")]
-  LV --> LVDB[("Leave_DB<br/>Requests, Balances,<br/>Year Allocations, History")]
-  HR -.->|"Cache-aside catalog<br/>TTL mặc định 30 phút"| R[("Redis<br/>Leave types / Policies / Holidays")]
-  LV -.->|"authoritative=true<br/>bypass cache cho nghiệp vụ"| HR
+  U["Trình duyệt<br/>Employee / Manager / HR"] -->|"HTTP(S)"| W["React + TypeScript<br/>Nginx :3000"]
+  W -->|"/hr-api/*"| HR["HR Service :8081<br/>Authentication · Employees · Departments<br/>Dynamic RBAC · Leave Catalog/Policy"]
+  W -->|"/leave-api/*"| LV["Leave Service :8082<br/>Leave Requests · Balances · Calendar<br/>Approval · History"]
+  HR -->|"Phát JWT: authz_v + perm<br/>Refresh cookie HttpOnly"| W
+  LV -->|"Xác thực JWT cục bộ<br/>cùng issuer/audience/signing key"| LV
+  LV -->|"REST + Bearer token<br/>timeout 5 giây"| HR
+  HR -->|"HR-owned persistence"| HRDB[("HR_DB<br/>Employees · Departments · RefreshTokens<br/>Roles · Permissions · UserRoles<br/>RolePermissions · Scope Rules · Audit<br/>LeaveTypes · LeavePolicies · Holidays")]
+  LV -->|"Leave-owned persistence"| LVDB[("Leave_DB<br/>LeaveRequests · LeaveBalances<br/>YearAllocations · RequestHistories")]
+  HR <-->|"Cache-aside catalog<br/>TTL mặc định 30 phút"| R[("Redis<br/>Leave types · Policies · Holidays")]
+  LV -.->|"authoritative=true<br/>bypass Redis cho nghiệp vụ"| HR
+  HR -.->|"GET /api/v1/leave-policy-usage/{id}<br/>đếm allocation tham chiếu trước khi xóa policy"| LV
   subgraph SQL["SQL Server — hai database độc lập"]
     HRDB
     LVDB
   end
   N["Không có API Gateway riêng<br/>Nginx chỉ proxy theo path"] -.-> W
-  X["Leave Service không truy cập HR_DB<br/>Không có cross-database FK"] -.-> LV
+  X["Không có cross-database FK<br/>Leave lưu HR IDs dạng scalar reference"] -.-> LV
+  Y["Access JWT stateless<br/>Role claim legacy chỉ hỗ trợ UI"] -.-> HR

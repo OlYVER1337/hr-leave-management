@@ -1,27 +1,28 @@
 erDiagram
-  LEAVE_REQUESTS ||--o{ LEAVE_REQUEST_HISTORIES : "ghi lịch sử"
+  LEAVE_REQUESTS ||--o{ LEAVE_REQUEST_HISTORIES : "ghi history"
   LEAVE_REQUESTS ||--o{ LEAVE_REQUEST_YEAR_ALLOCATIONS : "phân bổ theo năm"
+
   LEAVE_BALANCES {
     guid Id PK
-    guid EmployeeId "HR ID scalar, không cross-DB FK"
-    int LeaveTypeId "HR ID scalar, không cross-DB FK"
+    guid EmployeeId "HR ID scalar, no FK"
+    int LeaveTypeId "HR ID scalar, no FK"
     int Year
-    decimal Entitled
+    decimal PolicyDays
     decimal Used
     decimal Pending
     binary RowVersion
   }
   LEAVE_REQUESTS {
     guid Id PK
-    guid EmployeeId "HR ID scalar"
-    guid ApproverId "snapshot lúc tạo, không dùng authorize hiện tại"
-    int DepartmentId "snapshot lúc tạo"
-    int LeaveTypeId "HR ID scalar"
+    guid EmployeeId "HR ID scalar, no FK"
+    guid ApproverId "HR snapshot, no FK"
+    int DepartmentId "HR snapshot, no FK"
+    int LeaveTypeId "HR ID scalar, no FK"
     date StartDate
     date EndDate
     decimal TotalDays
     string Reason
-    string Status "Pending, Approved, Rejected, Cancelled"
+    string Status "Pending/Approved/Rejected/Cancelled"
     datetime CreatedAtUtc
     datetime DecidedAtUtc
     binary RowVersion
@@ -30,14 +31,23 @@ erDiagram
     guid LeaveRequestId PK,FK
     int Year PK
     decimal Days
+    int PolicyVersionId "HR policy ID scalar, nullable"
+    decimal PolicyDaysAtCreation "nullable historical snapshot"
   }
   LEAVE_REQUEST_HISTORIES {
     guid Id PK
     guid LeaveRequestId FK
-    guid ActorId "HR ID scalar"
+    guid ActorId "HR ID scalar, no FK"
     string Action
     string FromStatus
     string ToStatus
     string Note
     datetime CreatedAtUtc
   }
+
+  %% LeaveBalance unique key: EmployeeId + LeaveTypeId + Year.
+  %% Entitled and Available are [NotMapped], not persisted SQL columns.
+  %% Entitled = max(PolicyDays, Used + Pending); Available = Entitled - Used - Pending.
+  %% PolicyDays, Used and Pending each have non-negative CHECK constraints.
+  %% LeaveRequest.YearAllocations and Histories cascade-delete with LeaveRequest.
+  %% Employee/Approver/Department/LeaveType/PolicyVersion IDs are HR-owned scalar references.

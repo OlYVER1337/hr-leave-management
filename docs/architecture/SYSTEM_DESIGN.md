@@ -14,6 +14,8 @@ Sơ đồ source:
 - Create leave sequence: diagrams/mermaid/seq-create-leave.mmd
 - Approve/reject sequence: diagrams/mermaid/seq-approve-leave.mmd
 - Balance self-sync sequence: diagrams/mermaid/seq-balance-sync.mmd
+- Policy version lifecycle: diagrams/mermaid/seq-policy-version.mmd
+- Employee cancel flow: diagrams/mermaid/seq-cancel-leave.mmd
 
 Mermaid là source chỉnh sửa. PNG/SVG chỉ được coi là bản xuất đồng bộ khi đã render lại từ source mới nhất.
 
@@ -88,25 +90,31 @@ HR lookup hồ sơ nhân viên theo employees.read và lookup IDs để xác đ�
 3. Lấy holiday list, tính ngày làm việc (weekday trừ ngày lễ).
 4. Với loại deduct balance, lấy toàn bộ policy version authoritative cho từng năm liên quan; chọn phiên bản mới nhất có `EffectiveFrom <= ngày tạo đơn` theo UTC+07.
 5. Chia request qua năm thành yearly allocations; mỗi allocation lưu `PolicyVersionId` và `PolicyDaysAtCreation`, đồng thời ghi snapshot ApproverId/DepartmentId từ HR.
-6. Trong SQL transaction, đồng bộ `PolicyDays` từ phiên bản được chọn, kiểm tra overlap/quota, reserve Pending, lưu request + allocations + history.
-7. Trả response cùng balance rows liên quan.
+6. Trong transaction `SERIALIZABLE`, kiểm tra overlap Pending/Approved; tạo hoặc đọc balance, refresh `PolicyDays` từ policy version lấy được, tính `Entitled = max(PolicyDays, Used + Pending)`, kiểm tra Available và tăng Pending.
+7. Cùng transaction lưu LeaveRequest, YearAllocations và LeaveRequestHistory (Created), sau đó commit và trả balance rows liên quan.
 
 Request có range tối đa 366 ngày; reason bắt buộc, tối đa 1.000 ký tự. Request không có working day bị từ chối.
 
-### Approve / reject / cancel
+### Approve / reject
 
-- Chỉ request Pending được chuyển trạng thái.
-- Approve: Pending giảm, Used tăng.
-- Reject/Cancel: Pending giảm.
-- History được append trong cùng luồng transaction.
-- RowVersion, unique balance key, Serializable transaction và retry cho deadlock/concurrency bảo vệ balance/status.
-- ApproverId chỉ là snapshot lúc tạo; Team authority được xác minh lại từ HR.
+- Inbox yêu cầu `leaves.decide:Team/All` và phân trang `page/pageSize`. Team scope lấy direct report IDs hiện tại từ HR; All scope không cần Team lookup.
+- Chỉ request Pending được quyết định; self-approval bị chặn.
+- Với Team scope, Leave gọi HR lookup employee và xác minh employee còn active, `ManagerId` hiện tại bằng actor. Không dùng `ApproverId` snapshot làm authority.
+- Trước transition, Leave lấy policy hiện hành từ HR theo từng năm trong allocation. Trong transaction `SERIALIZABLE`, refresh `PolicyDays`, giảm Pending; Approve tăng Used và set Approved, Reject chỉ set Rejected. History được append trong cùng transaction.
+
+### Cancel
+
+- `leaves.cancel:Self`; request phải thuộc caller và đang Pending.
+- Leave lấy policy hiện hành từ HR theo từng năm allocation, sau đó trong transaction `SERIALIZABLE` refresh `PolicyDays`, giảm Pending, giữ nguyên Used, set Cancelled và append history.
+- HR policy lookup lỗi thì fail closed; không đổi trạng thái/balance/history.
+
+RowVersion, unique balance key, Serializable transaction và retry cho deadlock/concurrency bảo vệ balance/status. `ApproverId` chỉ là snapshot lúc tạo.
 
 ### Balance hiện tại
 
 Balance key duy nhất là EmployeeId + LeaveTypeId + Year; các cột lưu là `PolicyDays`, `Used`, `Pending` (decimal(6,1)), có RowVersion và CHECK constraint ngăn bộ đếm âm. `Entitled = max(PolicyDays, Used + Pending)`; `Available = Entitled - Used - Pending`. Balance row được tạo lazy khi tạo đơn trừ quota hoặc khi tự đồng bộ theo employee/năm.
 
-GET `/api/v1/leave-balances/mine` và POST `/api/v1/leave-balances/mine/synchronize` đều gọi HR authoritative để lấy policy hiện hành, sau đó cập nhật `PolicyDays` trong transaction `SERIALIZABLE` trước khi trả số dư. Luồng đọc có side effect đồng bộ idempotent; chỉ xử lý caller, chưa có HR bulk reconciliation/worker cho toàn bộ nhân viên. Khi quota giảm dưới Used + Pending, hệ thống vẫn cập nhật PolicyDays; Entitled tạm thời bằng Used + Pending, Available bằng 0. Khi đơn bị từ chối/hủy Pending được trả về, Entitled được tính lại theo PolicyDays và lượng Used + Pending còn lại. Luồng tạo đơn chọn policy version theo ngày tạo request và lưu snapshot version/quota; approve/reject/cancel refresh PolicyDays từ HR trong cùng transaction cập nhật Used/Pending.
+GET `/api/v1/leave-balances/mine` và POST `/api/v1/leave-balances/mine/synchronize` đều gọi HR catalog với `authoritative=true`, sau đó cập nhật `PolicyDays` trong transaction `SERIALIZABLE` trước khi trả số dư. Hai endpoint chỉ đồng bộ EmployeeId lấy từ JWT, kể cả caller có scope All; nếu thiếu year thì dùng business year UTC+07. Chỉ leave type active có `DeductsBalance=true` và có policy hợp lệ mới được đồng bộ; loại thiếu policy được bỏ qua và trả tên/code qua header `X-Leave-Policy-Missing`. Luồng đọc có side effect đồng bộ idempotent; chưa có HR bulk reconciliation/worker cho toàn bộ nhân viên. Khi quota giảm dưới Used + Pending, hệ thống vẫn cập nhật PolicyDays; Entitled tạm thời bằng Used + Pending, Available bằng 0. Khi Pending được giải phóng sau Reject/Cancel, Entitled tự tính lại theo PolicyDays và lượng Used + Pending còn lại. Luồng tạo đơn snapshot policy version/quota lúc tạo; Approve/Reject/Cancel refresh PolicyDays hiện hành từ HR trong cùng transaction cập nhật Used/Pending.
 
 ### History hiện tại
 
@@ -119,9 +127,9 @@ HR Service cache ba nhóm catalog:
 - hr:catalog:leave-policies
 - hr:catalog:holidays
 
-TTL chung mặc định 1.800 giây (30 phút), cấu hình Cache:ExpirationSeconds trong khoảng 1–3.600 giây. Khi cache miss, HR đọc SQL rồi thử ghi Redis. Ghi/xóa cache failure được log và không chặn luồng SQL. Nếu invalidation thất bại khi Redis outage, catalog thông thường có thể stale đến khi TTL hết.
+TTL chung mặc định 1.800 giây (30 phút), cấu hình `Cache:ExpirationSeconds` trong khoảng 1–3.600 giây. Khi cache miss, HR đọc SQL rồi thử ghi Redis. Khi cập nhật/xóa catalog, HR cố gắng invalidate key tương ứng. Ghi/xóa cache failure được log và không chặn luồng SQL; nếu invalidation thất bại khi Redis outage, catalog thông thường có thể stale đến khi TTL hết.
 
-Leave Service gọi HR với authoritative=true khi lấy leave types/policies/holidays cho nghiệp vụ, do đó bypass Redis. Balance, state và history không cache trong Redis.
+Leave Service gọi HR với `authoritative=true` khi lấy leave types/policies/holidays cho nghiệp vụ, do đó bypass Redis. Khi HR xóa policy version, HR còn gọi Leave GET `/api/v1/leave-policy-usage/{policyVersionId}` để đếm allocation tham chiếu trước khi xóa; Leave không khả dụng thì HR fail closed. Balance, state và history không cache trong Redis.
 
 ## 8. Failure handling và vận hành
 
@@ -135,7 +143,7 @@ Leave Service gọi HR với authoritative=true khi lấy leave types/policies/h
 
 ## 9. Business rules về năm và timezone
 
-HR Leave Policy dùng business calendar UTC+07:00; chỉ tạo/sửa policy của năm lớn hơn năm hiện tại theo UTC+07. Policy năm hiện tại/quá khứ read-only.
+HR Leave Policy dùng business calendar UTC+07:00. Policy chỉ được tạo version cho năm hiện tại hoặc tương lai; `EffectiveFrom` không được trước ngày hiện tại (hoặc 01/01 của policy year nếu ngày hiện tại còn trước mốc đó) và không vượt khỏi năm policy. PUT policy tạo version mới. PUT `/edit` chỉ sửa version còn ở tương lai (`EffectiveFrom > business today`) và giữ nguyên năm, loại nghỉ, ngày hiệu lực. DELETE chỉ cho version tương lai và phải xác nhận Leave không có allocation tham chiếu. Policy version đã effective là historical/current và không được edit/delete.
 
 Leave Request validation, default year của Leave Balance và business date/year trong `leaveService.ts` đều dùng UTC+07 (`Asia/Ho_Chi_Minh`). Cần duy trì kiểm thử ở ranh giới 31/12–01/01 và rà soát các màn hình frontend khác để không dùng browser-local time cho nghiệp vụ.
 
