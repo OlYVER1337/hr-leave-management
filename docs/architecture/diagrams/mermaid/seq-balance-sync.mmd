@@ -17,7 +17,7 @@ sequenceDiagram
   HDB-->>HR: Catalog versions theo năm
   HR-->>LV: Leave types + policy versions
   LV->>LV: Lọc leave type active và DeductsBalance=true
-  LV->>LV: Chọn version mới nhất có EffectiveFrom <= today (nếu today trước 01/01 thì dùng 01/01)
+  LV->>LV: Chọn version mới nhất có EffectiveFrom trong policy year và <= max(today, 01/01 của policy year)
   LV->>LV: Kiểm tra quota 0..366, tối đa 1 chữ số thập phân
   alt HR lỗi hoặc policy không hợp lệ
     LV-->>W: Dependency error / conflict, chưa ghi Leave_DB
