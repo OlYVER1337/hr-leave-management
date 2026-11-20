@@ -67,10 +67,13 @@ export function setup() {
 
   for (let number = 1; number <= managerCount; number += 1) {
     const token = loginManager(managerEmail(number));
-    const inbox = http.get(`${leaveBaseUrl}/api/v1/leave-requests/pending-approval`, {
-      headers: { Authorization: `Bearer ${token}` },
-      tags: { phase: 'setup' },
-    });
+    const inbox = http.get(
+  `${leaveBaseUrl}/api/v1/leave-requests/pending-approval?page=1&pageSize=100`,
+  {
+    headers: { Authorization: `Bearer ${token}` },
+    tags: { phase: 'setup' },
+  },
+);
     if (inbox.status !== 200) {
       throw new Error(`Manager ${number} pending inbox failed with HTTP ${inbox.status}`);
     }
