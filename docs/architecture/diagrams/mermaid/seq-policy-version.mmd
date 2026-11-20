@@ -1,0 +1,47 @@
+sequenceDiagram
+  autonumber
+  actor A as HR Admin
+  participant W as React / Nginx
+  participant HR as HR Service
+  participant HDB as HR_DB
+  participant LV as Leave Service
+  participant LDB as Leave_DB
+  participant R as Redis
+
+  A->>W: Tạo policy version hoặc cập nhật policy
+  W->>HR: POST /api/v1/leave-policies hoặc PUT /api/v1/leave-policies/{id}
+  HR->>HR: Authorize permission + validate built-in active deducting leave type
+  HR->>HR: Kiểm tra năm hiện tại/tương lai và EffectiveFrom theo UTC+07
+  HR->>HDB: INSERT version mới (LeaveTypeId, Year, DaysPerYear, EffectiveFrom, CreatedAtUtc, Reason)
+  HDB-->>HR: PolicyVersionId mới
+  HR->>R: Invalidate leave-policies cache
+  HR-->>W: 201/200 policy version mới
+
+  opt Sửa trực tiếp một version chưa hiệu lực
+    W->>HR: PUT /api/v1/leave-policies/{id}/edit
+    HR->>HR: Chỉ cho version EffectiveFrom > hôm nay; giữ nguyên Year, LeaveTypeId, EffectiveFrom
+    HR->>HDB: UPDATE DaysPerYear/Reason
+    HR->>R: Invalidate leave-policies cache
+    HR-->>W: 200 version đã sửa
+  end
+
+  opt Xóa một version tương lai
+    W->>HR: DELETE /api/v1/leave-policies/{id}
+    HR->>HR: Kiểm tra version thuộc năm hợp lệ và EffectiveFrom > hôm nay
+    HR->>LV: GET /api/v1/leave-policy-usage/{policyVersionId} (Bearer token)
+    LV->>LDB: COUNT YearAllocations có PolicyVersionId
+    LDB-->>LV: Reference count
+    LV-->>HR: referencedAllocations
+    alt Có allocation tham chiếu
+      HR-->>W: 409 Conflict; không xóa version
+    else Không có reference
+      HR->>HDB: DELETE LeavePolicy version
+      HR->>R: Invalidate leave-policies cache
+      HR-->>W: 204 No Content
+    end
+    Note over HR,LV: Leave outage/HTTP error => fail closed, không xóa.
+    Note over HR,HDB: Có race window nhỏ giữa COUNT reference và DELETE; không có distributed transaction.
+  end
+
+  Note over HR,HDB: Policy đã effective (EffectiveFrom <= business today) là historical/current và không thể xóa.
+  Note over LV,LDB: LeaveRequestYearAllocations lưu PolicyVersionId + PolicyDaysAtCreation; ID policy là scalar cross-service reference, không phải FK.
