@@ -279,3 +279,63 @@ Lần chạy tiếp theo cần:
 
 Lệnh PowerShell tham khảo nằm ở docs/testing/dynamic-authorization-validation.md. Benchmark catalog Redis ON/OFF trong docs/performance/redis-performance.md là workload riêng, không trộn với số liệu Workforce paged-v2.
 
+
+
+## 11. Approval benchmark mới sau seed — 20/11/2026
+
+### 11.1. Seed data đã xác minh
+
+Người chạy xác nhận seed script hoàn tất trên stack cô lập `hrbench` bằng SQL Server 2022. Lệnh `sqlcmd` có `-b` và PowerShell kiểm tra `$LASTEXITCODE`; không phát sinh SQL error.
+
+| Hạng mục | Kết quả |
+|---|---:|
+| SeededEmployees | 1.000 |
+| SeededLeaveRequests | 5.000 |
+| LeaveYear | 2026 |
+| Pending | 1.250 |
+| Approved | 1.250 |
+| Rejected | 1.250 |
+| Cancelled | 1.250 |
+| Total requests | 5.000 |
+
+Các trạng thái được kiểm tra trực tiếp bằng SELECT từ `Leave_DB.dbo.LeaveRequests` với `Reason LIKE 'LOADTEST:%'`. Bộ dữ liệu này được tạo cho workload load-test, không phải dữ liệu nhân viên nghiệp vụ.
+
+### 11.2. Approval 100 VU — một lần chạy ngày 20/11
+
+Cấu hình scenario: `VUS=100`, `ITERATIONS_PER_VU=10`, `DURATION=5m` (maxDuration), `LOADTEST_MANAGER_COUNT=25`. Script dùng `per-vu-iterations`; mỗi VU thực hiện 10 quyết định approve trên request ID riêng sau bước login và đọc pending inbox trong setup.
+
+| Chỉ số | Kết quả |
+|---|---:|
+| Planned approvals | 1.000 |
+| Approval attempts | 1.000 |
+| Completed approvals | 1.000 |
+| Approval errors | 0 |
+| Error rate | 0% |
+| P50 | 61,6436 ms |
+| P95 | 193,4192 ms |
+| Leave → HR calls | 2.000 |
+| Leave → HR total time | 14.987,0 ms |
+| Leave → HR average | 7,4935 ms |
+| Leave → HR P95 | 17,03 ms |
+| Scenario elapsed theo output k6 | khoảng 1,4 giây |
+| Tổng thời gian lệnh k6 theo terminal | khoảng 3,7 giây |
+
+### 11.3. Diễn giải và giới hạn
+
+- Tất cả 1.000 quyết định hoàn tất, không có approval error và error rate bằng 0 trong lượt chạy này.
+- P95 193,42 ms cao hơn mức trung bình P95 khoảng 98,98 ms của ba lượt 100 VU v3 trước đó. Đây là so sánh tham khảo: workload/setup/revision có thể khác nhau và lần chạy mới chỉ có một mẫu. Cần lặp lại cùng điều kiện trước khi kết luận hiệu năng thay đổi.
+- Summary cho thấy 2.000 Leave → HR calls trên 1.000 approval. Dùng số liệu thực đo này; không suy diễn số call trên mỗi request ở workload khác.
+- `DURATION=5m` chỉ là giới hạn `maxDuration`; scenario hoàn tất trong khoảng 1,4 giây. Đây là burst concurrency, không phải soak test hay sustained 5-minute test.
+- Summary không cung cấp raw request throughput hoặc resource metrics đủ để tính/đánh giá CPU, RAM, SQL waits và connection pool.
+- Git SHA và immutable image ID tại thời điểm chạy chưa được ghi lại. Không gắn kết quả vào merge commit `81b98704` nếu chưa xác nhận checkout thực tế.
+
+### 11.4. Raw report
+
+Lệnh k6 được cấu hình `REPORT_JSON=/reports/approval-100vu-after-seed.json`; thư mục `/reports` được mount tới `docs/testing/evidence/dynamic-authorization/`. Tuy nhiên, tại lần rà soát GitHub sau khi merge, file này chưa được tìm thấy trên `master`. Hãy kiểm tra tại máy chạy:
+
+```powershell
+Test-Path .\docs\testing\evidence\dynamic-authorization\approval-100vu-after-seed.json
+git status --short
+```
+
+Nếu file có tồn tại, commit raw report cùng SHA được xác minh bằng `git rev-parse HEAD` và image IDs nếu còn lưu. Phần số liệu trong mục này hiện dựa trên terminal output người chạy cung cấp, không thay thế raw k6 JSON.

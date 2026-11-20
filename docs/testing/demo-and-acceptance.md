@@ -1,10 +1,8 @@
 # Kịch bản demo, kết quả kiểm thử và checklist nghiệm thu
 
+> **Snapshot ngày 20/11/2026:** Dynamic Authorization V1 đã được merge vào `master` qua [PR #6](https://github.com/OlYVER1337/hr-leave-management/pull/6), merge commit `81b987043ce4663ad11800bb331ffdbc013bd1d2`. Kết quả regression local đã được báo cáo là HR 155/155, Leave 123/123 và Web 79 tests pass; các lượt này chưa ghi lại SHA chính xác. Ngày 20/11, seed scale data thành công (1.000 nhân viên/5.000 đơn) và Approval 100 VU hoàn thành 1.000/1.000 quyết định, 0 lỗi. Chi tiết và giới hạn bằng chứng ở Mục 7–8. Không có CI/CD theo quyết định dự án.
 
-> **Cập nhật trạng thái 18/11/2026:** Kết quả local ngày 17/11 do người dùng cung cấp (Leave 118/118; HR 132/132; 0 failed/0 skipped) là bằng chứng lịch sử trên source trước thay đổi policy versioning. HEAD hiện tại đã thay đổi model/migration/service/API/UI/test; chưa có CI workflow phù hợp trong repository và chưa có kết quả backend/Web test/build cho SHA hiện tại. Stored TRX trong repository vẫn là evidence cũ ngày 05/11 (HR 57 passed/1 skipped; Leave 19 passed/6 skipped).
-
-
-## 1. Kết quả kiểm thử hồi quy và tích hợp
+## 1. Kết quả kiểm thử hồi quy và tích hợp (lịch sử — 03/11/2026)
 
 Backend được chạy lại ngày **03/11/2026** sau khi cập nhật Microsoft.Data.SqlClient
 6.1.8 và thêm kiểm tra TTL mặc định/thu hồi refresh token khi deactivate. Web test
@@ -299,47 +297,83 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
   chứa bí mật vào báo cáo, log hoặc Git.
 
 
-## 7. Cập nhật trạng thái source và bằng chứng — 17/11/2026
+## 7. Trạng thái source và bằng chứng sau merge — 20/11/2026
 
-### 7.1. Dynamic Authorization hiện tại
+### 7.1. Repository và Dynamic Authorization
 
-Backend HR/Leave đã chuyển sang authorization theo permission/scope claim:
-- JWT chứa authz_v=1 và perm JSON; login/refresh tính lại quyền từ HR database.
+- Dynamic Authorization V1 đã được merge vào `master` qua PR #6; merge commit `81b987043ce4663ad11800bb331ffdbc013bd1d2`.
+- JWT chứa `authz_v=1` và `perm` JSON; login/refresh tính lại quyền từ HR database.
 - HR sở hữu Role, Permission, UserRole assignment, Scope rules và audit log.
-- Scope đang được thực thi là Self, Team, All. Department chưa có filter nghiệp vụ.
-- Leave Team reads/decisions xác minh current reporting line từ HR; không dùng ApproverId snapshot làm quyền hiện tại.
+- Scope đang thực thi là Self, Team, All. Department chưa có filter nghiệp vụ.
+- Leave Team reads/decisions xác minh current reporting line từ HR; không dùng `ApproverId` snapshot làm quyền hiện tại.
 - UserRole assignment APIs đã có; Role/Permission catalog CRUD và UI quản trị chưa có.
 - React vẫn dùng legacy HR/Manager/Employee roles cho navigation/route guard. Điều này không thay thế permission enforcement ở backend.
 
-### 7.2. Automated test evidence cần hiểu đúng
+### 7.2. Regression test evidence
 
-**Kết quả local mới nhất do người dùng cung cấp ngày 17/11/2026:**
-- Leave Service: 118/118 passed, 0 failed, 0 skipped.
-- HR Service: 132/132 passed, 0 failed, 0 skipped.
-- Cả hai solution build thành công trong lượt chạy được báo cáo.
+Kết quả local được ghi nhận trong quá trình hoàn thiện dự án:
 
-Các lệnh đã chạy là `dotnet test src\leave-service\LeaveService.slnx --no-restore` và `dotnet test src\hr-service\HrService.slnx --no-restore`. Output không có `git rev-parse HEAD`, do đó kết quả được ghi nhận là user-reported local run, chưa thể gắn chắc chắn với SHA của branch. Chưa có kết quả mới cho `npm test -- --run` và `npm run build` sau balance-sync.
+| Bộ kiểm thử | Kết quả | Ghi chú |
+|---|---:|---|
+| HR Service | 155/155 passed | 0 failed, 0 skipped |
+| Leave Service | 123/123 passed | 0 failed, 0 skipped |
+| Web | 79 tests passed | Vitest |
+| Web production build | Thành công | TypeScript/Vite build |
 
-TRX đã commit tại `docs/testing/evidence/dotnet/` vẫn là evidence cũ hơn: HR total 58 / 57 executed / 57 passed / 1 skipped; Leave total 25 / 19 executed / 19 passed / 6 skipped. Không dùng các TRX này để phủ nhận lượt chạy 17/11, nhưng cũng không thay chúng bằng kết quả mới khi chưa có file TRX tương ứng.
+Các kết quả trên là test chạy thủ công/local do người dùng báo cáo. Output không lưu `git rev-parse HEAD`, vì vậy chưa gắn chắc chắn với merge commit `81b98704`. Không có CI/CD chạy tự động theo lựa chọn của dự án.
 
-### 7.3. Workforce benchmark mới nhất
+Stored TRX trong repository là bằng chứng lịch sử và không thay thế cho log của các lượt chạy mới. Khi cần sign-off theo revision, chạy lại test tại `master`, ghi SHA, lưu TRX và log Web tương ứng. Không suy diễn test count của HEAD từ workflow Render diagrams.
 
-Ba lượt paged-v2 mỗi mức VU ngày 16/11 ghi nhận:
-- 50 VU: trung bình 454,07 RPS; P95 trung bình 17,85 ms; HTTP error rate 0%.
-- 100 VU: trung bình 764,14 RPS; P95 trung bình 73,28 ms; HTTP error rate 0%.
-- Page size 50, duration 5 phút.
-- Các raw JSON chưa gắn Git SHA/image ID (giá trị not-provided); không xem đây là benchmark baseline bất biến cho revision cụ thể.
+### 7.3. Seed và Approval benchmark ngày 20/11
 
-Chi tiết: dynamic-authorization-benchmark-results.md. Muốn sign-off hiệu năng phải chạy lại với SHA/image ID cố định và metrics tài nguyên đồng bộ với workload.
+Seed script đã chạy thành công với `sqlcmd -b`:
+
+| Dữ liệu | Kết quả |
+|---|---:|
+| Employees | 1.000 |
+| Requests | 5.000 |
+| Pending | 1.250 |
+| Approved | 1.250 |
+| Rejected | 1.250 |
+| Cancelled | 1.250 |
+| Leave year | 2026 |
+
+Approval benchmark 100 VU, 10 iterations/VU:
+
+| Metric | Kết quả |
+|---|---:|
+| Planned / attempts / completed | 1.000 / 1.000 / 1.000 |
+| Approval errors | 0 |
+| Error rate | 0% |
+| P50 | 61,64 ms |
+| P95 | 193,42 ms |
+| Leave → HR calls | 2.000 |
+| Leave → HR average / P95 | 7,49 ms / 17,03 ms |
+
+Scenario hoàn tất khoảng 1,4 giây; tổng thời gian chạy k6 khoảng 3,7 giây. `DURATION=5m` chỉ là maxDuration của executor `per-vu-iterations`, không phải sustained load 5 phút. Đây mới là một lượt 100 VU; cần repeat để đánh giá biến động P95.
+
+Raw JSON `approval-100vu-after-seed.json` được chỉ định qua `REPORT_JSON`, nhưng chưa được xác minh đã commit lên GitHub. Kiểm tra file local trước khi ghi nhận raw evidence. SHA/image IDs của lần benchmark cũng chưa được ghi lại.
 
 ### 7.4. Các gap còn mở
 
-- Leave Balance GET và POST đều đồng bộ PolicyDays hiện hành từ HR trước khi trả balance. Entitled = max(PolicyDays, Used + Pending); quota giảm dưới lượng đã dùng/đang chờ không làm số dư âm. Policy version được chọn theo ngày tạo đơn và snapshot ở từng yearly allocation. Các thay đổi ngày 18/11 chưa được chạy test/build trên HEAD hiện tại. Chưa có API/worker bulk reconciliation cho tất cả nhân viên sau khi HR đổi policy.
-- Leave request date validation, balance default year và HR policy year đều dùng business timezone UTC+07; frontend `leaveService.ts` dùng `Asia/Ho_Chi_Minh`. Cần rà soát các màn hình frontend còn lại ở ranh giới ngày/năm.
+- Leave Balance GET và POST self-sync đều cập nhật `PolicyDays` authoritative từ HR; `Entitled = max(PolicyDays, Used + Pending)`. Request lưu `PolicyVersionId` và `PolicyDaysAtCreation` trong yearly allocation. Chưa có API/worker bulk reconciliation cho mọi nhân viên.
+- Backend HR policy year, Leave request validation và balance default year dùng UTC+07; frontend `leaveService.ts` dùng `Asia/Ho_Chi_Minh`. Cần rà soát các màn hình frontend còn lại ở ranh giới ngày/năm.
 - Employee lookup cần thống nhất active-state behavior giữa lookup by ID/batch và Team listing.
 - Leave History có ghi nhưng chưa có GET endpoint.
 - Health endpoint chưa tách readiness/liveness và chưa kiểm tra database readiness.
 - HR HttpClient timeout 5 giây, chưa có circuit breaker/retry.
-- Annual demo policy không thống nhất: backend DemoDataSeeder đặt ANNUAL 12 ngày, frontend built-in fallback metadata khai báo 15 ngày.
+- Annual demo policy có sai khác giữa backend DemoDataSeeder (12 ngày) và frontend built-in fallback (15 ngày).
 
-Thứ tự và tiêu chí hoàn thành được theo dõi ở planning/BACKLOG.md.
+Thứ tự và tiêu chí hoàn thành được theo dõi ở [planning/BACKLOG.md](../planning/BACKLOG.md).
+
+## 8. Quy trình tái xác minh sau merge
+
+Để gắn kết quả kiểm thử với chính xác revision `master`:
+
+1. Chạy `git switch master`, `git pull origin master`, sau đó ghi `git rev-parse HEAD`.
+2. Chạy HR và Leave test với biến SQL/Redis integration như Mục 1; yêu cầu `failed = 0`, `skipped = 0`.
+3. Chạy Web tests và production build trong Node 20 container như lệnh ở Mục 1.
+4. Nếu chạy Approval benchmark, seed lại trước từng lượt; lưu raw k6 JSON, SHA và image IDs.
+5. Không dùng `DURATION=5m` của `approval.js` làm bằng chứng soak test; cần scenario duration-based riêng.
+
+Mục 1–6 vẫn chứa các kịch bản demo, yêu cầu và chẩn đoán lịch sử; các kết quả mới nhất về trạng thái repository/test/benchmark được tổng hợp tại Mục 7.

@@ -1,6 +1,6 @@
 # Xác minh Dynamic RBAC và benchmark HR lookup
 
-Tài liệu này dùng cho branch `feature/dynamic-authorization-v1`. Các integration test tạo/xóa database kiểm thử ngẫu nhiên; chỉ chạy với SQL Server và Redis riêng cho môi trường test/benchmark.
+Tài liệu này áp dụng cho source đã merge vào `master` qua PR #6, merge commit `81b987043ce4663ad11800bb331ffdbc013bd1d2`. Khi chạy lại kiểm thử, ghi SHA thực tế bằng `git rev-parse HEAD`; không mặc định kết quả local gắn với merge commit. Các integration test tạo/xóa database kiểm thử ngẫu nhiên; chỉ chạy với SQL Server và Redis riêng cho môi trường test/benchmark.
 
 **Báo cáo số liệu đã chạy:** [Kết quả benchmark Dynamic RBAC và HR lookup](dynamic-authorization-benchmark-results.md). Báo cáo ghi cả kết quả lần đầu và repeat, phương pháp, giới hạn diễn giải và các việc còn thiếu để nghiệm thu.
 
@@ -9,7 +9,8 @@ Tài liệu này dùng cho branch `feature/dynamic-authorization-v1`. Các integ
 PowerShell tại thư mục gốc repository:
 
 ```powershell
-git pull origin feature/dynamic-authorization-v1
+git switch master
+git pull origin master
 
 $compose = @(
     "-p", "hrbench",
@@ -398,3 +399,65 @@ Chạy ba lượt độc lập để đo biến động; đổi REPORT_JSON mỗ
 - Đo CPU, memory, SQL waits, query duration và connection pool trong cùng cửa sổ 5 phút trước khi kết luận bottleneck.
 - Không dùng số liệu local benchmark để cam kết production throughput.
 
+
+
+## 10. Kết quả xác minh sau merge — 20/11/2026
+
+### 10.1. Seed scale data đã chạy thành công
+
+Trên PowerShell tại repository, lệnh đã thực thi thành công:
+
+```powershell
+docker cp .\scripts\load-test\seed-scale-data.sql hrbench-sqlserver-1:/tmp/seed-scale-data.sql
+
+docker exec hrbench-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -b -C -S localhost -U sa -P "$env:SA_PASSWORD" -d master -v EmployeeCount="1000" RequestsPerEmployee="5" ManagerCount="25" -i /tmp/seed-scale-data.sql
+
+if ($LASTEXITCODE -ne 0) {
+    throw "Seed script thất bại"
+}
+```
+
+Output trả về 1.000 employees, 5.000 leave requests, năm 2026. SELECT xác nhận:
+
+| Status | Total |
+|---|---:|
+| Pending | 1.250 |
+| Approved | 1.250 |
+| Rejected | 1.250 |
+| Cancelled | 1.250 |
+| **Total** | **5.000** |
+
+Lỗi schema trước đó đã được sửa trong seed script: SQL insert dùng cột `PolicyDays`, không dùng `Entitled` vì `Entitled` là thuộc tính `[NotMapped]` trong C#.
+
+### 10.2. Approval 100 VU đã hoàn tất
+
+Lệnh chạy đã dùng:
+
+```powershell
+docker compose -p hrbench -f docker-compose.yml -f docker-compose.loadtest.yml --profile loadtest run --rm -e VUS=100 -e DURATION=5m -e LOADTEST_MANAGER_COUNT=25 -e MANAGER_PASSWORD=$env:DEMO_MANAGER_PASSWORD -e REPORT_JSON=/reports/approval-100vu-after-seed.json k6 run /scripts/approval.js
+```
+
+| Metric | Kết quả |
+|---|---:|
+| Planned approvals | 1.000 |
+| Approval attempts | 1.000 |
+| Completed approvals | 1.000 |
+| Approval errors | 0 |
+| Error rate | 0 |
+| P50 | 61,6436 ms |
+| P95 | 193,4192 ms |
+| Leave → HR calls | 2.000 |
+| Leave → HR average | 7,4935 ms |
+| Leave → HR P95 | 17,03 ms |
+
+Scenario hoàn tất khoảng 1,4 giây; tổng lệnh k6 khoảng 3,7 giây. Do executor là `per-vu-iterations`, `DURATION=5m` là maxDuration chứ không phải thời gian tải liên tục. Cần seed lại trước mỗi lượt Approval tiếp theo vì các request được approve sẽ rời khỏi Pending inbox.
+
+### 10.3. Giới hạn evidence
+
+- Output của lượt mới chưa kèm Git SHA và immutable image IDs. Xác nhận checkout tại máy benchmark bằng `git rev-parse HEAD` trước khi gắn kết quả vào revision.
+- K6 được cấu hình ghi raw report tới `docs/testing/evidence/dynamic-authorization/approval-100vu-after-seed.json`. Kiểm tra file local bằng `Test-Path`; chỉ khi file tồn tại mới add/commit raw JSON.
+- Lượt 100 VU mới có một lần chạy; P95 193,42 ms cần được xác nhận bằng repeat cùng điều kiện.
+- Đây không phải soak test. Dùng scenario duration-based riêng nếu cần đo tải duy trì.
+- Không dùng benchmark local này để cam kết production capacity.
+
+Lưu ý: các kết quả HR 155/155, Leave 123/123 và Web 79 tests đã được ghi nhận trong phiên kiểm thử dự án; SHA của checkout ở các lượt đó chưa được lưu. Muốn chứng minh hồi quy trên merge commit chính xác, chạy lại các lệnh ở Mục 2 và lệnh Web ở tài liệu demo-and-acceptance.md, rồi lưu SHA cùng log/TRX.
