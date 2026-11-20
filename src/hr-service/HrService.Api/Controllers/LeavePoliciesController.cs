@@ -9,7 +9,9 @@ namespace HrService.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/v1/leave-policies")]
-public sealed class LeavePoliciesController(LeaveCatalogService catalogService) : ControllerBase
+public sealed class LeavePoliciesController(
+    LeaveCatalogService catalogService,
+    LeavePolicyVersionDeletionService deletionService) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<LeavePolicyResponse>>> GetAll(
@@ -74,7 +76,7 @@ public sealed class LeavePoliciesController(LeaveCatalogService catalogService) 
         int id,
         CancellationToken cancellationToken)
     {
-        await catalogService.DeleteLeavePolicyVersionAsync(id, cancellationToken);
+        await deletionService.DeleteAsync(id, Request.Headers.Authorization.ToString(), cancellationToken);
         return NoContent();
     }
 }

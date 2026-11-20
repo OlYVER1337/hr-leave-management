@@ -419,7 +419,7 @@ public sealed class LeaveCatalogService(
     }
 
     // Chỉ xóa version thuộc năm hiện tại hoặc tương lai; UI phải kiểm tra không có allocation tham chiếu trước khi gọi.
-    public async Task DeleteLeavePolicyVersionAsync(
+    public async Task EnsureVersionDeletableAsync(
         int id,
         CancellationToken cancellationToken = default)
     {
@@ -442,6 +442,15 @@ public sealed class LeaveCatalogService(
             throw new ConflictException(
                 "A policy version that is already effective cannot be deleted. Create a new future version instead.");
         }
+    }
+
+    public async Task DeleteLeavePolicyVersionAsync(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureVersionDeletableAsync(id, cancellationToken);
+        var policy = await repository.GetLeavePolicyForUpdateByIdAsync(id, cancellationToken)
+            ?? throw new NotFoundException($"Leave policy with id '{id}' was not found.");
 
         repository.Remove(policy);
         await unitOfWork.SaveChangesAsync(cancellationToken);

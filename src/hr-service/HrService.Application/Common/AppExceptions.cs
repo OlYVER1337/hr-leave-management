@@ -17,3 +17,7 @@ public sealed class RequestValidationException(IReadOnlyDictionary<string, strin
 {
     public IReadOnlyDictionary<string, string[]> Errors { get; } = errors;
 }
+
+// Phụ thuộc (Leave Service) không trả lời: fail closed, không ghi dữ liệu.
+public sealed class LeavePolicyUsageUnavailableException(string message)
+    : AppException("Dependency unavailable", message, 503);

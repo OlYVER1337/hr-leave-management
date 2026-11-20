@@ -20,6 +20,16 @@ builder.Services.AddHealthChecks();
 builder.Services.AddScoped<DepartmentService>();
 builder.Services.AddScoped<EmployeeService>();
 builder.Services.AddScoped<LeaveCatalogService>();
+builder.Services.AddScoped<HrService.Application.Services.LeavePolicyVersionDeletionService>();
+builder.Services.AddHttpClient<
+    HrService.Application.Abstractions.ILeavePolicyUsageClient,
+    HrService.Infrastructure.Clients.LeavePolicyUsageClient>(client =>
+{
+    var leaveBaseUrl = builder.Configuration["Services:Leave:BaseUrl"]
+        ?? throw new InvalidOperationException("Configuration 'Services:Leave:BaseUrl' is required.");
+    client.BaseAddress = new Uri(leaveBaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(3);
+});
 builder.Services.AddScoped<AuthenticationService>();
 builder.Services.AddScoped<AuthorizationService>();
 builder.Services.AddScoped<UserRoleService>();
