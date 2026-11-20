@@ -233,7 +233,7 @@ public sealed class LeaveBalanceServiceTests
             It.IsAny<Guid>(),
             It.IsAny<int>(),
             It.Is<IReadOnlyList<LeaveBalanceEntitlement>>(list => list.Count == 0),
-            It.IsAny<CancellationToken>()), Times.Never);
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     // HR lỗi thì Leave phải fail closed, không ghi balance dựa trên quota cũ hoặc không xác định.

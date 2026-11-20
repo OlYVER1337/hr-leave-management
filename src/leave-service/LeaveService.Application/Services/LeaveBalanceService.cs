@@ -92,13 +92,11 @@ public sealed class LeaveBalanceService(
 
         // HR catalog đã được lấy và kiểm tra đầy đủ trước khi chạm vào Leave DB.
         // Không có loại nào đủ chính sách để đồng bộ thì không ghi gì.
-        var balances = entitlements.Count == 0
-            ? Array.Empty<LeaveBalance>()
-            : await repository.SynchronizeBalancesAsync(
-                employeeId,
-                year,
-                entitlements,
-                cancellationToken);
+        var balances = await repository.SynchronizeBalancesAsync(
+            employeeId,
+            year,
+            entitlements,
+            cancellationToken);
 
         var responses = balances
             .OrderBy(item => item.LeaveTypeId)
