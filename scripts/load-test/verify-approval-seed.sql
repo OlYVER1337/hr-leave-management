@@ -1,6 +1,3 @@
-:setvar ManagerCount "25"
-:setvar ExpectedPendingPerManager "800"
-
 SET NOCOUNT ON;
 
 DECLARE @ManagerCount int = TRY_CONVERT(int, '$(ManagerCount)');
