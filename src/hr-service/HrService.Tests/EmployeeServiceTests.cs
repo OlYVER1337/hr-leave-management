@@ -195,12 +195,6 @@ public sealed class EmployeeServiceTests
         var employee = CreateEmployee(employeeId, managerId);
         var repository = new Mock<IEmployeeRepository>();
         repository
-            .Setup(item => item.IsDirectManagerOfAsync(
-                managerId,
-                employeeId,
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true);
-        repository
             .Setup(item => item.GetByIdAsync(employeeId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(employee);
         var service = CreateService(repository);
@@ -215,6 +209,55 @@ public sealed class EmployeeServiceTests
         Assert.DoesNotContain("Email", typeof(EmployeeLookupResponse).GetProperties().Select(property => property.Name));
     }
 
+    // Direct report đã deactivate không còn thuộc phạm vi Team của Manager.
+    [Fact]
+    public async Task GetLookupAsync_RejectsInactiveDirectReportForTeamScope()
+    {
+        var employeeId = Guid.NewGuid();
+        var managerId = Guid.NewGuid();
+        var employee = CreateEmployee(employeeId, managerId);
+        employee.IsActive = false;
+
+        var repository = new Mock<IEmployeeRepository>();
+        repository
+            .Setup(item => item.GetByIdAsync(employeeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(employee);
+        var service = CreateService(repository);
+        var managerAuthorization = new EffectiveAuthorization(
+            [new EffectivePermission("employees.read", ["Team"])]);
+
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => service.GetLookupAsync(employeeId, managerId, managerAuthorization));
+
+        repository.Verify(
+            item => item.GetByIdAsync(employeeId, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    // Manager cũ không thể tra cứu hồ sơ sau khi nhân viên được chuyển sang Manager khác.
+    [Fact]
+    public async Task GetLookupAsync_RejectsFormerManagersOutOfTeamLookupAfterReassignment()
+    {
+        var employeeId = Guid.NewGuid();
+        var formerManagerId = Guid.NewGuid();
+        var currentManagerId = Guid.NewGuid();
+        var employee = CreateEmployee(employeeId, currentManagerId);
+        var repository = new Mock<IEmployeeRepository>();
+        repository
+            .Setup(item => item.GetByIdAsync(employeeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(employee);
+        var service = CreateService(repository);
+        var formerManagerAuthorization = new EffectiveAuthorization(
+            [new EffectivePermission("employees.read", ["Team"])]);
+
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => service.GetLookupAsync(employeeId, formerManagerId, formerManagerAuthorization));
+
+        repository.Verify(
+            item => item.GetByIdAsync(employeeId, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
     // Scope All cho phép lookup không cần quan hệ manager trực tiếp.
     [Fact]
     public async Task GetLookupAsync_AllowsAllScopeWithoutManagerRelationship()
@@ -222,6 +265,7 @@ public sealed class EmployeeServiceTests
         var employeeId = Guid.NewGuid();
         var requesterId = Guid.NewGuid();
         var employee = CreateEmployee(employeeId);
+        employee.IsActive = false;
         var repository = new Mock<IEmployeeRepository>();
         repository.Setup(item => item.GetByIdAsync(employeeId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(employee);
@@ -232,10 +276,7 @@ public sealed class EmployeeServiceTests
         var result = await service.GetLookupAsync(employeeId, requesterId, authorization);
 
         Assert.Equal(employeeId, result.Id);
-        repository.Verify(
-            item => item.IsDirectManagerOfAsync(
-                It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        Assert.False(result.IsActive);
     }
 
     // Danh sách Team phải được giới hạn vào các nhân viên báo cáo trực tiếp cho Manager.
