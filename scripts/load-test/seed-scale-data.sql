@@ -59,12 +59,17 @@ CREATE TABLE #LoadTestManagers
     Number int NOT NULL
 );
 
-;WITH ManagerNumbers AS
+;WITH NumberSource AS
 (
-    SELECT TOP (@ManagerCount)
-        CONVERT(int, ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) AS Number
+    SELECT CONVERT(int, ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) AS Number
     FROM sys.all_objects AS firstSource
     CROSS JOIN sys.all_objects AS secondSource
+),
+ManagerNumbers AS
+(
+    SELECT Number
+    FROM NumberSource
+    WHERE Number <= @ManagerCount
 )
 INSERT INTO dbo.Employees
 (
@@ -115,12 +120,17 @@ FROM dbo.Employees
 WHERE Email LIKE N'loadtest.user.%@example.invalid'
 ORDER BY Code;
 
-;WITH Numbers AS
+;WITH NumberSource AS
 (
-    SELECT TOP (@EmployeeCount)
-        CONVERT(int, ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) AS Number
+    SELECT CONVERT(int, ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) AS Number
     FROM sys.all_objects AS firstSource
     CROSS JOIN sys.all_objects AS secondSource
+),
+Numbers AS
+(
+    SELECT Number
+    FROM NumberSource
+    WHERE Number <= @EmployeeCount
 )
 INSERT INTO dbo.Employees
 (
@@ -204,16 +214,17 @@ DELETE balance
 FROM dbo.LeaveBalances AS balance
 INNER JOIN #LoadTestEmployees AS employee ON employee.EmployeeId = balance.EmployeeId;
 
-;WITH CalendarDays AS
+;WITH CalendarNumberSource AS
 (
-    SELECT TOP (@DaysInYear)
-        DATEADD(
-            day,
-            CONVERT(int, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) - 1),
-            @YearStart
-        ) AS CalendarDate
+    SELECT CONVERT(int, ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) AS Number
     FROM sys.all_objects AS firstSource
     CROSS JOIN sys.all_objects AS secondSource
+),
+CalendarDays AS
+(
+    SELECT DATEADD(day, Number - 1, @YearStart) AS CalendarDate
+    FROM CalendarNumberSource
+    WHERE Number <= @DaysInYear
 ),
 BusinessDays AS
 (
@@ -247,12 +258,17 @@ EmployeeNumbers AS
         TRY_CONVERT(int, SUBSTRING(Code, 3, 7)) AS EmployeeNumber
     FROM #LoadTestEmployees
 ),
-RequestNumbers AS
+RequestNumberSource AS
 (
-    SELECT TOP (@RequestCount)
-        CONVERT(int, ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) AS Number
+    SELECT CONVERT(int, ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) AS Number
     FROM sys.all_objects AS firstSource
     CROSS JOIN sys.all_objects AS secondSource
+),
+RequestNumbers AS
+(
+    SELECT Number
+    FROM RequestNumberSource
+    WHERE Number <= @RequestCount
 )
 INSERT INTO #LoadTestRequests
 (
