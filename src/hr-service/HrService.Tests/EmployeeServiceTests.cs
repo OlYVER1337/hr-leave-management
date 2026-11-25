@@ -172,24 +172,18 @@ public sealed class EmployeeServiceTests
     [Fact]
     public async Task GetLookupAsync_RejectsUserOutsideEmployeeScope()
     {
-        var employeeId = Guid.NewGuid();
-        var requesterId = Guid.NewGuid();
-        var employee = CreateEmployee(employeeId);
         var repository = new Mock<IEmployeeRepository>();
-        repository
-            .Setup(item => item.GetByIdAsync(employeeId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(employee);
         var service = CreateService(repository);
 
         await Assert.ThrowsAsync<ForbiddenException>(
             () => service.GetLookupAsync(
-                employeeId,
-                requesterId,
+                Guid.NewGuid(),
+                Guid.NewGuid(),
                 EffectiveAuthorization.Empty));
 
         repository.Verify(
-            item => item.GetByIdAsync(employeeId, It.IsAny<CancellationToken>()),
-            Times.Once);
+            item => item.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     // Manager chỉ xem direct report và response chỉ chứa các trường lookup cần thiết.
