@@ -172,18 +172,24 @@ public sealed class EmployeeServiceTests
     [Fact]
     public async Task GetLookupAsync_RejectsUserOutsideEmployeeScope()
     {
+        var employeeId = Guid.NewGuid();
+        var requesterId = Guid.NewGuid();
+        var employee = CreateEmployee(employeeId);
         var repository = new Mock<IEmployeeRepository>();
+        repository
+            .Setup(item => item.GetByIdAsync(employeeId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(employee);
         var service = CreateService(repository);
 
         await Assert.ThrowsAsync<ForbiddenException>(
             () => service.GetLookupAsync(
-                Guid.NewGuid(),
-                Guid.NewGuid(),
+                employeeId,
+                requesterId,
                 EffectiveAuthorization.Empty));
 
         repository.Verify(
-            item => item.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+            item => item.GetByIdAsync(employeeId, It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     // Manager chỉ xem direct report và response chỉ chứa các trường lookup cần thiết.
@@ -265,6 +271,7 @@ public sealed class EmployeeServiceTests
         var employeeId = Guid.NewGuid();
         var requesterId = Guid.NewGuid();
         var employee = CreateEmployee(employeeId);
+        employee.IsActive = false;
         var repository = new Mock<IEmployeeRepository>();
         repository.Setup(item => item.GetByIdAsync(employeeId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(employee);
@@ -275,6 +282,7 @@ public sealed class EmployeeServiceTests
         var result = await service.GetLookupAsync(employeeId, requesterId, authorization);
 
         Assert.Equal(employeeId, result.Id);
+        Assert.False(result.IsActive);
     }
 
     // Danh sách Team phải được giới hạn vào các nhân viên báo cáo trực tiếp cho Manager.
