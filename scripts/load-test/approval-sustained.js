@@ -10,6 +10,9 @@ const duration = __ENV.DURATION || '5m';
 const managerCount = Number(__ENV.LOADTEST_MANAGER_COUNT || 25);
 const maxApprovalsPerVu = Number(__ENV.MAX_APPROVALS_PER_VU || 400);
 const thinkTimeSeconds = Number(__ENV.THINK_TIME_SECONDS || 1);
+const seededEmployeeCount = Number(__ENV.SEED_EMPLOYEE_COUNT || 4000);
+const requestsPerEmployee = Number(__ENV.REQUESTS_PER_EMPLOYEE || 20);
+const seedPendingPercent = Number(__ENV.SEED_PENDING_PERCENT || 25);
 const pageSize = 100;
 
 if (!Number.isSafeInteger(vuCount) || vuCount < 1) {
@@ -23,6 +26,18 @@ if (!Number.isSafeInteger(maxApprovalsPerVu) || maxApprovalsPerVu < 1) {
 }
 if (!Number.isFinite(thinkTimeSeconds) || thinkTimeSeconds < 1) {
   throw new Error('THINK_TIME_SECONDS must be at least 1 to preserve the seeded request capacity.');
+}
+if (!Number.isSafeInteger(seededEmployeeCount) || seededEmployeeCount < 1000 || seededEmployeeCount > 5000) {
+  throw new Error('SEED_EMPLOYEE_COUNT must be an integer between 1000 and 5000.');
+}
+if (!Number.isSafeInteger(requestsPerEmployee) || requestsPerEmployee < 1 || requestsPerEmployee > 20) {
+  throw new Error('REQUESTS_PER_EMPLOYEE must be an integer between 1 and 20.');
+}
+if (![25, 50].includes(seedPendingPercent)) {
+  throw new Error('SEED_PENDING_PERCENT must be 25 or 50.');
+}
+if (seedPendingPercent === 50 && requestsPerEmployee !== 20) {
+  throw new Error('SEED_PENDING_PERCENT=50 requires REQUESTS_PER_EMPLOYEE=20.');
 }
 
 const approvalRequests = new Counter('approval_requests');
@@ -300,14 +315,11 @@ export function handleSummary(data) {
     test_run_duration_ms: data.state?.testRunDurationMs || 0,
     think_time_seconds: thinkTimeSeconds,
     manager_count: managerCount,
-    seeded_employees: Number(__ENV.SEED_EMPLOYEE_COUNT || 4000),
-    requests_per_employee: Number(__ENV.REQUESTS_PER_EMPLOYEE || 20),
-    seeded_requests: Number(__ENV.SEED_EMPLOYEE_COUNT || 4000) * Number(__ENV.REQUESTS_PER_EMPLOYEE || 20),
-    seeded_pending_percent: Number(__ENV.SEED_PENDING_PERCENT || 25),
-    seeded_pending_requests:
-      Number(__ENV.SEED_EMPLOYEE_COUNT || 4000) *
-      Number(__ENV.REQUESTS_PER_EMPLOYEE || 20) *
-      Number(__ENV.SEED_PENDING_PERCENT || 25) / 100,
+    seeded_employees: seededEmployeeCount,
+    requests_per_employee: requestsPerEmployee,
+    seeded_requests: seededEmployeeCount * requestsPerEmployee,
+    seeded_pending_percent: seedPendingPercent,
+    seeded_pending_requests: seededEmployeeCount * requestsPerEmployee * seedPendingPercent / 100,
     max_approvals_per_vu: maxApprovalsPerVu,
     approval_id_capacity: vuCount * maxApprovalsPerVu,
     approval_attempts: attempts,
