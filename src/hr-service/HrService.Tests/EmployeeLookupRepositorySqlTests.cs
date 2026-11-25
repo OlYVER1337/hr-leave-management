@@ -82,6 +82,8 @@ public sealed class EmployeeLookupRepositorySqlTests : IClassFixture<Authorizati
                 managerId, inactiveDirectReportId));
             Assert.False(await repository.IsActiveDirectReportOfManagerAsync(
                 managerId, reassignedDirectReportId));
+            Assert.True(await repository.IsActiveDirectReportOfManagerAsync(
+                otherManagerId, reassignedDirectReportId));
 
             var teamList = await repository.GetDirectReportsAsync(managerId);
             var teamPage = await repository.ListDirectReportsPageAsync(
@@ -91,7 +93,7 @@ public sealed class EmployeeLookupRepositorySqlTests : IClassFixture<Authorizati
                 includeSelf: false,
                 includeTeam: true,
                 includeAll: false,
-                requestedIds);
+                employeeIds: requestedIds);
 
             Assert.Equal(new[] { activeDirectReportId }, teamList.Select(employee => employee.Id));
             Assert.Equal(new[] { activeDirectReportId }, teamPage.Items.Select(employee => employee.Id));
@@ -104,15 +106,12 @@ public sealed class EmployeeLookupRepositorySqlTests : IClassFixture<Authorizati
                 includeSelf: false,
                 includeTeam: false,
                 includeAll: true,
-                [inactiveDirectReportId]);
+                employeeIds: [inactiveDirectReportId]);
 
             var inactiveEmployee = Assert.Single(hrLookup);
             Assert.Equal(inactiveDirectReportId, inactiveEmployee.Id);
             Assert.False(inactiveEmployee.IsActive);
         }
-
-        // Manager cũ không còn thấy nhân viên sau khi quan hệ báo cáo được chuyển sang Manager khác.
-        Assert.NotEqual(managerId, otherManagerId);
     }
 
     private static Employee CreateEmployee(
