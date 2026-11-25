@@ -32,6 +32,19 @@ export const options = {
 
 const managerCount = Math.max(1, Number(__ENV.LOADTEST_MANAGER_COUNT || 1));
 
+function optionalNonNegativeInteger(name) {
+  const rawValue = __ENV[name];
+  if (rawValue === undefined || rawValue.trim() === '') {
+    return null;
+  }
+
+  const value = Number(rawValue);
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`${name} must be a non-negative integer.`);
+  }
+  return value;
+}
+
 function managerEmail(number) {
   // LOADTEST_MANAGER_COUNT=1: hành vi cũ, dùng MANAGER_EMAIL.
   if (managerCount === 1) {
@@ -175,7 +188,29 @@ export function handleSummary(data) {
   const hrMetrics = data.metrics.approval_leave_to_hr_call_duration_ms?.values || {};
   const attempts = data.metrics.approval_requests?.values?.count || 0;
   const errors = data.metrics.approval_http_errors?.values?.count || 0;
+  const benchmarkMetadata = {
+    workload: 'manager-approval-and-hr-lookup',
+    git_sha: __ENV.GIT_SHA || 'not-provided',
+    hr_image_id: __ENV.HR_IMAGE_ID || 'not-provided',
+    leave_image_id: __ENV.LEAVE_IMAGE_ID || 'not-provided',
+    vus: vuCount,
+    iterations_per_vu: iterationsPerVu,
+    scenario_executor: 'per-vu-iterations',
+    max_duration: duration,
+    duration_semantics: 'maxDuration; not a sustained-load duration',
+    loadtest_manager_count: managerCount,
+    year: optionalNonNegativeInteger('YEAR'),
+    seeded_employees: optionalNonNegativeInteger('SEEDED_EMPLOYEES'),
+    seeded_leave_requests: optionalNonNegativeInteger('SEEDED_LEAVE_REQUESTS'),
+    seeded_pending_requests: optionalNonNegativeInteger('SEEDED_PENDING_REQUESTS'),
+    generated_at_utc: new Date().toISOString(),
+  };
+
+  // Gắn metadata vào cả summary hiển thị và raw JSON để truy vết từng lượt.
+  data.benchmark_metadata = benchmarkMetadata;
+
   const summary = {
+    benchmark_metadata: benchmarkMetadata,
     workload: 'manager-approval-and-hr-lookup',
     vus: vuCount,
     iterations_per_vu: iterationsPerVu,
