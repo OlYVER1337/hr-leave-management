@@ -41,7 +41,7 @@ export function getBusinessYear(value: Date = new Date()): number {
  * hoặc thay đổi DST của máy đang mở trình duyệt.
  */
 export function parseDateOnlyUtc(value: string): Date {
-  const match = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(value);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return new Date(Number.NaN);
 
   const year = Number(match[1]);
