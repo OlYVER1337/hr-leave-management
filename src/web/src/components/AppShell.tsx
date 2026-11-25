@@ -9,6 +9,7 @@ import { useAuth } from '../contexts';
 import { DEMO_MODE } from '../services/config';
 import { getApiErrorMessage } from '../services/apiClient';
 import { Avatar } from './ui';
+import { BUSINESS_TIME_ZONE } from '../utils/businessTime';
 
 type NavItem = { label: string; to: string; icon: typeof LayoutDashboard; roles?: Array<'HR' | 'Manager' | 'Employee'>; badge?: string };
 const primaryItems: NavItem[] = [
@@ -78,7 +79,7 @@ export function AppShell() {
           <div className="breadcrumb"><span>Không gian làm việc</span><ChevronRight size={15} /><strong>Quản trị nhân sự</strong></div>
           <div className="topbar-right">
             {DEMO_MODE && <span className="demo-pill"><span /> Chế độ dùng thử</span>}
-            <span className="topbar-date">{new Intl.DateTimeFormat('vi-VN', { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date())}</span>
+            <span className="topbar-date">{new Intl.DateTimeFormat('vi-VN', { timeZone: BUSINESS_TIME_ZONE, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date())}</span>
             <button className="icon-button notification-button" aria-label="Thông báo chưa khả dụng" title="Thông báo chưa khả dụng" disabled><Bell size={19} /></button>
             <div className="topbar-profile-wrap">
               <button className="topbar-profile" onClick={() => setProfileOpen((value) => !value)}><Avatar name={user?.fullName ?? 'Người dùng'} size="sm" /><span>{user?.fullName.split(' ').slice(-1)[0]}</span><ChevronDown size={14} /></button>
