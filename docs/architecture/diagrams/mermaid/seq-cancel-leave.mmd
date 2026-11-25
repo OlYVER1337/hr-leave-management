@@ -1,0 +1,37 @@
+sequenceDiagram
+  autonumber
+  actor E as Employee
+  participant W as React / Nginx
+  participant LV as Leave Service
+  participant HR as HR Service
+  participant HDB as HR_DB
+  participant LDB as Leave_DB
+
+  E->>W: Hủy đơn Pending của mình
+  W->>LV: POST /leave-api/api/v1/leave-requests/{id}/cancel
+  LV->>LV: Lấy EmployeeId từ JWT và xác minh request thuộc caller, còn Pending
+  opt Request có yearly allocation trừ quota
+    loop Mỗi năm trong YearAllocations
+      LV->>HR: GET /api/v1/leave-policies?year=&asOfDate={max(today UTC+07, 01/01 allocation year)}&authoritative=true
+      HR->>HDB: Lấy policy version hiện hành
+      HDB-->>HR: PolicyDays hiện hành
+      HR-->>LV: PolicyDays theo năm
+    end
+  end
+  Note over LV,HR: HR outage hoặc thiếu policy hiệu lực thì fail closed, không đổi đơn.
+  LV->>LDB: BEGIN SERIALIZABLE
+  LV->>LDB: Đọc lại request thuộc caller và kiểm tra Pending
+  opt Request có yearly allocation trừ quota
+    loop Mỗi allocation
+      LV->>LDB: Refresh PolicyDays
+      LV->>LDB: Giảm Pending theo allocation days
+      LV->>LDB: Giữ nguyên Used
+    end
+  end
+  LV->>LDB: Cập nhật Status Cancelled và DecidedAtUtc
+  LV->>LDB: Append LeaveRequestHistory
+  LV->>LDB: SAVE CHANGES + COMMIT
+  LV-->>W: 200 request Cancelled + balance mới
+  W-->>E: Cập nhật trạng thái đơn
+
+  Note over LV,LDB: RowVersion, Serializable transaction và retry bảo vệ cập nhật đồng thời.

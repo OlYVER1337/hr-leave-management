@@ -1,43 +1,42 @@
 sequenceDiagram
   autonumber
   actor E as Employee / Manager
-  participant W as React (Nginx)
+  participant W as React / Nginx
   participant LV as Leave Service
   participant HR as HR Service
-  participant HRDB as HR_DB
+  participant HDB as HR_DB
   participant LDB as Leave_DB
 
-  E->>W: Mở số dư phép hoặc yêu cầu đồng bộ
-  W->>LV: POST /leave-api/api/v1/leave-balances/mine/synchronize?year={year} (Bearer JWT)
-  LV->>LV: Validate JWT và leaves.read:Self/All
-  LV->>LV: Lấy EmployeeId từ claim, mặc định year theo UTC+07 nếu bỏ trống
+  E->>W: Mở màn hình số dư
+  W->>LV: GET /leave-api/api/v1/leave-balances/mine?year={year}
+  Note over W,LV: POST /mine/synchronize?year=... gọi cùng service đồng bộ.
+  LV->>LV: Validate leaves.read:Self/All, EmployeeId chỉ lấy từ JWT
+  LV->>LV: Nếu thiếu year, dùng business year UTC+07
   LV->>HR: GET /api/v1/leave-catalog?year={year}&authoritative=true
-  Note over LV,HR: Forward Bearer token, authoritative read bỏ qua Redis cache
-  HR->>HRDB: Đọc leave types và policies trực tiếp từ SQL
-  HRDB-->>HR: Catalog theo năm
-  HR-->>LV: Leave types + policies
-  LV->>LV: Chọn type active và DeductsBalance=true
-  LV->>LV: Kiểm tra đúng một policy/type/năm và quota 0..366 (1 chữ số thập phân)
-  alt HR lỗi hoặc catalog/policy không hợp lệ
-    LV-->>W: Dependency error hoặc 409, chưa ghi Leave_DB
+  HR->>HDB: Đọc LeaveTypes và LeavePolicies trực tiếp từ SQL
+  HDB-->>HR: Catalog versions theo năm
+  HR-->>LV: Leave types + policy versions
+  LV->>LV: Lọc leave type active và DeductsBalance=true
+  LV->>LV: Chọn version mới nhất có EffectiveFrom trong policy year và <= max(today, 01/01 của policy year)
+  LV->>LV: Kiểm tra quota 0..366, tối đa 1 chữ số thập phân
+  alt HR lỗi hoặc policy không hợp lệ
+    LV-->>W: Dependency error / conflict, chưa ghi Leave_DB
   else Catalog hợp lệ
     LV->>LDB: BEGIN SERIALIZABLE
     LV->>LDB: Đọc balance rows của EmployeeId + Year
-    loop Mỗi leave type được đồng bộ
+    loop Mỗi loại nghỉ active có policy
       alt Chưa có balance row
-        LV->>LDB: INSERT balance (Entitled = quota, Used = 0, Pending = 0)
+        LV->>LDB: INSERT PolicyDays=quota, Used=0, Pending=0
       else Đã có balance row
-        LV->>LDB: So sánh quota mới với Used + Pending
-        alt Quota mới < Used + Pending
-          LV->>LDB: ROLLBACK
-          LV-->>W: 409 Conflict, giữ nguyên toàn bộ balance
-        else Quota hợp lệ
-          LV->>LDB: UPDATE Entitled, giữ nguyên Used và Pending
-        end
+        LV->>LDB: UPDATE PolicyDays=quota, giữ nguyên Used và Pending
       end
     end
     LV->>LDB: SAVE CHANGES + COMMIT
-    LDB-->>LV: Balance rows đã đồng bộ
-    LV-->>W: 200 OK + Entitled, Used, Pending, Available
+    LV->>LV: Entitled = max(PolicyDays, Used + Pending)
+    LV->>LV: Available = Entitled - Used - Pending
+    LV-->>W: 200 balances, header X-Leave-Policy-Missing nếu thiếu policy
   end
-  W-->>E: Hiển thị số dư phép
+  W-->>E: Hiển thị PolicyDays, Entitled, Used, Pending, Available
+
+  Note over LV,LDB: Quota mới thấp hơn Used + Pending không rollback, Entitled vẫn bao phủ usage/reservations lịch sử.
+  Note over LV,LDB: Chỉ đồng bộ nhân viên hiện tại, chưa có bulk reconciliation worker.
