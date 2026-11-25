@@ -187,7 +187,7 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
             .FirstOrDefaultAsync(employee => employee.Id == id, cancellationToken);
     }
 
-    public Task<bool> IsDirectManagerOfAsync(
+    public Task<bool> IsActiveDirectReportOfManagerAsync(
         Guid managerId,
         Guid employeeId,
         CancellationToken cancellationToken = default)
@@ -195,7 +195,10 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
         return dbContext.Employees
             .AsNoTracking()
             .AnyAsync(
-                employee => employee.Id == employeeId && employee.ManagerId == managerId,
+                employee =>
+                    employee.Id == employeeId &&
+                    employee.ManagerId == managerId &&
+                    employee.IsActive,
                 cancellationToken);
     }
 
