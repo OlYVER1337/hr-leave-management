@@ -461,3 +461,81 @@ Scenario hoàn tất khoảng 1,4 giây; tổng lệnh k6 khoảng 3,7 giây. Do
 - Không dùng benchmark local này để cam kết production capacity.
 
 Lưu ý: các kết quả HR 155/155, Leave 123/123 và Web 79 tests đã được ghi nhận trong phiên kiểm thử dự án; SHA của checkout ở các lượt đó chưa được lưu. Muốn chứng minh hồi quy trên merge commit chính xác, chạy lại các lệnh ở Mục 2 và lệnh Web ở tài liệu demo-and-acceptance.md, rồi lưu SHA cùng log/TRX.
+
+
+## 11. Gắn metadata cho Approval benchmark
+
+Từ phiên bản script này, `approval.js` ghi trường `benchmark_metadata` vào raw k6 JSON và summary terminal. Metadata gồm Git SHA, image ID riêng của HR/Leave, số VU, số iteration mỗi VU, `maxDuration`, số Manager, thông tin seed và thời điểm tạo báo cáo. Trường không được truyền vào sẽ ghi `not-provided` hoặc `null`; script không tự suy đoán SHA/image từ tên tag.
+
+### 11.1. Build đúng revision và lấy image ID của container đang chạy
+
+Chạy tại thư mục gốc repository. Lấy SHA trước khi build để gắn đúng source revision với image:
+
+```powershell
+$gitSha = (git rev-parse HEAD).Trim()
+
+docker compose @compose build hr-service leave-service
+if ($LASTEXITCODE -ne 0) { throw "Build HR/Leave failed." }
+
+docker compose @compose up -d --force-recreate hr-service leave-service
+if ($LASTEXITCODE -ne 0) { throw "Recreate HR/Leave failed." }
+
+Invoke-RestMethod http://localhost:18081/health
+Invoke-RestMethod http://localhost:18082/health
+
+$hrContainerId = (docker compose @compose ps -q hr-service | Select-Object -First 1).Trim()
+$leaveContainerId = (docker compose @compose ps -q leave-service | Select-Object -First 1).Trim()
+if (-not $hrContainerId -or -not $leaveContainerId) {
+    throw "Không tìm thấy container HR/Leave đang chạy."
+}
+
+# .Image là image ID bất biến mà container hiện tại thực sự sử dụng.
+$hrImageId = (docker inspect $hrContainerId --format '{{.Image}}').Trim()
+$leaveImageId = (docker inspect $leaveContainerId --format '{{.Image}}').Trim()
+
+Write-Host "Git SHA: $gitSha"
+Write-Host "HR image ID: $hrImageId"
+Write-Host "Leave image ID: $leaveImageId"
+```
+
+Truyền riêng `HR_IMAGE_ID` và `LEAVE_IMAGE_ID`; không ghép hai image ID vào một chuỗi chung.
+
+### 11.2. Seed và chạy Approval
+
+**Seed lại trước từng lượt Approval** vì các request đã duyệt sẽ rời khỏi Pending inbox. Ví dụ dưới đây chạy 100 VU:
+
+```powershell
+docker compose @compose cp .\scripts\load-test\seed-scale-data.sql sqlserver:/tmp/seed-scale-data.sql
+docker compose @compose exec -T sqlserver /opt/mssql-tools18/bin/sqlcmd -b -C -S localhost -U sa -P "$env:SA_PASSWORD" -d master -v EmployeeCount="1000" RequestsPerEmployee="5" ManagerCount="25" -i /tmp/seed-scale-data.sql
+if ($LASTEXITCODE -ne 0) { throw "Seed benchmark data failed." }
+
+docker compose @compose --profile loadtest run --rm `
+    -e VUS=100 `
+    -e ITERATIONS_PER_VU=10 `
+    -e DURATION=5m `
+    -e LOADTEST_MANAGER_COUNT=25 `
+    -e YEAR=2026 `
+    -e SEEDED_EMPLOYEES=1000 `
+    -e SEEDED_LEAVE_REQUESTS=5000 `
+    -e SEEDED_PENDING_REQUESTS=1250 `
+    -e GIT_SHA=$gitSha `
+    -e HR_IMAGE_ID=$hrImageId `
+    -e LEAVE_IMAGE_ID=$leaveImageId `
+    -e REPORT_JSON=/reports/approval-100vu-metadata-run1.json `
+    k6 run /scripts/approval.js
+
+if ($LASTEXITCODE -ne 0) { throw "Approval benchmark failed." }
+```
+
+Với 50 VU, thay `VUS=50` và dùng tên report riêng. Với mỗi lượt repeat, seed lại và tăng số `run` trong tên report. Không chạy đồng thời các lượt k6.
+
+### 11.3. Kiểm tra metadata
+
+Mỗi raw JSON mới cần có `git_sha`, `hr_image_id`, `leave_image_id`, `vus`, `iterations_per_vu`, `scenario_executor`, `max_duration`, `duration_semantics`, `loadtest_manager_count`, các trường `seeded_*` và `generated_at_utc`.
+
+```powershell
+$report = Get-Content .\docs\testing\evidence\dynamic-authorization\approval-100vu-metadata-run1.json -Raw | ConvertFrom-Json
+$report.benchmark_metadata | Format-List
+```
+
+Không sửa metadata của raw JSON cũ để gán hồi tố SHA/image. Chỉ các lượt chạy bằng script mới và truyền đủ biến môi trường mới có metadata truy vết đầy đủ.
