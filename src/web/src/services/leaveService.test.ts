@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthUser, LeavePolicy } from '../types';
+import { getBusinessYear } from '../utils/businessTime';
 import { decideLeaveRequest, editPolicyVersion, getBalances, getLeaveRequestSummary, getLeaveRequests, getLeaveRequestsPage, getPolicies, getPolicyVersions, restoreBuiltInLeaveType, savePolicies } from './leaveService';
 
 const mocks = vi.hoisted(() => ({
@@ -21,13 +22,6 @@ vi.mock('./mockStore', () => ({
   loadDemoState: vi.fn(),
   updateDemoState: vi.fn(),
 }));
-
-function getVietnamBusinessYear(): number {
-  return Number(new Intl.DateTimeFormat('en', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    year: 'numeric',
-  }).format(new Date()));
-}
 
 const employee: AuthUser = {
   id: 'employee-1',
@@ -120,7 +114,7 @@ describe('leave request summary and decisions', () => {
   // Balance được khởi tạo/đồng bộ bằng POST; HR catalog cung cấp tên và metadata để hiển thị.
   it('loads balances and catalog with two requests instead of three', async () => {
     // Dùng năm nghiệp vụ Việt Nam để test không phụ thuộc múi giờ máy chạy test.
-    const year = getVietnamBusinessYear();
+    const year = getBusinessYear();
     mocks.leavePost.mockResolvedValue({
       data: [{
         leaveTypeId: 1,
@@ -269,7 +263,7 @@ describe('built-in leave policies', () => {
 
   // Màn hình policy chỉ hiển thị ba loại nghỉ chuẩn; loại đã xóa được biểu diễn ở trạng thái có thể khôi phục.
   it('returns only the fixed three types and represents a deleted type as restorable', async () => {
-    const year = getVietnamBusinessYear() + 1;
+    const year = getBusinessYear() + 1;
     mocks.hrGet.mockImplementation(async (path: string) => {
       if (path === '/api/v1/leave-catalog') {
         return {
@@ -324,7 +318,7 @@ describe('built-in leave policies', () => {
   });
 
   it('resolves the policy version that is effective on the requested date', async () => {
-    const year = getVietnamBusinessYear() + 1;
+    const year = getBusinessYear() + 1;
     mocks.hrGet.mockResolvedValue({
       data: {
         leaveTypes: [
@@ -369,7 +363,7 @@ describe('built-in leave policies', () => {
   });
 
   it('returns policy versions ordered by effective date and excludes legacy dates outside the policy year', async () => {
-    const year = getVietnamBusinessYear();
+    const year = getBusinessYear();
     mocks.hrGet.mockResolvedValue({
       data: {
         leaveTypes: [
@@ -404,7 +398,7 @@ describe('built-in leave policies', () => {
   });
 
   it('numbers policy versions separately for each leave type and policy year', async () => {
-    const year = getVietnamBusinessYear();
+    const year = getBusinessYear();
     mocks.hrGet.mockResolvedValue({
       data: {
         leaveTypes: [
@@ -435,7 +429,7 @@ describe('built-in leave policies', () => {
   });
 
   it('does not display a legacy prior-year policy as current but keeps it available for appending', async () => {
-    const year = getVietnamBusinessYear() + 1;
+    const year = getBusinessYear() + 1;
     mocks.hrGet.mockImplementation(async (path: string) => {
       if (path === '/api/v1/leave-catalog') {
         return {
@@ -478,7 +472,7 @@ describe('built-in leave policies', () => {
 
   // Khôi phục leave type chuẩn phải tạo loại nghỉ trước rồi mới tạo policy mặc định cho năm tương lai.
   it('restores a missing built-in type and creates its default annual policy', async () => {
-    const year = getVietnamBusinessYear() + 1;
+    const year = getBusinessYear() + 1;
     mocks.hrGet.mockImplementation(async (path: string) => {
       if (path === '/api/v1/leave-catalog') {
         return { data: { leaveTypes: [], leavePolicies: [] } };
@@ -519,7 +513,7 @@ describe('built-in leave policies', () => {
 
   // Thay đổi quota chỉ gọi Leave Policies API, không chạm tới Leave Types API.
   it('appends a policy version with PUT without updating the leave type', async () => {
-    const year = getVietnamBusinessYear() + 1;
+    const year = getBusinessYear() + 1;
     mocks.hrPut.mockResolvedValue({ data: {} });
 
     await savePolicies([{
@@ -551,7 +545,7 @@ describe('built-in leave policies', () => {
 
   // Trường hợp loại nghỉ đã được khôi phục nhưng chưa có policy trong năm được chọn.
   it('creates the first policy for a future year with POST', async () => {
-    const year = getVietnamBusinessYear() + 1;
+    const year = getBusinessYear() + 1;
     mocks.hrPost.mockResolvedValue({ data: {} });
 
     await savePolicies([{
@@ -581,7 +575,7 @@ describe('built-in leave policies', () => {
   });
 
   it('allows policy changes for the current business year from today onward', async () => {
-    const year = getVietnamBusinessYear();
+    const year = getBusinessYear();
     const today = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'Asia/Ho_Chi_Minh',
       year: 'numeric',
@@ -613,7 +607,7 @@ describe('built-in leave policies', () => {
   });
 
   it('rejects an effective date in the previous year when editing a future policy', async () => {
-    const year = getVietnamBusinessYear() + 1;
+    const year = getBusinessYear() + 1;
 
     await expect(savePolicies([{
       id: 'type-1',
@@ -657,7 +651,7 @@ describe('leave policy version editing', () => {
   });
 
   it('rejects editing an already-effective policy before calling either service', async () => {
-    const year = getVietnamBusinessYear();
+    const year = getBusinessYear();
     const policy = createPolicy(year, 101, `${year}-01-01`);
 
     await expect(editPolicyVersion(policy)).rejects.toThrow(
@@ -669,7 +663,7 @@ describe('leave policy version editing', () => {
   });
 
   it('allows editing a future-effective policy version when it has no allocation references', async () => {
-    const year = getVietnamBusinessYear() + 1;
+    const year = getBusinessYear() + 1;
     const policy = createPolicy(year, 303, `${year}-01-01`);
     mocks.leaveGet.mockResolvedValue({
       data: { policyVersionId: 303, referencedAllocations: 0 },

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { ArrowRight, CalendarCheck2, Check, Eye, EyeOff, Fingerprint, LockKeyhole, Mail, ShieldCheck, Sparkles, UsersRound } from 'lucide-react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts';
+import { getBusinessYear } from '../utils/businessTime';
 import { DEMO_MODE } from '../services/config';
 import { useToast } from '../components/ToastProvider';
 
@@ -60,7 +61,7 @@ export function LoginPage() {
           </form>
           {DEMO_MODE && <div className="demo-accounts"><div className="demo-accounts-heading"><span>TRUY CẬP NHANH</span><span>Mật khẩu: <code>Demo123!</code></span></div>{accounts.map((account) => <button className="demo-account" key={account.email} onClick={() => { setEmail(account.email); setPassword('Demo123!'); setError(''); }}><span className={`demo-account-icon demo-${account.color}`}><UsersRound size={17} /></span><span className="demo-account-copy"><strong>{account.label}</strong><small>{account.email}</small></span><span className="demo-account-role">{account.role}</span></button>)}</div>}
           <div className="login-security"><ShieldCheck size={15} /><span>Phiên làm việc được bảo vệ bằng phân quyền theo vai trò.</span></div>
-          <div className="login-legal">© {new Date().getFullYear()} Peopleflow HR Suite <span>·</span> Đơn giản hóa công tác quản trị nhân sự.</div>
+          <div className="login-legal">© {getBusinessYear()} Peopleflow HR Suite <span>·</span> Đơn giản hóa công tác quản trị nhân sự.</div>
         </div>
       </section>
     </div>

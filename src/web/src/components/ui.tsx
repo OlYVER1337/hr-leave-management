@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { ArrowDownRight, ArrowUpRight, Inbox } from 'lucide-react';
 import type { LeaveStatus } from '../types';
+import { BUSINESS_TIME_ZONE, parseDateOnlyUtc } from '../utils/businessTime';
 
 export function PageHeader({ eyebrow, title, description, actions }: { eyebrow?: string; title: string; description?: string; actions?: ReactNode }) {
   return (
@@ -42,9 +43,12 @@ export function EmptyState({ title, description, action }: { title: string; desc
 
 export function formatDate(value: string, options?: Intl.DateTimeFormatOptions): string {
   if (!value) return '—';
-  const date = new Date(`${value.slice(0, 10)}T12:00:00`);
+  const date = parseDateOnlyUtc(value.slice(0, 10));
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat('vi-VN', options ?? { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
+  return new Intl.DateTimeFormat('vi-VN', {
+    timeZone: BUSINESS_TIME_ZONE,
+    ...(options ?? { day: '2-digit', month: '2-digit', year: 'numeric' }),
+  }).format(date);
 }
 
 export function initialsColor(seed: string): string {

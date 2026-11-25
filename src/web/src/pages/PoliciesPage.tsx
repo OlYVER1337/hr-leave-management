@@ -7,6 +7,7 @@ import { deletePolicyVersion, editPolicyVersion, getHolidays, getPolicies, getPo
 import { DEMO_MODE } from '../services/config';
 import { getApiErrorMessage, getRejectedReason } from '../services/apiClient';
 import type { Holiday, LeavePolicy } from '../types';
+import { BUSINESS_TIME_ZONE, getBusinessDate, parseDateOnlyUtc } from '../utils/businessTime';
 
 const newHoliday = () => ({ id: '', name: '', date: '' });
 
@@ -49,12 +50,7 @@ function getMinimumPolicyEffectiveDate(
 }
 
 export function PoliciesPage() {
-  const currentBusinessDate = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date());
+  const currentBusinessDate = getBusinessDate();
   const currentYear = Number(currentBusinessDate.slice(0, 4));
   const policyYearOptions = Array.from({ length: 8 }, (_, index) => currentYear + index);
   const notify = useToast();
@@ -352,7 +348,7 @@ export function PoliciesPage() {
               : <EmptyState title="Chưa có phiên bản" description="Loại nghỉ này chưa có lịch sử chính sách." />
             : <p className="policy-description">UNPAID không áp dụng quota và không có version.</p>}
         </section>;
-      })}</section> : <section className="panel holiday-panel"><div className="panel-header"><div><h2>Lịch nghỉ lễ</h2><p>Ngày lễ không được tính vào số ngày làm việc khi tạo đơn nghỉ.</p></div><span className="holiday-count"><CalendarDays size={15} /> {holidays.length} ngày</span></div>{holidays.length === 0 ? <EmptyState title="Chưa cấu hình ngày lễ" description="Thêm ngày nghỉ lễ cho năm sắp tới." /> : <div className="table-scroll"><table className="data-table"><thead><tr><th>Ngày lễ</th><th>Ngày</th><th>Thứ</th><th /></tr></thead><tbody>{[...holidays].sort((a, b) => a.date.localeCompare(b.date)).map((holiday) => <tr key={holiday.id}><td><div className="holiday-name-cell"><span><CalendarDays size={17} /></span><strong>{holiday.name}</strong></div></td><td>{formatDate(holiday.date)}</td><td>{new Intl.DateTimeFormat('vi-VN', { weekday: 'long' }).format(new Date(`${holiday.date}T12:00:00`))}</td><td><div className="row-actions"><button className="icon-button" aria-label={`Sửa ${holiday.name}`} onClick={() => openEditHoliday(holiday)}><Edit3 size={16} /></button><button className="icon-button danger-icon" aria-label={`Xóa ${holiday.name}`} onClick={() => void deleteHoliday(holiday)}><Trash2 size={16} /></button></div></td></tr>)}</tbody></table></div>}</section>}
+      })}</section> : <section className="panel holiday-panel"><div className="panel-header"><div><h2>Lịch nghỉ lễ</h2><p>Ngày lễ không được tính vào số ngày làm việc khi tạo đơn nghỉ.</p></div><span className="holiday-count"><CalendarDays size={15} /> {holidays.length} ngày</span></div>{holidays.length === 0 ? <EmptyState title="Chưa cấu hình ngày lễ" description="Thêm ngày nghỉ lễ cho năm sắp tới." /> : <div className="table-scroll"><table className="data-table"><thead><tr><th>Ngày lễ</th><th>Ngày</th><th>Thứ</th><th /></tr></thead><tbody>{[...holidays].sort((a, b) => a.date.localeCompare(b.date)).map((holiday) => <tr key={holiday.id}><td><div className="holiday-name-cell"><span><CalendarDays size={17} /></span><strong>{holiday.name}</strong></div></td><td>{formatDate(holiday.date)}</td><td>{new Intl.DateTimeFormat('vi-VN', { timeZone: BUSINESS_TIME_ZONE, weekday: 'long' }).format(parseDateOnlyUtc(holiday.date))}</td><td><div className="row-actions"><button className="icon-button" aria-label={`Sửa ${holiday.name}`} onClick={() => openEditHoliday(holiday)}><Edit3 size={16} /></button><button className="icon-button danger-icon" aria-label={`Xóa ${holiday.name}`} onClick={() => void deleteHoliday(holiday)}><Trash2 size={16} /></button></div></td></tr>)}</tbody></table></div>}</section>}
     <div className="policy-reminder"><CheckCircle2 size={18} /><p><strong>Chính sách cần được theo dõi.</strong> {DEMO_MODE ? 'Ứng dụng đang ở chế độ demo; thay đổi được lưu cục bộ trong trình duyệt.' : 'HR Service là nguồn dữ liệu chính sách; mỗi lần lưu tạo một phiên bản mới, giữ nguyên phiên bản cũ và làm mới bộ nhớ đệm liên quan.'}</p></div>
 
     {historyPolicy && <Modal title={`Lịch sử chính sách · ${historyPolicy.typeName}`} description="Các phiên bản được sắp xếp theo năm và ngày hiệu lực mới nhất trước." onClose={() => setHistoryTypeCode(null)}><div className="policy-version-list">{historyVersions.length ? [...historyVersions].sort(sortVersionsByYearAndDate).map((version) => <article className="policy-version-row" key={version.policyId}><div><div className="policy-card-top"><strong>Năm {version.year} · Version {version.versionNumber}</strong><span className="employee-status">{version.year === currentYear && version.policyId === historyPolicy.policyId ? 'Đang áp dụng' : version.effectiveFrom && version.effectiveFrom > currentBusinessDate ? 'Đã lên lịch' : 'Phiên bản trước'}</span></div><div className="policy-entitlement"><strong>{version.daysPerYear}</strong><span>ngày mỗi năm</span></div><p className="policy-description">Hiệu lực từ {version.effectiveFrom ? formatDate(version.effectiveFrom) : 'Chưa xác định'}</p>{version.reason && <p className="policy-description">Lý do: {version.reason}</p>}{version.policyId && version.year !== undefined && version.year >= currentYear && Boolean(version.effectiveFrom) && version.effectiveFrom! > currentBusinessDate && <div className="row-actions"><button className="icon-button" aria-label={`Sửa phiên bản ${version.typeCode} ${version.year} version ${version.versionNumber}`} onClick={() => openEditPolicyVersion(version)} disabled={saving}><Edit3 size={16} /></button><button className="icon-button danger-icon" aria-label={`Xóa phiên bản ${version.typeCode} ${version.year} version ${version.versionNumber}`} onClick={() => void removePolicyVersion(version)} disabled={saving}><Trash2 size={16} /></button></div>}</div></article>) : <EmptyState title="Chưa có lịch sử phiên bản" description="Chính sách này chưa có version nào." />}</div></Modal>}

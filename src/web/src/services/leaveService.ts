@@ -2,6 +2,7 @@ import type { AuthUser, Holiday, LeaveBalance, LeavePolicy, LeaveRequest } from 
 import { DEMO_MODE } from './config';
 import { getApiErrorMessage, hrApi, leaveApi } from './apiClient';
 import { loadDemoState, updateDemoState } from './mockStore';
+import { formatDateOnlyUtc, getBusinessDate, getBusinessYear, parseDateOnlyUtc } from '../utils/businessTime';
 
 export interface CreateLeaveInput {
   typeCode: LeaveRequest['typeCode'];
@@ -73,29 +74,6 @@ const employeeDisplayCache = new Map<string, { value: EmployeeRecord; expiresAt:
 const employeeDisplayInFlight = new Map<string, Promise<void>>();
 const leaveTypeCache = new Map<boolean, { value: LeaveTypeRecord[]; expiresAt: number }>();
 const leaveTypeInFlight = new Map<boolean, Promise<LeaveTypeRecord[]>>();
-
-function getBusinessDate(value = new Date()): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(value);
-  const values = new Map<string, string>(
-    parts.map((part) => [part.type, part.value] as [string, string]),
-  );
-  const year = values.get('year');
-  const month = values.get('month');
-  const day = values.get('day');
-  if (!year || !month || !day) {
-    throw new Error('Could not resolve the Vietnam business date.');
-  }
-  return `${year}-${month}-${day}`;
-}
-
-function getBusinessYear(value = new Date()): number {
-  return Number(getBusinessDate(value).slice(0, 4));
-}
 
 function employeeDisplayCacheKey(userId: string, employeeId: string): string {
   return `${userId}:${employeeId}`;
@@ -235,13 +213,15 @@ export async function getRequestLeaveTypes(): Promise<RequestLeaveType[]> {
 }
 
 function countWeekdays(startDate: string, endDate: string, holidays: Holiday[]): number {
+  const start = parseDateOnlyUtc(startDate);
+  const end = parseDateOnlyUtc(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return 0;
+
   const skip = new Set(holidays.map((holiday) => holiday.date));
-  const start = new Date(`${startDate}T12:00:00`);
-  const end = new Date(`${endDate}T12:00:00`);
   let count = 0;
-  for (const day = new Date(start); day <= end; day.setDate(day.getDate() + 1)) {
-    const weekday = day.getDay();
-    const iso = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+  for (const day = new Date(start); day <= end; day.setUTCDate(day.getUTCDate() + 1)) {
+    const weekday = day.getUTCDay();
+    const iso = formatDateOnlyUtc(day);
     if (weekday !== 0 && weekday !== 6 && !skip.has(iso)) count++;
   }
   return count;

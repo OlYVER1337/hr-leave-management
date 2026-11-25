@@ -6,6 +6,7 @@ import { useAuth } from '../contexts';
 import { useToast } from '../components/ToastProvider';
 import { createLeaveRequest, getBalances, getHolidays, getRequestLeaveTypes, type CreateLeaveInput, type RequestLeaveType } from '../services/leaveService';
 import type { Holiday, LeaveBalance } from '../types';
+import { formatDateOnlyUtc, getBusinessDate, parseDateOnlyUtc } from '../utils/businessTime';
 
 const defaultTypes: Array<RequestLeaveType & { color: string; icon: typeof CalendarDays }> = [
   { code: 'ANNUAL', name: 'Nghỉ phép năm', description: 'Nghỉ hưởng lương để nghỉ ngơi, du lịch hoặc giải quyết việc cá nhân.', deductsBalance: true, color: 'blue', icon: CalendarDays },
@@ -14,20 +15,19 @@ const defaultTypes: Array<RequestLeaveType & { color: string; icon: typeof Calen
 ];
 
 function estimateWorkdays(startDate: string, endDate: string, holidays: Holiday[]): number {
-  if (!startDate || !endDate || endDate < startDate) return 0;
+  if (!startDate || !endDate) return 0;
+  const start = parseDateOnlyUtc(startDate);
+  const end = parseDateOnlyUtc(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return 0;
+
   const holidaySet = new Set(holidays.map((holiday) => holiday.date));
   let count = 0;
-  for (let date = new Date(`${startDate}T12:00:00`); date <= new Date(`${endDate}T12:00:00`); date.setDate(date.getDate() + 1)) {
-    const day = date.getDay();
-    const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    if (day !== 0 && day !== 6 && !holidaySet.has(iso)) count++;
+  for (const date = new Date(start); date <= end; date.setUTCDate(date.getUTCDate() + 1)) {
+    const weekday = date.getUTCDay();
+    const iso = formatDateOnlyUtc(date);
+    if (weekday !== 0 && weekday !== 6 && !holidaySet.has(iso)) count++;
   }
   return count;
-}
-
-function getTodayDate(): string {
-  const today = new Date();
-  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 }
 
 export function RequestLeavePage() {
@@ -70,7 +70,7 @@ export function RequestLeavePage() {
   const selectedType = types.find((item) => item.code === typeCode) ?? types[0] ?? defaultTypes[0];
   const SelectedTypeIcon = selectedType.icon;
   const selectedBalance = balances.find((item) => item.code === typeCode);
-  const today = getTodayDate();
+  const today = getBusinessDate();
   const dateInPast = Boolean((startDate && startDate < today) || (endDate && endDate < today));
   const dateInvalid = Boolean(startDate && endDate && endDate < startDate);
   const balanceInsufficient = selectedBalance?.available != null && days > selectedBalance.available;

@@ -8,11 +8,9 @@ import { getApiErrorMessage } from '../services/apiClient';
 import type { Department, Employee, UserRole } from '../types';
 import { Pagination } from '../components/Pagination';
 import { usePagedBlock } from '../hooks/usePagedBlock';
+import { getBusinessDate } from '../utils/businessTime';
 
-const today = () => {
-  const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-};
+const today = getBusinessDate;
 const blankForm = (): EmployeeInput => ({ fullName: '', email: '', password: '', role: 'Employee', hireDate: today(), departmentId: 0, managerId: null });
 const pageSizeOptions = [10, 25, 50];
 type EmployeeSortField = 'fullName' | 'code' | 'departmentName' | 'role' | 'managerName' | 'hireDate' | 'isActive';

@@ -6,20 +6,20 @@ import { useAuth } from '../contexts';
 import { getCalendarLeaves, getHolidays } from '../services/leaveService';
 import { getApiErrorMessage, getRejectedReason } from '../services/apiClient';
 import type { Holiday, LeaveRequest } from '../types';
+import { BUSINESS_TIME_ZONE, formatDateOnlyUtc, getBusinessDate, parseDateOnlyUtc } from '../utils/businessTime';
 
-function isoDate(year: number, month: number, day: number) {
-  const date = new Date(year, month, day);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+function isoDate(year: number, month: number, day: number): string {
+  return formatDateOnlyUtc(new Date(Date.UTC(year, month, day)));
 }
 
 export function CalendarPage() {
   const { user } = useAuth();
-  const [monthDate, setMonthDate] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [monthDate, setMonthDate] = useState(() => parseDateOnlyUtc(`${getBusinessDate().slice(0, 7)}-01`));
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [error, setError] = useState('');
-  const [selectedDate, setSelectedDate] = useState(() => isoDate(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()));
-  const year = monthDate.getFullYear(); const month = monthDate.getMonth();
+  const [selectedDate, setSelectedDate] = useState(getBusinessDate);
+  const year = monthDate.getUTCFullYear(); const month = monthDate.getUTCMonth();
 
   useEffect(() => {
     let active = true;
@@ -35,11 +35,11 @@ export function CalendarPage() {
     return () => { active = false; };
   }, [user, year, month]);
 
-  const monthLabel = new Intl.DateTimeFormat('vi-VN', { month: 'long', year: 'numeric' }).format(monthDate);
+  const monthLabel = new Intl.DateTimeFormat('vi-VN', { timeZone: BUSINESS_TIME_ZONE, month: 'long', year: 'numeric' }).format(monthDate);
   const weeks = useMemo(() => {
-    const first = new Date(year, month, 1);
-    const offset = (first.getDay() + 6) % 7;
-    const total = new Date(year, month + 1, 0).getDate();
+    const first = new Date(Date.UTC(year, month, 1));
+    const offset = (first.getUTCDay() + 6) % 7;
+    const total = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
     const count = Math.ceil((offset + total) / 7) * 7;
     return Array.from({ length: count }, (_, index) => {
       const day = index - offset + 1;
@@ -49,20 +49,21 @@ export function CalendarPage() {
   const visibleRequests = requests.filter((item) => item.status === 'Approved' || item.status === 'Pending');
   const selectedRequests = visibleRequests.filter((item) => selectedDate >= item.startDate && selectedDate <= item.endDate);
   const selectedHolidays = holidays.filter((item) => item.date === selectedDate);
-  const upcoming = [...visibleRequests].filter((item) => item.endDate >= isoDate(new Date().getFullYear(), new Date().getMonth(), new Date().getDate())).sort((a, b) => a.startDate.localeCompare(b.startDate)).slice(0, 5);
+  const today = getBusinessDate();
+  const upcoming = [...visibleRequests].filter((item) => item.endDate >= today).sort((a, b) => a.startDate.localeCompare(b.startDate)).slice(0, 5);
 
   return <div className="page-stack">
     <PageHeader eyebrow="LẬP KẾ HOẠCH NHÓM" title="Lịch nghỉ của nhóm" description="Theo dõi lịch nghỉ dự kiến và ngày lễ của tổ chức." actions={user?.role !== 'HR' ? <Link to="/request" className="button button-primary"><Plus size={16} /> Tạo đơn nghỉ</Link> : undefined} />
     {error && <div className="inline-alert alert-warning">{error}</div>}
     <div className="calendar-layout">
       <section className="panel calendar-panel">
-        <div className="calendar-toolbar"><div><h2>{monthLabel}</h2><p>Lịch nghỉ trong tổ chức</p></div><div className="calendar-nav"><button className="icon-button" aria-label="Tháng trước" onClick={() => { setMonthDate(new Date(year, month - 1, 1)); setSelectedDate(isoDate(year, month - 1, 1)); }}><ChevronLeft size={18} /></button><button className="button button-secondary button-today" onClick={() => { const now = new Date(); setMonthDate(new Date(now.getFullYear(), now.getMonth(), 1)); setSelectedDate(isoDate(now.getFullYear(), now.getMonth(), now.getDate())); }}>Hôm nay</button><button className="icon-button" aria-label="Tháng sau" onClick={() => { setMonthDate(new Date(year, month + 1, 1)); setSelectedDate(isoDate(year, month + 1, 1)); }}><ChevronRight size={18} /></button></div></div>
+        <div className="calendar-toolbar"><div><h2>{monthLabel}</h2><p>Lịch nghỉ trong tổ chức</p></div><div className="calendar-nav"><button className="icon-button" aria-label="Tháng trước" onClick={() => { setMonthDate(new Date(Date.UTC(year, month - 1, 1))); setSelectedDate(isoDate(year, month - 1, 1)); }}><ChevronLeft size={18} /></button><button className="button button-secondary button-today" onClick={() => { const todayDate = getBusinessDate(); const [todayYear, todayMonth] = todayDate.split('-').map(Number); setMonthDate(new Date(Date.UTC(todayYear, todayMonth - 1, 1))); setSelectedDate(todayDate); }}>Hôm nay</button><button className="icon-button" aria-label="Tháng sau" onClick={() => { setMonthDate(new Date(Date.UTC(year, month + 1, 1))); setSelectedDate(isoDate(year, month + 1, 1)); }}><ChevronRight size={18} /></button></div></div>
         <div className="calendar-legend"><span><i className="legend-dot approved-dot" /> Nghỉ đã duyệt</span><span><i className="legend-dot pending-dot" /> Chờ duyệt</span><span><i className="legend-dot holiday-dot" /> Ngày lễ</span></div>
         <div className="calendar-grid"><div className="calendar-weekday">T2</div><div className="calendar-weekday">T3</div><div className="calendar-weekday">T4</div><div className="calendar-weekday">T5</div><div className="calendar-weekday">T6</div><div className="calendar-weekday weekend">T7</div><div className="calendar-weekday weekend">CN</div>
           {weeks.map((day, index) => {
             const dayRequests = day ? visibleRequests.filter((item) => day >= item.startDate && day <= item.endDate) : [];
             const dayHoliday = day ? holidays.some((item) => item.date === day) : false;
-            const isToday = day === isoDate(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+            const isToday = day === today;
             return <button type="button" key={`${day ?? 'empty'}-${index}`} disabled={!day} className={`calendar-day${!day ? ' calendar-day-outside' : ''}${day === selectedDate ? ' calendar-day-selected' : ''}${isToday ? ' calendar-day-today' : ''}`} onClick={() => day && setSelectedDate(day)}><span className="calendar-day-number">{day ? Number(day.slice(-2)) : ''}</span>{dayHoliday && <span className="calendar-event holiday-event">Ngày lễ</span>}{dayRequests.slice(0, 2).map((item) => <span className={`calendar-event ${item.status === 'Pending' ? 'pending-event' : 'approved-event'}`} key={item.id}>{item.employeeName.split(' ').slice(-1)[0]}</span>)}{dayRequests.length > 2 && <span className="calendar-extra">+{dayRequests.length - 2} nữa</span>}</button>;
           })}
         </div>
@@ -73,7 +74,7 @@ export function CalendarPage() {
           {selectedRequests.map((item) => <div className="selected-event" key={item.id}><Avatar name={item.employeeName} size="sm" /><div className="selected-event-copy"><strong>{item.employeeName}</strong><small>{item.typeName} · {item.days} ngày</small></div><span className={`event-status-dot ${item.status.toLowerCase()}`} /> </div>)}
           {selectedRequests.length === 0 && selectedHolidays.length === 0 && <EmptyState title="Không có lịch nghỉ" description="Không có đơn nghỉ hoặc ngày lễ vào ngày này." />}
         </article>
-        <article className="panel upcoming-panel"><div className="panel-header"><div><h2>Sắp tới</h2><p>Các ngày nghỉ đã duyệt và đang chờ</p></div><Users size={18} className="upcoming-icon" /></div>{upcoming.length === 0 ? <EmptyState title="Chưa có lịch nghỉ sắp tới" description="Các ngày nghỉ trong tương lai sẽ hiển thị tại đây." /> : <div className="upcoming-list">{upcoming.map((item) => <button key={item.id} className="upcoming-item" onClick={() => setSelectedDate(item.startDate)}><span className="upcoming-date"><strong>{new Date(`${item.startDate}T12:00:00`).getDate()}</strong><small>{new Intl.DateTimeFormat('vi-VN', { month: 'short' }).format(new Date(`${item.startDate}T12:00:00`))}</small></span><span className="upcoming-copy"><strong>{item.employeeName}</strong><small>{item.typeName}</small></span><StatusBadge status={item.status} /></button>)}</div>}</article>
+        <article className="panel upcoming-panel"><div className="panel-header"><div><h2>Sắp tới</h2><p>Các ngày nghỉ đã duyệt và đang chờ</p></div><Users size={18} className="upcoming-icon" /></div>{upcoming.length === 0 ? <EmptyState title="Chưa có lịch nghỉ sắp tới" description="Các ngày nghỉ trong tương lai sẽ hiển thị tại đây." /> : <div className="upcoming-list">{upcoming.map((item) => <button key={item.id} className="upcoming-item" onClick={() => setSelectedDate(item.startDate)}><span className="upcoming-date"><strong>{parseDateOnlyUtc(item.startDate).getUTCDate()}</strong><small>{new Intl.DateTimeFormat('vi-VN', { timeZone: BUSINESS_TIME_ZONE, month: 'short' }).format(parseDateOnlyUtc(item.startDate))}</small></span><span className="upcoming-copy"><strong>{item.employeeName}</strong><small>{item.typeName}</small></span><StatusBadge status={item.status} /></button>)}</div>}</article>
       </aside>
     </div>
   </div>;
