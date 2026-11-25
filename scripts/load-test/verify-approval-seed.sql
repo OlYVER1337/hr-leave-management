@@ -5,8 +5,8 @@ DECLARE @ExpectedPendingPerManager int = TRY_CONVERT(int, '$(ExpectedPendingPerM
 
 IF @ManagerCount NOT BETWEEN 1 AND 200
     THROW 51100, 'ManagerCount must be between 1 and 200.', 1;
-IF @ExpectedPendingPerManager < 1
-    THROW 51101, 'ExpectedPendingPerManager must be positive.', 1;
+IF @ExpectedPendingPerManager IS NULL OR @ExpectedPendingPerManager < 1
+    THROW 51101, 'ExpectedPendingPerManager must be a positive integer.', 1;
 
 USE HR_DB;
 
