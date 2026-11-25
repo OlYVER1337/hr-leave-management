@@ -7,6 +7,7 @@ import { getApprovalsInbox, getBalances, getLeaveRequests } from '../services/le
 import { getDepartments, getEmployeePage } from '../services/hrService';
 import { getApiErrorMessage, getRejectedReason } from '../services/apiClient';
 import type { Department, LeaveBalance, LeaveRequest } from '../types';
+import { BUSINESS_TIME_ZONE, getBusinessDate } from '../utils/businessTime';
 
 const DashboardCharts = lazy(() =>
   import('../components/DashboardCharts').then(({ DashboardCharts }) => ({
@@ -65,13 +66,13 @@ export function DashboardPage() {
   }, [user]);
 
   const chartData = useMemo(() => {
-    const now = new Date();
+    const [currentYear, currentMonth] = getBusinessDate().slice(0, 7).split('-').map(Number);
     return Array.from({ length: 6 }, (_, index) => {
-      const date = new Date(now.getFullYear(), now.getMonth() - 5 + index, 1);
-      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const date = new Date(Date.UTC(currentYear, currentMonth - 1 - 5 + index, 1));
+      const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
       const monthRequests = requests.filter((request) => request.startDate.slice(0, 7) === key && request.status !== 'Cancelled');
       return {
-        month: new Intl.DateTimeFormat('vi-VN', { month: 'short' }).format(date),
+        month: new Intl.DateTimeFormat('vi-VN', { timeZone: BUSINESS_TIME_ZONE, month: 'short' }).format(date),
         annual: monthRequests.filter((request) => request.typeCode === 'ANNUAL').length,
         sick: monthRequests.filter((request) => request.typeCode === 'SICK').length,
       };

@@ -5,6 +5,7 @@ import type { AuthUser, LeaveRequest } from '../types';
 import { useAuth } from '../contexts';
 import { getCalendarLeaves, getHolidays } from '../services/leaveService';
 import { CalendarPage } from './CalendarPage';
+import { getBusinessDate } from '../utils/businessTime';
 
 const mocks = vi.hoisted(() => ({
   useAuth: vi.fn(),
@@ -27,8 +28,7 @@ const employee: AuthUser = {
 };
 
 function todayIso() {
-  const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  return getBusinessDate();
 }
 
 const request: LeaveRequest = {
