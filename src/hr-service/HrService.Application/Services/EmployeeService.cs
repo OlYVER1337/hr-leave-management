@@ -194,16 +194,19 @@ public sealed class EmployeeService(
         var canReadAll = scopes.Contains("All", StringComparer.OrdinalIgnoreCase);
         var canReadSelf = scopes.Contains("Self", StringComparer.OrdinalIgnoreCase);
         var canReadTeam = scopes.Contains("Team", StringComparer.OrdinalIgnoreCase);
-        var isSelf = requesterId == id;
-        var isDirectReport = canReadTeam &&
-            await employeeRepository.IsActiveDirectReportOfManagerAsync(requesterId, id, cancellationToken);
+        var employee = await GetByIdAsync(id, cancellationToken);
 
-        if (!canReadAll && !(canReadSelf && isSelf) && !isDirectReport)
+        // Kiểm tra quyền trên chính snapshot vừa đọc để tránh race khi nhân viên đổi Manager/deactivate.
+        var isVisible =
+            canReadAll ||
+            (canReadSelf && employee.Id == requesterId) ||
+            (canReadTeam && employee.IsActive && employee.ManagerId == requesterId);
+
+        if (!isVisible)
         {
             throw new ForbiddenException();
         }
 
-        var employee = await GetByIdAsync(id, cancellationToken);
         return ToLookupResponse(employee);
     }
 
