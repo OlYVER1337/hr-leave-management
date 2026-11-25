@@ -77,6 +77,7 @@ public sealed class EmployeeLookupRepositorySqlTests : IClassFixture<Authorizati
             };
 
             var teamList = await repository.GetDirectReportsAsync(managerId);
+            var newManagerTeam = await repository.GetDirectReportsAsync(otherManagerId);
             var teamPage = await repository.ListDirectReportsPageAsync(
                 managerId, search: null, page: 1, pageSize: 10);
             var batchLookup = await repository.ListVisibleByIdsAsync(
@@ -87,6 +88,7 @@ public sealed class EmployeeLookupRepositorySqlTests : IClassFixture<Authorizati
                 employeeIds: requestedIds);
 
             Assert.Equal(new[] { activeDirectReportId }, teamList.Select(employee => employee.Id));
+            Assert.Equal(new[] { reassignedDirectReportId }, newManagerTeam.Select(employee => employee.Id));
             Assert.Equal(new[] { activeDirectReportId }, teamPage.Items.Select(employee => employee.Id));
             Assert.Equal(1, teamPage.TotalCount);
             Assert.Equal(new[] { activeDirectReportId }, batchLookup.Select(employee => employee.Id));
