@@ -236,7 +236,7 @@ public sealed class EmployeeServiceTests
 
     // Manager cũ không thể tra cứu hồ sơ sau khi nhân viên được chuyển sang Manager khác.
     [Fact]
-    public async Task GetLookupAsync_RejectsEmployeeAfterManagerReassignment()
+    public async Task GetLookupAsync_RejectsFormerManagersOutOfTeamLookupAfterReassignment()
     {
         var employeeId = Guid.NewGuid();
         var formerManagerId = Guid.NewGuid();
