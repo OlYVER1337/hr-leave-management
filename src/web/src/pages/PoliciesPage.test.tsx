@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Holiday, LeavePolicy } from '../types';
+import { getBusinessDate, getBusinessYear } from '../utils/businessTime';
 import {
   getHolidays,
   deletePolicyVersion,
@@ -39,10 +40,7 @@ vi.mock('../services/leaveService', () => ({
   savePolicies: mocks.savePolicies,
 }));
 
-const currentBusinessYear = Number(new Intl.DateTimeFormat('en', {
-  timeZone: 'Asia/Ho_Chi_Minh',
-  year: 'numeric',
-}).format(new Date()));
+const currentBusinessYear = getBusinessYear();
 const futureYear = currentBusinessYear + 1;
 const annual: LeavePolicy = {
   id: 'annual',
@@ -173,23 +171,13 @@ describe('PoliciesPage', () => {
     expect(await screen.findByLabelText('Năm áp dụng')).toHaveValue(String(currentBusinessYear));
     expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveAttribute('min');
     expect(screen.getByLabelText('Ngày hiệu lực *')).toHaveValue(
-      new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Asia/Ho_Chi_Minh',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      }).format(new Date()),
+      getBusinessDate(),
     );
   });
 
   it('opens a new current-year version after the latest scheduled version', async () => {
     const user = userEvent.setup();
-    const today = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Ho_Chi_Minh',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(new Date());
+    const today = getBusinessDate();
     const nextDateValue = new Date(`${today}T00:00:00Z`);
     nextDateValue.setUTCDate(nextDateValue.getUTCDate() + 1);
     const nextDate = nextDateValue.toISOString().slice(0, 10);
