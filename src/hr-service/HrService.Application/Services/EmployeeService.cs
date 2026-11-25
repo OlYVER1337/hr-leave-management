@@ -196,7 +196,7 @@ public sealed class EmployeeService(
         var canReadTeam = scopes.Contains("Team", StringComparer.OrdinalIgnoreCase);
         var isSelf = requesterId == id;
         var isDirectReport = canReadTeam &&
-            await employeeRepository.IsDirectManagerOfAsync(requesterId, id, cancellationToken);
+            await employeeRepository.IsActiveDirectReportOfManagerAsync(requesterId, id, cancellationToken);
 
         if (!canReadAll && !(canReadSelf && isSelf) && !isDirectReport)
         {
