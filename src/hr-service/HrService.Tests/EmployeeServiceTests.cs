@@ -195,7 +195,7 @@ public sealed class EmployeeServiceTests
         var employee = CreateEmployee(employeeId, managerId);
         var repository = new Mock<IEmployeeRepository>();
         repository
-            .Setup(item => item.IsDirectManagerOfAsync(
+            .Setup(item => item.IsActiveDirectReportOfManagerAsync(
                 managerId,
                 employeeId,
                 It.IsAny<CancellationToken>()))
@@ -213,6 +213,38 @@ public sealed class EmployeeServiceTests
         Assert.Equal(employee.Code, result.Code);
         Assert.Equal(employee.ManagerId, result.ManagerId);
         Assert.DoesNotContain("Email", typeof(EmployeeLookupResponse).GetProperties().Select(property => property.Name));
+    }
+
+    // Direct report đã deactivate không còn thuộc phạm vi Team của Manager.
+    [Fact]
+    public async Task GetLookupAsync_RejectsInactiveDirectReportForTeamScope()
+    {
+        var employeeId = Guid.NewGuid();
+        var managerId = Guid.NewGuid();
+        var employee = CreateEmployee(employeeId, managerId);
+        employee.IsActive = false;
+
+        var repository = new Mock<IEmployeeRepository>();
+        repository
+            .Setup(item => item.IsActiveDirectReportOfManagerAsync(
+                managerId,
+                employeeId,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var service = CreateService(repository);
+        var managerAuthorization = new EffectiveAuthorization(
+            [new EffectivePermission("employees.read", ["Team"])]);
+
+        await Assert.ThrowsAsync<ForbiddenException>(
+            () => service.GetLookupAsync(employeeId, managerId, managerAuthorization));
+
+        repository.Verify(
+            item => item.IsActiveDirectReportOfManagerAsync(
+                managerId, employeeId, It.IsAny<CancellationToken>()),
+            Times.Once);
+        repository.Verify(
+            item => item.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     // Scope All cho phép lookup không cần quan hệ manager trực tiếp.
@@ -233,7 +265,7 @@ public sealed class EmployeeServiceTests
 
         Assert.Equal(employeeId, result.Id);
         repository.Verify(
-            item => item.IsDirectManagerOfAsync(
+            item => item.IsActiveDirectReportOfManagerAsync(
                 It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
