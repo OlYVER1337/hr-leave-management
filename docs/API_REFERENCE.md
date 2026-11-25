@@ -54,8 +54,8 @@ Danh sách phân trang:
 | PUT /api/v1/employees/{id} | employees.update:All | Cập nhật hồ sơ |
 | POST /api/v1/employees/{id}/deactivate | employees.deactivate:All | Vô hiệu hóa nhân viên và thu hồi refresh token |
 | PUT /api/v1/employees/{id}/password | employees.password.reset:All | Đặt lại mật khẩu nhân viên |
-| POST /api/v1/lookup/employees/batch | employees.read:Self/Team/All | Lookup tối đa 100 ID; service kiểm tra scope từng record |
-| GET /api/v1/lookup/employees/{id} | employees.read:Self/Team/All | Snapshot nhân viên đơn lẻ cho HR/Leave |
+| POST /api/v1/lookup/employees/batch | employees.read:Self/Team/All | Lookup tối đa 100 ID; Team chỉ gồm direct report active theo ManagerId hiện tại; All có thể đọc inactive |
+| GET /api/v1/lookup/employees/{id} | employees.read:Self/Team/All | Snapshot theo scope; Team chỉ đọc direct report active theo ManagerId hiện tại; All có thể đọc inactive |
 
 Danh sách direct reports của Manager chỉ truy cập qua `GET /api/v1/me/team`; endpoint tự lấy manager ID từ caller, yêu cầu `employees.read:Team` và hỗ trợ pagination.
 
