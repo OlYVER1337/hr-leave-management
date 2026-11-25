@@ -48,6 +48,9 @@ sequenceDiagram
   Note over LV,HR: Team lookup hoặc policy lookup lỗi thì fail closed, không đổi trạng thái.
   LV->>LDB: BEGIN SERIALIZABLE
   LV->>LDB: Đọc lại request và kiểm tra Pending
+  opt Team scope đã xác minh Manager hiện tại
+    LV->>LDB: Ghi ApproverId = ManagerId hiện tại đã xác minh
+  end
   opt Request có yearly allocation trừ quota
     loop Mỗi allocation
       LV->>LDB: Refresh balance.PolicyDays
@@ -64,4 +67,4 @@ sequenceDiagram
   LV->>LDB: SAVE CHANGES + COMMIT
   LV-->>W: 200 + request/balance mới
 
-  Note over LV,LDB: Team authority lấy từ reporting line hiện tại, không tin ApproverId snapshot.
+  Note over LV,LDB: ApproverId được ghi lúc tạo và cập nhật bằng Manager đã xác minh khi quyết định Team; không dùng trường này làm authority.

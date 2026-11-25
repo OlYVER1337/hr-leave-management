@@ -15,7 +15,7 @@ erDiagram
   LEAVE_REQUESTS {
     guid Id PK
     guid EmployeeId "HR ID scalar, no FK"
-    guid ApproverId "HR snapshot, no FK"
+    guid ApproverId "HR scalar; initial + verified Team decider, no FK"
     int DepartmentId "HR snapshot, no FK"
     int LeaveTypeId "HR ID scalar, no FK"
     date StartDate

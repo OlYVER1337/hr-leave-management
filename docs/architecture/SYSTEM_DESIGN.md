@@ -108,7 +108,7 @@ Request có range tối đa 366 ngày; reason bắt buộc, tối đa 1.000 ký 
 - Leave lấy policy hiện hành từ HR theo từng năm allocation, sau đó trong transaction `SERIALIZABLE` refresh `PolicyDays`, giảm Pending, giữ nguyên Used, set Cancelled và append history.
 - HR policy lookup lỗi thì fail closed; không đổi trạng thái/balance/history.
 
-RowVersion, unique balance key, Serializable transaction và retry cho deadlock/concurrency bảo vệ balance/status. `ApproverId` chỉ là snapshot lúc tạo.
+RowVersion, unique balance key, Serializable transaction và retry cho deadlock/concurrency bảo vệ balance/status. `ApproverId` được khởi tạo từ ManagerId khi tạo đơn; với quyết định Team, Leave ghi lại ManagerId hiện tại đã được HR xác minh trong transaction chuyển trạng thái. Trường này phục vụ lưu dấu approver, không phải nguồn xác định quyền Team.
 
 ### Balance hiện tại
 
