@@ -303,6 +303,11 @@ export function handleSummary(data) {
     seeded_employees: Number(__ENV.SEED_EMPLOYEE_COUNT || 4000),
     requests_per_employee: Number(__ENV.REQUESTS_PER_EMPLOYEE || 20),
     seeded_requests: Number(__ENV.SEED_EMPLOYEE_COUNT || 4000) * Number(__ENV.REQUESTS_PER_EMPLOYEE || 20),
+    seeded_pending_percent: Number(__ENV.SEED_PENDING_PERCENT || 25),
+    seeded_pending_requests:
+      Number(__ENV.SEED_EMPLOYEE_COUNT || 4000) *
+      Number(__ENV.REQUESTS_PER_EMPLOYEE || 20) *
+      Number(__ENV.SEED_PENDING_PERCENT || 25) / 100,
     max_approvals_per_vu: maxApprovalsPerVu,
     approval_id_capacity: vuCount * maxApprovalsPerVu,
     approval_attempts: attempts,
