@@ -194,6 +194,13 @@ public sealed class EmployeeService(
         var canReadAll = scopes.Contains("All", StringComparer.OrdinalIgnoreCase);
         var canReadSelf = scopes.Contains("Self", StringComparer.OrdinalIgnoreCase);
         var canReadTeam = scopes.Contains("Team", StringComparer.OrdinalIgnoreCase);
+        var isSelf = requesterId == id;
+
+        if (!canReadAll && !(canReadSelf && isSelf) && !canReadTeam)
+        {
+            throw new ForbiddenException();
+        }
+
         var employee = await GetByIdAsync(id, cancellationToken);
 
         // Kiểm tra quyền trên chính snapshot vừa đọc để tránh race khi nhân viên đổi Manager/deactivate.
