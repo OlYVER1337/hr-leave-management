@@ -32,7 +32,25 @@ const approvalDuration = new Trend('approval_request_duration_ms');
 const leaveToHrCalls = new Counter('approval_leave_to_hr_calls');
 const leaveToHrDuration = new Trend('approval_leave_to_hr_call_duration_ms');
 const leaveToHrTotalDuration = new Counter('approval_leave_to_hr_total_duration_ms');
+function durationToSeconds(value) {
+  const pattern = /(\d+(?:\.\d+)?)(ms|s|m|h)/g;
+  const factors = { ms: 0.001, s: 1, m: 60, h: 3600 };
 
+  let total = 0;
+  let matched = '';
+  let match;
+
+  while ((match = pattern.exec(value)) !== null) {
+    matched += match[0];
+    total += Number(match[1]) * factors[match[2]];
+  }
+
+  if (matched !== value || total <= 0) {
+    throw new Error(`Invalid DURATION: ${value}`);
+  }
+
+  return total;
+}
 export const options = {
   scenarios: {
     manager_decisions_sustained: {
@@ -236,7 +254,11 @@ export default function (data) {
         Authorization: `Bearer ${manager.token}`,
         'Content-Type': 'application/json',
       },
-      tags: { endpoint: 'leave_decision', workload: 'approval_sustained' },
+      tags: {
+  name: 'PATCH /api/v1/leave-requests/:id/decision',
+  endpoint: 'leave_decision',
+  workload: 'approval_sustained',
+},
     },
   );
 
@@ -284,7 +306,7 @@ export function handleSummary(data) {
     max_approvals_per_vu: maxApprovalsPerVu,
     approval_id_capacity: vuCount * maxApprovalsPerVu,
     approval_attempts: attempts,
-    approval_rps: requestMetrics.rate || 0,
+    approval_rps: attempts / durationToSeconds(duration),
     completed_approvals: data.metrics.approval_successes?.values?.count || 0,
     p50_ms: durationMetrics.med || 0,
     p95_ms: durationMetrics['p(95)'] || 0,
