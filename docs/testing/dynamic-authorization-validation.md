@@ -49,12 +49,12 @@ Leave test suite hiện có coverage cho balance self-sync và policy refresh: c
 
 ## 3. Seed dữ liệu tải
 
-Seed tạo/cập nhật bộ dữ liệu 1.000 nhân viên load-test và 5.000 đơn nghỉ, trong đó 1.250 Pending (25%). Nó chỉ xóa đơn và số dư thuộc nhóm nhân viên mã `LT*` / lý do `LOADTEST:*` đã được chuẩn bị cho benchmark.
+Seed baseline tạo/cập nhật 1.000 nhân viên load-test và 5.000 đơn nghỉ, trong đó 1.250 Pending (25%). Truyền rõ `EmployeeCount`, `RequestsPerEmployee` và `ManagerCount` qua `sqlcmd -v`; không dựa vào mặc định nằm trong file SQL. Script chỉ xóa đơn và số dư thuộc nhóm nhân viên mã `LT*` / lý do `LOADTEST:*` đã được chuẩn bị cho benchmark.
 
 ```powershell
 docker compose @compose cp .\scripts\load-test\seed-scale-data.sql sqlserver:/tmp/seed-scale-data.sql
 
-docker compose @compose exec -T sqlserver /bin/bash -c '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -d master -i /tmp/seed-scale-data.sql'
+docker compose @compose exec -T sqlserver /bin/bash -c '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -b -d master -v EmployeeCount=1000 RequestsPerEmployee=5 ManagerCount=25 -i /tmp/seed-scale-data.sql'
 ```
 
 Lệnh SQL lấy mật khẩu từ biến môi trường trong container SQL Server; không cần nhập hoặc in mật khẩu trong terminal.
@@ -113,7 +113,7 @@ Seed, sau đó chạy 50 VU:
 ```powershell
 docker compose @compose cp .\scripts\load-test\seed-scale-data.sql sqlserver:/tmp/seed-scale-data.sql
 
-docker compose @compose exec -T sqlserver /bin/bash -c '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -d master -i /tmp/seed-scale-data.sql'
+docker compose @compose exec -T sqlserver /bin/bash -c '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -b -d master -v EmployeeCount=1000 RequestsPerEmployee=5 ManagerCount=25 -i /tmp/seed-scale-data.sql'
 
 docker compose @compose --profile loadtest run --rm `
   -e VUS=50 `
@@ -128,7 +128,7 @@ Seed lại lần nữa rồi chạy 100 VU:
 ```powershell
 docker compose @compose cp .\scripts\load-test\seed-scale-data.sql sqlserver:/tmp/seed-scale-data.sql
 
-docker compose @compose exec -T sqlserver /bin/bash -c '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -d master -i /tmp/seed-scale-data.sql'
+docker compose @compose exec -T sqlserver /bin/bash -c '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -b -d master -v EmployeeCount=1000 RequestsPerEmployee=5 ManagerCount=25 -i /tmp/seed-scale-data.sql'
 
 docker compose @compose --profile loadtest run --rm `
   -e VUS=100 `
