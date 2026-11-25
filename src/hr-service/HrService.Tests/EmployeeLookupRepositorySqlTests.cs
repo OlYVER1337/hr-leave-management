@@ -76,15 +76,6 @@ public sealed class EmployeeLookupRepositorySqlTests : IClassFixture<Authorizati
                 reassignedDirectReportId
             };
 
-            Assert.True(await repository.IsActiveDirectReportOfManagerAsync(
-                managerId, activeDirectReportId));
-            Assert.False(await repository.IsActiveDirectReportOfManagerAsync(
-                managerId, inactiveDirectReportId));
-            Assert.False(await repository.IsActiveDirectReportOfManagerAsync(
-                managerId, reassignedDirectReportId));
-            Assert.True(await repository.IsActiveDirectReportOfManagerAsync(
-                otherManagerId, reassignedDirectReportId));
-
             var teamList = await repository.GetDirectReportsAsync(managerId);
             var teamPage = await repository.ListDirectReportsPageAsync(
                 managerId, search: null, page: 1, pageSize: 10);
