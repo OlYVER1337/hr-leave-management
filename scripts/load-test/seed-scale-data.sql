@@ -21,8 +21,10 @@ IF @RequestsPerEmployee IS NULL OR @RequestsPerEmployee NOT BETWEEN 1 AND 20
     THROW 51001, 'RequestsPerEmployee must be between 1 and 20.', 1;
 IF @ManagerCount IS NULL OR @ManagerCount NOT BETWEEN 1 AND 200
     THROW 51005, 'ManagerCount must be between 1 and 200.', 1;
-IF @PendingPercent IS NULL OR @PendingPercent NOT IN (25, 40)
-    THROW 51008, 'PendingPercent must be 25 (standard seed) or 40 (approval sustained seed).', 1;
+IF @PendingPercent IS NULL OR @PendingPercent NOT IN (25, 50)
+    THROW 51008, 'PendingPercent must be 25 (standard seed) or 50 (approval sustained seed).', 1;
+IF @PendingPercent = 50 AND @RequestsPerEmployee <> 20
+    THROW 51010, 'PendingPercent=50 requires RequestsPerEmployee=20 to preserve the per-employee balance quota.', 1;
 
 CREATE TABLE #LoadTestEmployees
 (
@@ -242,7 +244,7 @@ SELECT
     ),
     CONVERT(decimal(6,1), 1.0),
     CASE
-        -- Giữ phân phối 25% Pending cũ cho các workload tiêu chuẩn.
+        -- Seed tiêu chuẩn giữ phân phối 25% Pending như trước.
         WHEN @PendingPercent = 25 THEN
             CASE numbers.Number % 4
                 WHEN 0 THEN N'Pending'
@@ -250,10 +252,12 @@ SELECT
                 WHEN 2 THEN N'Rejected'
                 ELSE N'Cancelled'
             END
-        -- Approval sustained: 40% Pending, 20% cho mỗi trạng thái còn lại.
-        WHEN numbers.Number % 5 IN (0, 1) THEN N'Pending'
-        WHEN numbers.Number % 5 = 2 THEN N'Approved'
-        WHEN numbers.Number % 5 = 3 THEN N'Rejected'
+        -- Seed sustained: mỗi nhân viên có 20 request:
+        -- 10 Pending, 2 Approved, 4 Rejected, 4 Cancelled.
+        -- Used + Pending = 2 + 10 = 12 ngày, không vượt PolicyDays=12.
+        WHEN ((numbers.Number - 1) % @RequestsPerEmployee) % 10 < 5 THEN N'Pending'
+        WHEN ((numbers.Number - 1) % @RequestsPerEmployee) % 10 = 5 THEN N'Approved'
+        WHEN ((numbers.Number - 1) % @RequestsPerEmployee) % 10 IN (6, 7) THEN N'Rejected'
         ELSE N'Cancelled'
     END,
     DATEADD(minute, -numbers.Number, SYSUTCDATETIME()),
@@ -278,6 +282,18 @@ IF EXISTS
     WHERE orderedRequests.PreviousEndDate >= orderedRequests.StartDate
 )
     THROW 51009, 'Generated load-test requests overlap for the same employee.', 1;
+
+IF EXISTS
+(
+    SELECT EmployeeId
+    FROM #LoadTestRequests
+    GROUP BY EmployeeId
+    HAVING SUM
+    (
+        CASE WHEN Status IN (N'Pending', N'Approved') THEN TotalDays ELSE 0 END
+    ) > 12.0
+)
+    THROW 51011, 'Generated load-test Used + Pending days exceed the seeded PolicyDays quota.', 1;
 
 UPDATE request
 SET request.ApproverId = employee.ManagerId
