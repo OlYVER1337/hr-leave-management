@@ -193,7 +193,7 @@ trạng thái Pending:
 docker compose @compose run --rm -e VUS=50 -e ITERATIONS_PER_VU=10 -e DURATION=5m k6 run /scripts/approval.js
 
 docker compose @compose cp .\scripts\load-test\seed-scale-data.sql sqlserver:/tmp/seed-scale-data.sql
-docker compose @compose exec -T sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P $env:SA_PASSWORD -C -d master -i /tmp/seed-scale-data.sql
+docker compose @compose exec -T sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P $env:SA_PASSWORD -C -b -d master -v EmployeeCount=1000 RequestsPerEmployee=5 ManagerCount=25 -i /tmp/seed-scale-data.sql
 
 docker compose @compose run --rm -e VUS=100 -e ITERATIONS_PER_VU=10 -e DURATION=5m k6 run /scripts/approval.js
 ```
