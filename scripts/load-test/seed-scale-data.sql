@@ -6,15 +6,23 @@ SET QUOTED_IDENTIFIER ON;
 DECLARE @EmployeeCount int = TRY_CONVERT(int, '$(EmployeeCount)');
 DECLARE @RequestsPerEmployee int = TRY_CONVERT(int, '$(RequestsPerEmployee)');
 DECLARE @ManagerCount int = TRY_CONVERT(int, '$(ManagerCount)');
+DECLARE @PendingPercent int = TRY_CONVERT(int, '$(PendingPercent)');
 
-PRINT CONCAT('Seed configuration: EmployeeCount=', @EmployeeCount, '; RequestsPerEmployee=', @RequestsPerEmployee, '; ManagerCount=', @ManagerCount, '.');
+PRINT CONCAT(
+    'Seed configuration: EmployeeCount=', @EmployeeCount,
+    '; RequestsPerEmployee=', @RequestsPerEmployee,
+    '; ManagerCount=', @ManagerCount,
+    '; PendingPercent=', @PendingPercent, '.'
+);
 
-IF @EmployeeCount NOT BETWEEN 1000 AND 5000
+IF @EmployeeCount IS NULL OR @EmployeeCount NOT BETWEEN 1000 AND 5000
     THROW 51000, 'EmployeeCount must be between 1000 and 5000.', 1;
-IF @RequestsPerEmployee NOT BETWEEN 1 AND 20
+IF @RequestsPerEmployee IS NULL OR @RequestsPerEmployee NOT BETWEEN 1 AND 20
     THROW 51001, 'RequestsPerEmployee must be between 1 and 20.', 1;
-IF @ManagerCount NOT BETWEEN 1 AND 200
+IF @ManagerCount IS NULL OR @ManagerCount NOT BETWEEN 1 AND 200
     THROW 51005, 'ManagerCount must be between 1 and 200.', 1;
+IF @PendingPercent IS NULL OR @PendingPercent NOT IN (25, 40)
+    THROW 51008, 'PendingPercent must be 25 (standard seed) or 40 (approval sustained seed).', 1;
 
 CREATE TABLE #LoadTestEmployees
 (
@@ -160,6 +168,10 @@ DECLARE @LeaveTypeId int;
 DECLARE @RequestCount int = @EmployeeCount * @RequestsPerEmployee;
 DECLARE @Year int = YEAR(SYSUTCDATETIME());
 DECLARE @YearStart date = DATEFROMPARTS(YEAR(SYSUTCDATETIME()), 1, 1);
+-- DATEDIFF từ 1900-01-01 (thứ Hai) giúp chọn thứ Hai đầu tiên của năm,
+-- không phụ thuộc SET DATEFIRST hoặc ngôn ngữ session.
+DECLARE @DaysToFirstMonday int =
+    (7 - (DATEDIFF(day, CONVERT(date, '19000101'), @YearStart) % 7)) % 7;
 
 SELECT @LeaveTypeId = Id
 FROM HR_DB.dbo.LeaveTypes
@@ -218,13 +230,30 @@ SELECT
     employee.EmployeeId,
     NULL,
     @DepartmentId,
-    DATEADD(day, (numbers.Number - 1) % 300, @YearStart),
-    DATEADD(day, (numbers.Number - 1) % 300 + (numbers.Number % 3), @YearStart),
-    CONVERT(decimal(6,1), numbers.Number % 3 + 1),
-    CASE numbers.Number % 4
-        WHEN 0 THEN N'Pending'
-        WHEN 1 THEN N'Approved'
-        WHEN 2 THEN N'Rejected'
+    DATEADD(
+        day,
+        @DaysToFirstMonday + (((numbers.Number - 1) % @RequestsPerEmployee) * 7),
+        @YearStart
+    ),
+    DATEADD(
+        day,
+        @DaysToFirstMonday + (((numbers.Number - 1) % @RequestsPerEmployee) * 7),
+        @YearStart
+    ),
+    CONVERT(decimal(6,1), 1.0),
+    CASE
+        -- Giữ phân phối 25% Pending cũ cho các workload tiêu chuẩn.
+        WHEN @PendingPercent = 25 THEN
+            CASE numbers.Number % 4
+                WHEN 0 THEN N'Pending'
+                WHEN 1 THEN N'Approved'
+                WHEN 2 THEN N'Rejected'
+                ELSE N'Cancelled'
+            END
+        -- Approval sustained: 40% Pending, 20% cho mỗi trạng thái còn lại.
+        WHEN numbers.Number % 5 IN (0, 1) THEN N'Pending'
+        WHEN numbers.Number % 5 = 2 THEN N'Approved'
+        WHEN numbers.Number % 5 = 3 THEN N'Rejected'
         ELSE N'Cancelled'
     END,
     DATEADD(minute, -numbers.Number, SYSUTCDATETIME()),
@@ -233,6 +262,22 @@ FROM RequestNumbers AS numbers
 INNER JOIN EmployeeNumbers AS employee
     ON employee.EmployeeNumber =
         ((numbers.Number - 1) / @RequestsPerEmployee) % @EmployeeCount + 1;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM
+    (
+        SELECT
+            EmployeeId,
+            StartDate,
+            LAG(EndDate) OVER
+                (PARTITION BY EmployeeId ORDER BY StartDate, RequestNumber) AS PreviousEndDate
+        FROM #LoadTestRequests
+    ) AS orderedRequests
+    WHERE orderedRequests.PreviousEndDate >= orderedRequests.StartDate
+)
+    THROW 51009, 'Generated load-test requests overlap for the same employee.', 1;
 
 UPDATE request
 SET request.ApproverId = employee.ManagerId
