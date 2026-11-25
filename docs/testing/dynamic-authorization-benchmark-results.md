@@ -279,6 +279,81 @@ Lần chạy tiếp theo cần:
 
 Lệnh PowerShell tham khảo nằm ở docs/testing/dynamic-authorization-validation.md. Benchmark catalog Redis ON/OFF trong docs/performance/redis-performance.md là workload riêng, không trộn với số liệu Workforce paged-v2.
 
+## 11. Benchmark v4 — SHA fcf1992
+
+### 11.1. Thông tin lần đo
+
+| Mục | Giá trị |
+|---|---|
+| Git SHA | `fcf1992` (đầu nhánh `feature/dynamic-authorization-v1` tại thời điểm chạy) |
+| Image Leave Service | `sha256:fbb2ed6121920bbabc9923fdd3396c300331ebab098b91403c4c2a35dcb30911` |
+| Build | `hr-service` và `leave-service` build lại bằng `--build --force-recreate` trước đợt đo |
+| Load generator | `grafana/k6:latest` |
+| Dữ liệu | 1.000 nhân viên benchmark, 5.000 đơn, 25 Manager (`LOADTEST_MANAGER_COUNT=25`) |
+| Phân trang | `PAGE_SIZE=50` cho workforce; approval dùng endpoint decision |
+| Môi trường | Docker Desktop (WSL2), giới hạn RAM 7,62 GiB, không giới hạn CPU trong compose |
+
+Các file JSON có trường `git_sha` và `image_tag` do k6 ghi vào `benchmark_metadata`.
+
+### 11.2. Workforce (đọc danh sách), trung vị ba lần sạch
+
+| Cấu hình | RPS | p50 (ms) | p95 (ms) | Lỗi HTTP |
+|---|---|---|---|---|
+| 50 VU | 446,4 | 10,4 | 23,1 | 0 |
+| 100 VU | 745,4 | 25,7 | 83,4 | 0 |
+
+Chi tiết từng lần:
+
+| Cấu hình | Lần | RPS | p50 (ms) | p95 (ms) |
+|---|---|---|---|---|
+| 50 VU | 1 | 442,3 | 10,6 | 26,9 |
+| 50 VU | 2 | 446,4 | 10,4 | 23,1 |
+| 50 VU | 3 | 447,6 | 10,3 | 22,4 |
+| 100 VU | 1 | 720,1 | 28,5 | 97,2 |
+| 100 VU | 2 | 745,4 | 25,7 | 83,0 |
+| 100 VU | 3 | 745,9 | 25,4 | 83,4 |
+
+### 11.3. Approval (duyệt đơn), 25 Manager
+
+| Cấu hình | Lần | Hoàn tất | p50 (ms) | p95 (ms) | Lỗi |
+|---|---|---|---|---|---|
+| 50 VU | 1 (lặp lại) | 500/500 | 30,9 | 66,8 | 0 |
+| 50 VU | 2 | 500/500 | 42,0 | 83,4 | 0 |
+| 50 VU | 3 | 500/500 | 28,0 | 58,6 | 0 |
+| 100 VU | 1 | 1000/1000 | 66,4 | 118,1 | 0 |
+| 100 VU | 2 | 1000/1000 | 69,7 | 128,2 | 0 |
+| 100 VU | 3 | 1000/1000 | 73,4 | 116,0 | 0 |
+
+Trung vị approval 50 VU: p50 **30,9 ms**, p95 **66,8 ms** (ba lượt hợp lệ là 1 lặp lại, 2, 3).
+
+### 11.4. Lượt bị loại và lý do
+
+| Tệp | Lý do loại | Ghi chú |
+|---|---|---|
+| `workforce-50vu-v4-run2` và `run3` (ban đầu) | Chạy song song với lượt k6 khác | Đổi tên thành `…INVALID-concurrent.json`; p95 ~76 ms, không phản ánh hệ thống |
+| `approval-50vu-v4-run1` | Máy đang chạy thêm phần mềm khác | Đổi tên thành `…-run1-repeat.json` sau khi chạy lại; giá trị lượt bị loại: p50 49,5 ms, p95 896,9 ms |
+| `approval-100vu-v4-run2` (lần đầu) | Thiếu đơn Pending (chưa seed lại) | Setup dừng sớm, file ghi toàn số 0; đã chạy lại sau seed |
+
+### 11.5. Số lần gọi HR
+
+- **Đọc danh sách (workforce)**: khoảng 0,33 lời gọi HR mỗi request Leave (phù hợp với Team scope).
+- **Duyệt đơn theo Team**: 2 lời gọi HR mỗi lần duyệt:
+  1. `GetEmployeeAsync`: xác minh quản lý hiện tại (bảo vệ chống duyệt sai quản lý).
+  2. `GetCurrentPolicyDaysAsync`: đọc chính sách hiện hành để cập nhật `PolicyDays` và số dư sau duyệt.
+
+### 11.6. Hạn chế
+
+- Chưa thu thập `docker stats` cho lượt v4 chính thức. Phân tích CPU ở mục trước (lượt 100 VU v2) cho thấy SQL Server là điểm bão hòa; cần đo lại nếu muốn kết luận cho v4.
+- Lượt approval run1 (50 VU) có p95 bất thường trong lượt đầu và không lặp lại khi chạy lại; chưa xác định nguyên nhân chắc chắn (có thể là chi phí khởi động sau seed).
+- Số liệu chỉ từ một máy, một cấu hình Docker Desktop; không suy rộng cho môi trường khác.
+
+### 11.7. Cách tái lập
+
+1. Checkout đúng SHA `fcf1992` (hoặc commit tương ứng).
+2. Build lại `hr-service` và `leave-service` với `--build --force-recreate`.
+3. Seed lại `seed-scale-data.sql` trước mỗi lượt approval.
+4. Chạy `k6` với `GIT_SHA` và `IMAGE_TAG` như trong mục 11.1.
+5. Không chạy đồng thời hai lượt k6.
 
 
 ## 11. Approval benchmark mới sau seed — 20/11/2026
