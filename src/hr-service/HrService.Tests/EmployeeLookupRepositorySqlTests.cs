@@ -1,7 +1,6 @@
 using HrService.Domain.Entities;
 using HrService.Infrastructure.Persistence;
 using HrService.Infrastructure.Persistence.Repositories;
-using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace HrService.Tests;
@@ -15,7 +14,7 @@ public sealed class EmployeeLookupRepositorySqlTests : IClassFixture<Authorizati
         _fixture = fixture;
     }
 
-    // Lookup theo ID, batch và Team listing phải cùng chỉ trả direct report active theo ManagerId hiện tại.
+    // Batch lookup và Team listing phải cùng chỉ trả direct report active theo ManagerId hiện tại.
     [HrSqlFact]
     public async Task TeamLookups_OnlyReturnActiveCurrentDirectReports()
     {
