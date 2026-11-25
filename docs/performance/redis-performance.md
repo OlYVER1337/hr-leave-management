@@ -324,7 +324,7 @@ $compose = @(
 Đảm bảo stack `hrbench` đã chạy healthy và credentials benchmark trong `.env` đã được nạp. Seed 4.000 nhân viên và 80.000 đơn:
 
 ```powershell
-docker compose @compose cp .\\scripts\\load-test\\seed-scale-data.sql sqlserver:/tmp/seed-scale-data.sql
+docker compose @compose cp .\scripts\load-test\seed-scale-data.sql sqlserver:/tmp/seed-scale-data.sql
 
 docker compose @compose exec -T sqlserver `
   /opt/mssql-tools18/bin/sqlcmd `
@@ -338,7 +338,7 @@ docker compose @compose exec -T sqlserver `
 Copy và thực thi script kiểm tra:
 
 ```powershell
-docker compose @compose cp .\\scripts\\load-test\\verify-approval-seed.sql sqlserver:/tmp/verify-approval-seed.sql
+docker compose @compose cp .\scripts\load-test\verify-approval-seed.sql sqlserver:/tmp/verify-approval-seed.sql
 
 docker compose @compose exec -T sqlserver `
   /opt/mssql-tools18/bin/sqlcmd `
@@ -379,7 +379,7 @@ Không chạy workload benchmark khác đồng thời. Theo dõi tài nguyên tr
 Xác minh raw report tồn tại và kiểm tra working tree:
 
 ```powershell
-Test-Path .\\docs\\testing\\evidence\\dynamic-authorization\\approval-constant-vus-50-5m.json
+Test-Path .\docs\testing\evidence\dynamic-authorization\approval-constant-vus-50-5m.json
 git status --short
 ```
 
