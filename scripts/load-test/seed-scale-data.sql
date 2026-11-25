@@ -1,7 +1,3 @@
-:setvar EmployeeCount "1000"
-:setvar RequestsPerEmployee "5"
-:setvar ManagerCount "25"
-
 SET NOCOUNT ON;
 -- Bắt buộc: bảng UserRoles có unique index có điều kiện (filtered), cần QUOTED_IDENTIFIER ON.
 SET ANSI_NULLS ON;
@@ -10,6 +6,8 @@ SET QUOTED_IDENTIFIER ON;
 DECLARE @EmployeeCount int = TRY_CONVERT(int, '$(EmployeeCount)');
 DECLARE @RequestsPerEmployee int = TRY_CONVERT(int, '$(RequestsPerEmployee)');
 DECLARE @ManagerCount int = TRY_CONVERT(int, '$(ManagerCount)');
+
+PRINT CONCAT('Seed configuration: EmployeeCount=', @EmployeeCount, '; RequestsPerEmployee=', @RequestsPerEmployee, '; ManagerCount=', @ManagerCount, '.');
 
 IF @EmployeeCount NOT BETWEEN 1000 AND 5000
     THROW 51000, 'EmployeeCount must be between 1000 and 5000.', 1;
