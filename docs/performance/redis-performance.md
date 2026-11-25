@@ -63,28 +63,25 @@ Chạy các lệnh sau từ thư mục gốc repository trong PowerShell:
 docker compose -p hrbench -f docker-compose.yml -f docker-compose.loadtest.yml up -d --build
 docker compose -p hrbench -f docker-compose.yml -f docker-compose.loadtest.yml ps
 docker compose -p hrbench -f docker-compose.yml -f docker-compose.loadtest.yml cp .\scripts\load-test\seed-scale-data.sql sqlserver:/tmp/seed-scale-data.sql
-docker compose -p hrbench -f docker-compose.yml -f docker-compose.loadtest.yml exec -T sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P $env:SA_PASSWORD -C -d master -i /tmp/seed-scale-data.sql
+docker compose -p hrbench -f docker-compose.yml -f docker-compose.loadtest.yml exec -T sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P $env:SA_PASSWORD -C -b -d master -v EmployeeCount=1000 RequestsPerEmployee=5 ManagerCount=25 -i /tmp/seed-scale-data.sql
 ```
 
-Mặc định script tạo dữ liệu 1.000 nhân viên và 5.000 đơn nghỉ, phân bổ vào các
-trạng thái chờ duyệt/đã duyệt/từ chối/đã hủy, đồng thời tạo số dư nghỉ phép,
-phân bổ theo năm và lịch sử tương ứng. Có thể chỉnh hai giá trị `:setvar` ở đầu
-file `scripts/load-test/seed-scale-data.sql` để chọn từ 1.000 đến 5.000 nhân viên
-và từ 1 đến 20 đơn mỗi nhân viên. Chạy lại script trên cùng tập nhân viên sẽ chỉ
-làm mới các đơn và số dư phục vụ kiểm thử của tài khoản
-`loadtest.user.*@example.invalid`.
+Seed tạo dữ liệu theo ba biến SQLCMD được truyền tường minh bằng `sqlcmd -v`:
+`EmployeeCount` (1.000–5.000), `RequestsPerEmployee` (1–20) và `ManagerCount`
+(1–200). File SQL không khai báo `:setvar` mặc định; cách này tránh việc giá trị
+mặc định trong file ghi đè tham số người chạy truyền từ command line. Script tạo
+các trạng thái Pending/Approved/Rejected/Cancelled, balance, year allocation và
+history. Chạy lại script trên cùng tập nhân viên sẽ làm mới các đơn và số dư
+phục vụ kiểm thử của tài khoản `loadtest.user.*@example.invalid`.
 
 ### Seed 1.000 nhân viên: quy trình đầy đủ
 
 Script seed **không tự chạy** khi chỉ chạy `docker compose ... up`. Sau khi stack
-`hrbench` đã khởi động và database/service ở trạng thái sẵn sàng, cần thực hiện
-đúng hai bước: copy file SQL vào container SQL Server, sau đó chạy `sqlcmd`.
+`hrbench` đã khởi động và database/service ở trạng thái sẵn sàng, cần copy file
+SQL rồi gọi `sqlcmd` với tham số tường minh. Cấu hình baseline:
 
-Mặc định trong `scripts/load-test/seed-scale-data.sql`:
-
-```sql
-:setvar EmployeeCount "1000"
-:setvar RequestsPerEmployee "5"
+```powershell
+-v EmployeeCount=1000 RequestsPerEmployee=5 ManagerCount=25
 ```
 
 Kết quả mong đợi là **1.000 load-test employees** và **5.000 leave requests**.
