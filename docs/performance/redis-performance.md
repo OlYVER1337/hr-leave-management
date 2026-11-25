@@ -409,7 +409,7 @@ Artifact này chỉ là bằng chứng lịch sử cho fixture trước khi phá
 
 ### 7.6. Seed hợp lệ và ma trận Approval sustained 50/100 VU
 
-Seed chuẩn 1.000 × 5 dùng `PendingPercent=25` để giữ fixture cũ. Seed dành cho Approval sustained dùng 4.000 × 20 và `PendingPercent=50`; mỗi nhân viên có 10 Pending + 2 Approved, mỗi đơn một ngày, khoảng cách 7 ngày. Seed fail nếu có overlap hoặc Used + Pending vượt 12 ngày.
+Seed chuẩn 1.000 × 5 dùng `PendingPercent=25` để giữ fixture cũ. Seed dành cho Approval sustained dùng 4.000 × 20 và `PendingPercent=50`; mỗi nhân viên có 10 Pending + 2 Approved, mỗi đơn một ngày. Ngày được chọn từ HR business calendar, bỏ thứ Bảy, Chủ nhật và ngày lễ đã cấu hình, với một đơn sau mỗi 5 ngày làm việc. Seed fail nếu có overlap, không đủ ngày hợp lệ hoặc Used + Pending vượt 12 ngày.
 
 Đối với cả 50 và 100 VU, giữ `MAX_APPROVALS_PER_VU=400`, `THINK_TIME_SECONDS=1`, duration 5m. Sau khi seed, verifier phải báo đủ 25 Manager × 1.600 Pending. Chạy từng mức trên một database seed mới; sau mỗi lượt phải reseed và verify lại.
 
