@@ -180,7 +180,7 @@ DECLARE @LeaveTypeId int;
 DECLARE @RequestCount int = @EmployeeCount * @RequestsPerEmployee;
 DECLARE @Year int = YEAR(SYSUTCDATETIME());
 DECLARE @YearStart date = DATEFROMPARTS(@Year, 1, 1);
-DECLARE @DaysInYear int = DATEDIFF(day, @YearStart, DATEFROMPARTS(@Year + 1, 1, 1));
+DECLARE @YearEnd date = DATEADD(day, -1, DATEFROMPARTS(@Year + 1, 1, 1));
 
 SELECT @LeaveTypeId = Id
 FROM HR_DB.dbo.LeaveTypes
@@ -214,43 +214,71 @@ DELETE balance
 FROM dbo.LeaveBalances AS balance
 INNER JOIN #LoadTestEmployees AS employee ON employee.EmployeeId = balance.EmployeeId;
 
-;WITH CalendarNumberSource AS
+-- Materialize calendar trước khi lọc để SQL Server không đẩy DATEADD
+-- lên toàn bộ Cartesian row source của sys.all_objects và đánh giá ngày ngoài năm.
+CREATE TABLE #CalendarDays
 (
-    SELECT CONVERT(int, ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) AS Number
-    FROM sys.all_objects AS firstSource
-    CROSS JOIN sys.all_objects AS secondSource
-),
-CalendarDays AS
+    CalendarDate date NOT NULL PRIMARY KEY
+);
+
+;WITH CalendarDays AS
 (
-    SELECT DATEADD(day, Number - 1, @YearStart) AS CalendarDate
-    FROM CalendarNumberSource
-    WHERE Number <= @DaysInYear
-),
-BusinessDays AS
+    SELECT @YearStart AS CalendarDate
+    UNION ALL
+    SELECT DATEADD(day, 1, CalendarDate)
+    FROM CalendarDays
+    WHERE CalendarDate < @YearEnd
+)
+INSERT INTO #CalendarDays (CalendarDate)
+SELECT CalendarDate
+FROM CalendarDays
+OPTION (MAXRECURSION 366);
+
+CREATE TABLE #BusinessDays
+(
+    BusinessDayNumber int NOT NULL PRIMARY KEY,
+    CalendarDate date NOT NULL UNIQUE
+);
+
+;WITH RankedBusinessDays AS
 (
     -- Ngày làm việc: thứ Hai đến thứ Sáu, loại các ngày lễ đã cấu hình HR.
     SELECT
         CalendarDate,
         CONVERT(int, ROW_NUMBER() OVER (ORDER BY CalendarDate)) AS BusinessDayNumber
-    FROM CalendarDays
-    WHERE DATEDIFF(day, CONVERT(date, '19000101'), CalendarDate) % 7 BETWEEN 0 AND 4
+    FROM #CalendarDays AS calendar
+    WHERE DATEDIFF(day, CONVERT(date, '19000101'), calendar.CalendarDate) % 7 BETWEEN 0 AND 4
       AND NOT EXISTS
       (
           SELECT 1
           FROM HR_DB.dbo.Holidays AS holiday
-          WHERE holiday.HolidayDate = CalendarDays.CalendarDate
+          WHERE holiday.HolidayDate = calendar.CalendarDate
       )
-),
-ScheduleDates AS
+)
+INSERT INTO #BusinessDays (BusinessDayNumber, CalendarDate)
+SELECT BusinessDayNumber, CalendarDate
+FROM RankedBusinessDays;
+
+CREATE TABLE #ScheduleDates
 (
-    -- Chọn một ngày sau mỗi 5 ngày làm việc để các request cách nhau tối thiểu một tuần làm việc.
+    RequestSlot int NOT NULL PRIMARY KEY,
+    CalendarDate date NOT NULL UNIQUE
+);
+
+;WITH RankedScheduleDates AS
+(
+    -- Chọn một ngày sau mỗi 5 ngày làm việc để các request không chồng lấn.
     SELECT
         CalendarDate,
         CONVERT(int, ROW_NUMBER() OVER (ORDER BY BusinessDayNumber)) AS RequestSlot
-    FROM BusinessDays
+    FROM #BusinessDays
     WHERE (BusinessDayNumber - 1) % 5 = 0
-),
-EmployeeNumbers AS
+)
+INSERT INTO #ScheduleDates (RequestSlot, CalendarDate)
+SELECT RequestSlot, CalendarDate
+FROM RankedScheduleDates;
+
+;WITH EmployeeNumbers AS
 (
     SELECT
         EmployeeId,
@@ -306,7 +334,7 @@ FROM RequestNumbers AS numbers
 INNER JOIN EmployeeNumbers AS employee
     ON employee.EmployeeNumber =
         ((numbers.Number - 1) / @RequestsPerEmployee) % @EmployeeCount + 1
-INNER JOIN ScheduleDates AS schedule
+INNER JOIN #ScheduleDates AS schedule
     ON schedule.RequestSlot = ((numbers.Number - 1) % @RequestsPerEmployee) + 1;
 
 IF (SELECT COUNT(*) FROM #LoadTestRequests) <> @RequestCount
