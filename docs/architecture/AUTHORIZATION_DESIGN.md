@@ -147,7 +147,7 @@ Authorization Service đã được nối vào luồng phát access token của 
 HR Employees API đã chuyển sang Permission + Scope:
 - GET collection và GET theo ID dùng employees.read, giới hạn Self/Team/All.
 - POST, PUT, deactivate và reset-password lần lượt yêu cầu employees.create, employees.update, employees.deactivate và employees.password.reset với Scope All.
-- EmployeeLookupController dùng employees.read cho tra cứu theo ID; tra cứu Team yêu cầu employees.read với Team hoặc All. Service kiểm tra Self/Team/All từ perm, không đọc role claim.
+- EmployeeLookupController dùng employees.read cho tra cứu theo ID; tra cứu Team yêu cầu employees.read với Team hoặc All. Với scope Team, Manager chỉ tra cứu direct report đang active theo `ManagerId` hiện tại; lookup ID kiểm tra quyền trên cùng employee snapshot vừa đọc để tránh race khi deactivate/reassign. Batch lookup và Team listing áp dụng cùng active/current-manager rule. Scope All vẫn đọc được hồ sơ inactive. Service kiểm tra Self/Team/All từ perm, không đọc role claim.
 
 Các thao tác ghi ở Departments, Holidays, LeavePolicies và LeaveTypes cũng dùng policy riêng: departments.create/update/delete, holidays.create/update/delete, leave-policies.create/update và leave-types.create/update; các policy ghi dùng Scope All. HR system role được seed đầy đủ các quyền này. Employee.Role enum vẫn là dữ liệu tương thích/backfill trong giai đoạn chuyển tiếp, nhưng không còn là điều kiện authorization cho các endpoint nêu trên. Đọc danh mục leave type với includeInactive cũng kiểm tra leave-types.update:All thay vì role claim.
 
