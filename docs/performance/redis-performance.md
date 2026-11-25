@@ -293,9 +293,9 @@ Kịch bản sustained được tách khỏi `approval.js` để giữ nguyên k
 | THINK_TIME_SECONDS | 1 | Nghỉ sau mỗi quyết định để giới hạn tốc độ tiêu thụ dữ liệu |
 | Inbox page size | 100 | Đọc đủ các trang Pending có Reason bắt đầu bằng `LOADTEST:` |
 
-Với seed sustained, mỗi nhân viên có 20 đơn một ngày, được xếp vào 20 ngày thứ Hai cách nhau 7 ngày nên không chồng lấn. Mỗi nhân viên có 10 Pending, 2 Approved, 4 Rejected và 4 Cancelled; tổng Used + Pending là 12 ngày, không vượt quota fixture 12 ngày. 4.000 nhân viên chia đều cho 25 Manager (160 nhân viên/Manager), tạo 1.600 Pending/Manager, tổng 40.000 Pending. Với 50 VU, mỗi Manager cấp 800 ID (2 VU × 400); với 100 VU, mỗi Manager cấp 1.600 ID (4 VU × 400). Kịch bản không duyệt lặp lại ID; thiếu dữ liệu hoặc hết ID đã cấp thì test fail. Seed SQL cũng tự kiểm tra không có request overlap theo nhân viên và Used + Pending không vượt 12 ngày.
+Với seed sustained, mỗi nhân viên có 20 đơn một ngày, được xếp trên các ngày làm việc đã loại cuối tuần và ngày lễ từ HR holiday calendar; lịch chọn một ngày sau mỗi 5 ngày làm việc nên không chồng lấn. Mỗi nhân viên có 10 Pending, 2 Approved, 4 Rejected và 4 Cancelled; tổng Used + Pending là 12 ngày, không vượt quota fixture 12 ngày. 4.000 nhân viên chia đều cho 25 Manager (160 nhân viên/Manager), tạo 1.600 Pending/Manager, tổng 40.000 Pending. Với 50 VU, mỗi Manager cấp 800 ID (2 VU × 400); với 100 VU, mỗi Manager cấp 1.600 ID (4 VU × 400). Kịch bản không duyệt lặp lại ID; thiếu dữ liệu hoặc hết ID đã cấp thì test fail. Seed SQL cũng tự kiểm tra không có request overlap theo nhân viên và Used + Pending không vượt 12 ngày.
 
-Capacity 20.000 là giới hạn dữ liệu, không phải số lượng chắc chắn sẽ hoàn tất. Với 50 VU và think time 1 giây trong 5 phút, số approval thực tế phụ thuộc latency của hệ thống. Báo cáo phải dùng số đo k6 thực tế.
+Capacity dữ liệu là 40.000 Pending, bằng giới hạn tối đa 100 VU × 400 ID/VU. Đây là số ID có sẵn, không phải số lượng chắc chắn sẽ hoàn tất; số approval thực tế trong 5 phút phụ thuộc latency của hệ thống. Báo cáo phải dùng số đo k6 thực tế.
 
 ### 7.2. Chuẩn bị
 
@@ -363,6 +363,7 @@ docker compose @compose run --rm `
   -e THINK_TIME_SECONDS=1 `
   -e SEED_EMPLOYEE_COUNT=4000 `
   -e REQUESTS_PER_EMPLOYEE=20 `
+  -e SEED_PENDING_PERCENT=50 `
   -e GIT_SHA=$env:GIT_SHA `
   -e HR_IMAGE_ID=$env:HR_IMAGE_ID `
   -e LEAVE_IMAGE_ID=$env:LEAVE_IMAGE_ID `
@@ -391,7 +392,7 @@ Lượt chạy trước khi sửa fixture đã dùng 4.000 nhân viên × 20 đ�
 
 Khi tính throughput, dùng `14.659 / 300 = 48,86 approvals/s`, trong đó 300 giây là thời lượng scenario. Raw metric `approval_requests.rate` của k6 là 47,71/s vì metric rate sử dụng toàn bộ khoảng thời gian thu thập (khoảng 307,24 giây, bao gồm setup và graceful stop). Báo cáo này dùng throughput theo thời lượng tải để phản ánh đúng workload constant-vus.
 
-Lượt chạy đầu tiên cùng cấu hình ghi nhận 14.411 approvals, p95 48,79 ms và không có lỗi, nhưng k6 cảnh báo 100.033 unique time series do tag URL chứa request ID. Script sau đó chuẩn hóa tag `name` thành route template và tính lại RPS theo thời lượng scenario. Lượt xác nhận này không còn cảnh báo cardinality; kết quả cuối được chọn làm baseline. Hai lượt là các lần đo độc lập, chênh lệch latency không được xem là bằng chứng rằng thay đổi tag làm tăng hiệu năng API.
+Lượt chạy đầu tiên cùng cấu hình ghi nhận 14.411 approvals, p95 48,79 ms và không có lỗi, nhưng k6 cảnh báo 100.033 unique time series do tag URL chứa request ID. Script sau đó chuẩn hóa tag `name` thành route template và tính lại RPS theo thời lượng scenario. Lượt xác nhận không còn cảnh báo cardinality. Tuy nhiên, cả hai lượt dùng fixture trước khi phát hiện lịch nghỉ chồng lấn, nên chỉ lưu làm lịch sử; không dùng làm baseline nghiệm thu. Chênh lệch latency giữa hai lượt cũng không phải bằng chứng rằng thay đổi tag làm tăng hiệu năng API.
 
 **Revision và môi trường của lượt xác nhận:**
 
