@@ -279,7 +279,7 @@ Chi tiết từng lượt và phân tích p95 nằm trong [Dynamic Authorization
 
 ## 7. Approval sustained load với k6 constant-vus
 
-Kịch bản sustained được tách khỏi \`approval.js\` để giữ nguyên khả năng tái lập benchmark burst lịch sử. Script mới là \`scripts/load-test/approval-sustained.js\`, dùng executor \`constant-vus\`: số VU được giữ liên tục trong suốt \`DURATION\`, mỗi vòng approve một request ID duy nhất rồi nghỉ theo \`THINK_TIME_SECONDS\`.
+Kịch bản sustained được tách khỏi `approval.js` để giữ nguyên khả năng tái lập benchmark burst lịch sử. Script mới là `scripts/load-test/approval-sustained.js`, dùng executor `constant-vus`: số VU được giữ liên tục trong suốt `DURATION`, mỗi vòng approve một request ID duy nhất rồi nghỉ theo `THINK_TIME_SECONDS`.
 
 ### 7.1. Cấu hình baseline
 
@@ -293,7 +293,7 @@ Kịch bản sustained được tách khỏi \`approval.js\` để giữ nguyên
 | Seed ManagerCount | 25 | Phân bổ đều nhân viên cho Manager |
 | MAX_APPROVALS_PER_VU | 400 | Số ID Pending duy nhất dự phòng cho mỗi VU |
 | THINK_TIME_SECONDS | 1 | Nghỉ sau mỗi quyết định để giới hạn tốc độ tiêu thụ dữ liệu |
-| Inbox page size | 100 | Đọc đủ các trang Pending có Reason bắt đầu bằng \`LOADTEST:\` |
+| Inbox page size | 100 | Đọc đủ các trang Pending có Reason bắt đầu bằng `LOADTEST:` |
 
 Với seed fixture hiện tại, mỗi nhân viên có 20 đơn, trong đó 5 đơn Pending. 4.000 nhân viên được chia đều cho 25 Manager (160 nhân viên/Manager), tạo 800 đơn Pending/Manager. Hai VU/Manager được cấp 400 ID riêng mỗi VU, tổng capacity 20.000 quyết định duy nhất. Kịch bản không duyệt lặp lại một ID; nếu thiếu dữ liệu hoặc VU dùng hết ID đã cấp, test fail thay vì tái sử dụng request.
 
@@ -301,86 +301,86 @@ Capacity 20.000 là giới hạn dữ liệu, không phải số lượng chắc
 
 ### 7.2. Chuẩn bị
 
-Chạy trên stack benchmark cô lập \`hrbench\`, không dùng database nghiệp vụ. Trước tiên đồng bộ branch có script sustained và ghi SHA:
+Chạy trên stack benchmark cô lập `hrbench`, không dùng database nghiệp vụ. Trước tiên đồng bộ branch có script sustained và ghi SHA:
 
-\`\`\`powershell
+```powershell
 git fetch origin
 git switch benchmark/approval-constant-vus
 git pull --ff-only
 $env:GIT_SHA = (git rev-parse HEAD).Trim()
-\`\`\`
+```
 
 Khai báo Compose arguments:
 
-\`\`\`powershell
+```powershell
 $compose = @(
   "-p", "hrbench",
   "-f", "docker-compose.yml",
   "-f", "docker-compose.loadtest.yml",
   "--profile", "loadtest"
 )
-\`\`\`
+```
 
-Đảm bảo stack \`hrbench\` đã chạy healthy và credentials benchmark trong \`.env\` đã được nạp. Seed 4.000 nhân viên và 80.000 đơn:
+Đảm bảo stack `hrbench` đã chạy healthy và credentials benchmark trong `.env` đã được nạp. Seed 4.000 nhân viên và 80.000 đơn:
 
-\`\`\`powershell
+```powershell
 docker compose @compose cp .\\scripts\\load-test\\seed-scale-data.sql sqlserver:/tmp/seed-scale-data.sql
 
-docker compose @compose exec -T sqlserver \`
-  /opt/mssql-tools18/bin/sqlcmd \`
-  -S localhost -U sa -P $env:SA_PASSWORD -C -b -d master \`
-  -v EmployeeCount=4000 RequestsPerEmployee=20 ManagerCount=25 \`
+docker compose @compose exec -T sqlserver `
+  /opt/mssql-tools18/bin/sqlcmd `
+  -S localhost -U sa -P $env:SA_PASSWORD -C -b -d master `
+  -v EmployeeCount=4000 RequestsPerEmployee=20 ManagerCount=25 `
   -i /tmp/seed-scale-data.sql
-\`\`\`
+```
 
 ### 7.3. Xác minh seed trước khi chạy
 
 Copy và thực thi script kiểm tra:
 
-\`\`\`powershell
+```powershell
 docker compose @compose cp .\\scripts\\load-test\\verify-approval-seed.sql sqlserver:/tmp/verify-approval-seed.sql
 
-docker compose @compose exec -T sqlserver \`
-  /opt/mssql-tools18/bin/sqlcmd \`
-  -S localhost -U sa -P $env:SA_PASSWORD -C -b -d master \`
-  -v ManagerCount=25 ExpectedPendingPerManager=800 \`
+docker compose @compose exec -T sqlserver `
+  /opt/mssql-tools18/bin/sqlcmd `
+  -S localhost -U sa -P $env:SA_PASSWORD -C -b -d master `
+  -v ManagerCount=25 ExpectedPendingPerManager=800 `
   -i /tmp/verify-approval-seed.sql
-\`\`\`
+```
 
-Chỉ chạy k6 khi đủ 25 Manager và mỗi Manager có ít nhất 800 đơn Pending \`LOADTEST:\`. Script k6 cũng tự đăng nhập, đọc inbox qua pagination và kiểm tra đủ ID cho VU được giao trước khi bước vào scenario.
+Chỉ chạy k6 khi đủ 25 Manager và mỗi Manager có ít nhất 800 đơn Pending `LOADTEST:`. Script k6 cũng tự đăng nhập, đọc inbox qua pagination và kiểm tra đủ ID cho VU được giao trước khi bước vào scenario.
 
 ### 7.4. Ghi nhận image ID và chạy 50 VU / 5 phút
 
-\`\`\`powershell
+```powershell
 $env:HR_IMAGE_ID = (docker inspect --format '{{.Image}}' hrbench-hr-service-1).Trim()
 $env:LEAVE_IMAGE_ID = (docker inspect --format '{{.Image}}' hrbench-leave-service-1).Trim()
 
 $env:REPORT_JSON = "/reports/approval-constant-vus-50-5m.json"
 
-docker compose @compose run --rm \`
-  -e VUS=50 \`
-  -e DURATION=5m \`
-  -e LOADTEST_MANAGER_COUNT=25 \`
-  -e MAX_APPROVALS_PER_VU=400 \`
-  -e THINK_TIME_SECONDS=1 \`
-  -e SEED_EMPLOYEE_COUNT=4000 \`
-  -e REQUESTS_PER_EMPLOYEE=20 \`
-  -e GIT_SHA=$env:GIT_SHA \`
-  -e HR_IMAGE_ID=$env:HR_IMAGE_ID \`
-  -e LEAVE_IMAGE_ID=$env:LEAVE_IMAGE_ID \`
-  -e REPORT_JSON=$env:REPORT_JSON \`
+docker compose @compose run --rm `
+  -e VUS=50 `
+  -e DURATION=5m `
+  -e LOADTEST_MANAGER_COUNT=25 `
+  -e MAX_APPROVALS_PER_VU=400 `
+  -e THINK_TIME_SECONDS=1 `
+  -e SEED_EMPLOYEE_COUNT=4000 `
+  -e REQUESTS_PER_EMPLOYEE=20 `
+  -e GIT_SHA=$env:GIT_SHA `
+  -e HR_IMAGE_ID=$env:HR_IMAGE_ID `
+  -e LEAVE_IMAGE_ID=$env:LEAVE_IMAGE_ID `
+  -e REPORT_JSON=$env:REPORT_JSON `
   k6 run /scripts/approval-sustained.js
-\`\`\`
+```
 
-Không chạy workload benchmark khác đồng thời. Theo dõi tài nguyên trong lúc chạy bằng \`docker stats\` ở một terminal riêng. Script xuất summary gồm số approval attempts/completed/errors, RPS, p50/p95, số và thời gian HTTP call nội bộ Leave → HR; raw k6 summary được ghi vào \`docs/testing/evidence/dynamic-authorization/approval-constant-vus-50-5m.json\` trên máy chạy do thư mục đó được mount vào \`/reports\`.
+Không chạy workload benchmark khác đồng thời. Theo dõi tài nguyên trong lúc chạy bằng `docker stats` ở một terminal riêng. Script xuất summary gồm số approval attempts/completed/errors, RPS, p50/p95, số và thời gian HTTP call nội bộ Leave → HR; raw k6 summary được ghi vào `docs/testing/evidence/dynamic-authorization/approval-constant-vus-50-5m.json` trên máy chạy do thư mục đó được mount vào `/reports`.
 
 ### 7.5. Sau lượt chạy
 
 Xác minh raw report tồn tại và kiểm tra working tree:
 
-\`\`\`powershell
+```powershell
 Test-Path .\\docs\\testing\\evidence\\dynamic-authorization\\approval-constant-vus-50-5m.json
 git status --short
-\`\`\`
+```
 
 Chỉ ghi kết quả vào benchmark report sau khi đối chiếu raw JSON, Git SHA và hai image ID. Ghi rõ đây là sustained constant-VU workload; không so trực tiếp RPS với benchmark per-vu-iterations burst vì executor và think time khác nhau. Reseed trước mỗi lượt lặp lại vì các request đã được approve sẽ không còn Pending.
