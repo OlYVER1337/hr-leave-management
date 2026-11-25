@@ -169,11 +169,8 @@ USE Leave_DB;
 DECLARE @LeaveTypeId int;
 DECLARE @RequestCount int = @EmployeeCount * @RequestsPerEmployee;
 DECLARE @Year int = YEAR(SYSUTCDATETIME());
-DECLARE @YearStart date = DATEFROMPARTS(YEAR(SYSUTCDATETIME()), 1, 1);
--- DATEDIFF từ 1900-01-01 (thứ Hai) giúp chọn thứ Hai đầu tiên của năm,
--- không phụ thuộc SET DATEFIRST hoặc ngôn ngữ session.
-DECLARE @DaysToFirstMonday int =
-    (7 - (DATEDIFF(day, CONVERT(date, '19000101'), @YearStart) % 7)) % 7;
+DECLARE @YearStart date = DATEFROMPARTS(@Year, 1, 1);
+DECLARE @DaysInYear int = DATEDIFF(day, @YearStart, DATEFROMPARTS(@Year + 1, 1, 1));
 
 SELECT @LeaveTypeId = Id
 FROM HR_DB.dbo.LeaveTypes
@@ -207,7 +204,42 @@ DELETE balance
 FROM dbo.LeaveBalances AS balance
 INNER JOIN #LoadTestEmployees AS employee ON employee.EmployeeId = balance.EmployeeId;
 
-;WITH EmployeeNumbers AS
+;WITH CalendarDays AS
+(
+    SELECT TOP (@DaysInYear)
+        DATEADD(
+            day,
+            CONVERT(int, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) - 1),
+            @YearStart
+        ) AS CalendarDate
+    FROM sys.all_objects AS firstSource
+    CROSS JOIN sys.all_objects AS secondSource
+),
+BusinessDays AS
+(
+    -- Ngày làm việc: thứ Hai đến thứ Sáu, loại các ngày lễ đã cấu hình HR.
+    SELECT
+        CalendarDate,
+        CONVERT(int, ROW_NUMBER() OVER (ORDER BY CalendarDate)) AS BusinessDayNumber
+    FROM CalendarDays
+    WHERE DATEDIFF(day, CONVERT(date, '19000101'), CalendarDate) % 7 BETWEEN 0 AND 4
+      AND NOT EXISTS
+      (
+          SELECT 1
+          FROM HR_DB.dbo.Holidays AS holiday
+          WHERE holiday.HolidayDate = CalendarDays.CalendarDate
+      )
+),
+ScheduleDates AS
+(
+    -- Chọn một ngày sau mỗi 5 ngày làm việc để các request cách nhau tối thiểu một tuần làm việc.
+    SELECT
+        CalendarDate,
+        CONVERT(int, ROW_NUMBER() OVER (ORDER BY BusinessDayNumber)) AS RequestSlot
+    FROM BusinessDays
+    WHERE (BusinessDayNumber - 1) % 5 = 0
+),
+EmployeeNumbers AS
 (
     SELECT
         EmployeeId,
@@ -232,16 +264,8 @@ SELECT
     employee.EmployeeId,
     NULL,
     @DepartmentId,
-    DATEADD(
-        day,
-        @DaysToFirstMonday + (((numbers.Number - 1) % @RequestsPerEmployee) * 7),
-        @YearStart
-    ),
-    DATEADD(
-        day,
-        @DaysToFirstMonday + (((numbers.Number - 1) % @RequestsPerEmployee) * 7),
-        @YearStart
-    ),
+    schedule.CalendarDate,
+    schedule.CalendarDate,
     CONVERT(decimal(6,1), 1.0),
     CASE
         -- Seed tiêu chuẩn giữ phân phối 25% Pending như trước.
@@ -265,7 +289,12 @@ SELECT
 FROM RequestNumbers AS numbers
 INNER JOIN EmployeeNumbers AS employee
     ON employee.EmployeeNumber =
-        ((numbers.Number - 1) / @RequestsPerEmployee) % @EmployeeCount + 1;
+        ((numbers.Number - 1) / @RequestsPerEmployee) % @EmployeeCount + 1
+INNER JOIN ScheduleDates AS schedule
+    ON schedule.RequestSlot = ((numbers.Number - 1) % @RequestsPerEmployee) + 1;
+
+IF (SELECT COUNT(*) FROM #LoadTestRequests) <> @RequestCount
+    THROW 51012, 'Could not allocate enough unique non-holiday business dates for the load-test requests.', 1;
 
 IF EXISTS
 (
