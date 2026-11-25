@@ -369,15 +369,56 @@ docker compose @compose run --rm `
   k6 run /scripts/approval-sustained.js
 ```
 
-Không chạy workload benchmark khác đồng thời. Theo dõi tài nguyên trong lúc chạy bằng `docker stats` ở một terminal riêng. Script xuất summary gồm số approval attempts/completed/errors, RPS, p50/p95, số và thời gian HTTP call nội bộ Leave → HR; raw k6 summary được ghi vào `docs/testing/evidence/dynamic-authorization/approval-constant-vus-50-5m.json` trên máy chạy do thư mục đó được mount vào `/reports`.
+Không chạy workload benchmark khác đồng thời. Theo dõi tài nguyên trong lúc chạy bằng `docker stats` ở một terminal riêng. Script xuất summary gồm số approval attempts/completed/errors, RPS, p50/p95, số và thời gian HTTP call nội bộ Leave → HR. Ở lượt xác nhận cuối cùng, raw k6 summary được ghi tại `docs/testing/evidence/dynamic-authorization/approval-constant-vus-50-5m-rerun.json` trên máy chạy do thư mục đó được mount vào `/reports`.
 
-### 7.5. Sau lượt chạy
+### 7.5. Kết quả baseline đã xác nhận — 25/11/2026
 
-Xác minh raw report tồn tại và kiểm tra working tree:
+Lượt xác nhận cuối chạy trên stack cô lập `hrbench` với 50 VU trong đúng 5 phút, 25 Manager (hai VU/Manager), think time 1 giây và dataset đã được xác minh có 800 Pending request cho mỗi Manager (tổng 20.000 Pending). Kết quả:
+
+| Chỉ số | Kết quả |
+|---|---:|
+| Approval attempts / completed | **14.659 / 14.659** |
+| Approval errors | **0** |
+| Throughput trong 300 giây scenario | **48,86 approvals/s** |
+| p50 / p90 / p95 | **21,92 / 31,98 / 36,30 ms** |
+| Average / maximum approval latency | 23,73 / 299,86 ms |
+| HTTP requests toàn bộ test | 14.884 |
+| HTTP failed rate | **0%** |
+| Leave → HR calls | 29.318 |
+| Leave → HR call trung bình / p95 / max | 2,98 / 6,01 / 56,41 ms |
+| Tổng thời gian Leave → HR | 87.447,38 ms |
+
+Khi tính throughput, dùng `14.659 / 300 = 48,86 approvals/s`, trong đó 300 giây là thời lượng scenario. Raw metric `approval_requests.rate` của k6 là 47,71/s vì metric rate sử dụng toàn bộ khoảng thời gian thu thập (khoảng 307,24 giây, bao gồm setup và graceful stop). Báo cáo này dùng throughput theo thời lượng tải để phản ánh đúng workload constant-vus.
+
+Lượt chạy đầu tiên cùng cấu hình ghi nhận 14.411 approvals, p95 48,79 ms và không có lỗi, nhưng k6 cảnh báo 100.033 unique time series do tag URL chứa request ID. Script sau đó chuẩn hóa tag `name` thành route template và tính lại RPS theo thời lượng scenario. Lượt xác nhận này không còn cảnh báo cardinality; kết quả cuối được chọn làm baseline. Hai lượt là các lần đo độc lập, chênh lệch latency không được xem là bằng chứng rằng thay đổi tag làm tăng hiệu năng API.
+
+**Revision và môi trường của lượt xác nhận:**
+
+- Git SHA: `c4497f70b1e39b3954b576a2a8ff081f7f948336`
+- HR image: `sha256:8eccc09571553866449c312854526453e167ee01f1009491318b22dda8de4d04`
+- Leave image: `sha256:fbb2ed6121920bbabc9923fdd3396c300331ebab098b91403c4c2a35dcb30911`
+- Seed: 4.000 Employees × 20 Requests = 80.000 requests; 25 Manager × 800 Pending = 20.000 Pending.
+
+Raw k6 JSON đã được kiểm tra parse thành công và có đủ custom metrics tại:
+
+`docs/testing/evidence/dynamic-authorization/approval-constant-vus-50-5m-rerun.json`
+
+File hiện đã tồn tại trên máy chạy benchmark; cần được `git add` và commit vào branch để artifact được lưu cùng báo cáo trên GitHub. Chưa có bản ghi `docker stats` được cung cấp cho lượt này, vì vậy báo cáo không đưa ra kết luận về CPU/RAM hoặc giới hạn tài nguyên. Việc profile bottleneck CPU/RAM vẫn là hạng mục riêng.
+
+### 7.6. Sau lượt chạy và tái lập
+
+Xác minh raw report tồn tại và JSON đọc được:
 
 ```powershell
-Test-Path .\docs\testing\evidence\dynamic-authorization\approval-constant-vus-50-5m.json
+$reportPath = ".\docs\testing\evidence\dynamic-authorization\approval-constant-vus-50-5m-rerun.json"
+Test-Path $reportPath
+$report = Get-Content $reportPath -Raw | ConvertFrom-Json
+$report.metrics.approval_requests.values
+$report.metrics.approval_request_duration_ms.values
+$report.metrics.approval_http_errors.values
+$report.metrics.http_req_failed.values
+$report.metrics.approval_leave_to_hr_call_duration_ms.values
 git status --short
 ```
 
-Chỉ ghi kết quả vào benchmark report sau khi đối chiếu raw JSON, Git SHA và hai image ID. Ghi rõ đây là sustained constant-VU workload; không so trực tiếp RPS với benchmark per-vu-iterations burst vì executor và think time khác nhau. Reseed trước mỗi lượt lặp lại vì các request đã được approve sẽ không còn Pending.
+Đây là sustained constant-VU workload; không so trực tiếp RPS với benchmark per-vu-iterations burst vì executor và think time khác nhau. Reseed trước mỗi lượt lặp lại vì các request đã được approve sẽ không còn Pending.
