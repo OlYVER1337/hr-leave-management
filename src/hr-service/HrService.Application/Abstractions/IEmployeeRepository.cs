@@ -41,7 +41,7 @@ public interface IEmployeeRepository
         IReadOnlyCollection<Guid> employeeIds,
         CancellationToken cancellationToken = default);
     Task<Employee?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
-    Task<bool> IsDirectManagerOfAsync(
+    Task<bool> IsActiveDirectReportOfManagerAsync(
         Guid managerId,
         Guid employeeId,
         CancellationToken cancellationToken = default);
