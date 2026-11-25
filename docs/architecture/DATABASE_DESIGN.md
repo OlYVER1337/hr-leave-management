@@ -334,3 +334,37 @@ Nguồn quyết định schema thực tế
 - DELETE version tương lai yêu cầu Leave Service đếm số `LeaveRequestYearAllocations.PolicyVersionId` tham chiếu. Có allocation tham chiếu thì HR từ chối 409; Leave không khả dụng thì thao tác fail closed. Giữa bước COUNT ở Leave và DELETE ở HR vẫn có race window nhỏ vì hai database không dùng distributed transaction.
 - Leave lưu `PolicyVersionId` và `PolicyDaysAtCreation` ở yearly allocation như snapshot lịch sử. Đây không phải FK vì HR và Leave sở hữu database riêng; xóa version đã được tham chiếu bị ngăn qua kiểm tra liên service.
 - `LeaveBalances.PolicyDays` là quota hiện hành, không phải quota snapshot lịch sử. Khi policy giảm thấp hơn `Used + Pending`, Leave cập nhật `PolicyDays` nhưng không giảm `Used/Pending`; `Entitled` được suy ra để vẫn bao phủ số ngày đã dùng/đang chờ.
+
+## Đối chiếu ERD với EF Core model và migrations — 25/11/2026
+
+Đã rà soát hai source ERD `diagrams/mermaid/erd-hr-db.mmd` và `diagrams/mermaid/erd-leave-db.mmd` với `HrDbContext`, `LeaveDbContext` và các migration trên nhánh PR #13 (`61f22ad0fb264241744f56e4fb1a2c969d3d3046`). Source Mermaid hiện thể hiện các cấu phần chính của schema đang triển khai; không dùng hình ERD thay cho migration khi cần xác định kiểu dữ liệu hoặc constraint chi tiết.
+
+### HR_DB
+
+- Bảng nền: `Departments`, `Employees`, `RefreshTokens`, `LeaveTypes`, `LeavePolicies`, `Holidays`.
+- Dynamic Authorization: `Roles`, `Permissions`, `UserRoles`, `RolePermissions`, `PermissionScopeRules`, `RolePermissionScopes`, `AuthzAuditLog`.
+- `LeavePolicies` có `EffectiveFrom` kiểu `date`; unique index `(LeaveTypeId, Year, EffectiveFrom)` ngăn hai version cùng loại nghỉ/năm có cùng ngày hiệu lực.
+- `UserRoles` có unique filtered index cho `(EmployeeId, RoleId)` khi `RevokedAtUtc IS NULL`; `RolePermissionScopes` có composite key `(RoleId, PermissionId, Scope)` và scope check constraint.
+
+### Leave_DB
+
+- Bảng: `LeaveRequests`, `LeaveBalances`, `LeaveRequestYearAllocations`, `LeaveRequestHistories`.
+- `LeaveBalances` có unique index `(EmployeeId, LeaveTypeId, Year)`, `PolicyDays`, `Used`, `Pending`, `RowVersion`; ba cột số ngày có check constraint không âm.
+- `Entitled` và `Available` không phải cột SQL: chúng là thuộc tính `[NotMapped]`, được tính lần lượt bằng `max(PolicyDays, Used + Pending)` và `Entitled - Used - Pending`.
+- `LeaveRequestYearAllocations` có composite primary key `(LeaveRequestId, Year)`, lưu `Days`, `PolicyVersionId` nullable và `PolicyDaysAtCreation` nullable. `PolicyVersionId` là scalar reference sang HR_DB, không phải foreign key xuyên database.
+- `LeaveRequests` có index `(EmployeeId, Status, StartDate, EndDate)` và RowVersion; `LeaveRequestHistories` có index `(LeaveRequestId, CreatedAtUtc)`. History và yearly allocations cascade-delete theo LeaveRequest.
+
+### Migration hiện có trên source
+
+| Database | Migration |
+|---|---|
+| HR_DB | `20261026043924_InitialHrSchema` |
+| HR_DB | `20261102014444_AddRefreshTokens` |
+| HR_DB | `20261111043715_AddDynamicAuthorizationSchema` |
+| HR_DB | `20261118090000_AddLeavePolicyVersions` |
+| Leave_DB | `20261027041915_InitialLeaveSchema` |
+| Leave_DB | `20261027060954_AddApprovalAndYearAllocations` |
+| Leave_DB | `20261117031304_AddLeaveBalanceNonNegativeConstraints` |
+| Leave_DB | `20261118093000_AddPolicySnapshotsToLeaveBalances` |
+
+Migration list trên được xác nhận từ thư mục `Infrastructure/Persistence/Migrations` của hai service tại revision đối chiếu. Khi schema có thay đổi, cập nhật migration và Model Snapshot trước, rồi mới cập nhật ERD; không sửa migration đã áp dụng. PNG/SVG là file được render từ Mermaid source và không phải nguồn xác định schema.

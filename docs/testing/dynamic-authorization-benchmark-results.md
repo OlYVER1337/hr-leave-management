@@ -414,3 +414,72 @@ git status --short
 ```
 
 Nếu file có tồn tại, commit raw report cùng SHA được xác minh bằng `git rev-parse HEAD` và image IDs nếu còn lưu. Phần số liệu trong mục này hiện dựa trên terminal output người chạy cung cấp, không thay thế raw k6 JSON.
+
+## 12. Approval sustained — constant-vus, 25/11/2026
+
+Đây là kết quả workload Approval chạy liên tục bằng executor `constant-vus` trong 5 phút. Phần này bổ sung cho các kết quả lịch sử ở mục 11; không thay thế hoặc ghi đè raw evidence của những lần chạy trước.
+
+### 12.1. Môi trường và cách đo
+
+| Thuộc tính | Giá trị |
+|---|---|
+| Compose project | `hrbench` |
+| Compose files | `docker-compose.yml`, `docker-compose.loadtest.yml` |
+| Load generator | `grafana/k6:latest`, Compose profile `loadtest` |
+| HR / Leave | ASP.NET Core trên .NET 10 |
+| Database / cache | SQL Server và Redis trong stack Docker Compose riêng |
+| HR / Leave / SQL / Redis | `18081` / `18082` / `11433` / `16379` trên host |
+| HR call metrics | Bật bằng `LoadTest__EnableHrCallMetrics=true` ở load-test Compose |
+| Workload | `PATCH /api/v1/leave-requests/{id}/decision`, approve |
+| Executor | `constant-vus`; 5 phút workload, 1 giây think time |
+| Máy chạy | Windows PowerShell + Docker Desktop; không có Docker CPU/RAM stats đồng bộ được lưu cho lượt 150 VU |
+
+RPS trong bảng là `completed approvals / 300 giây` theo cửa sổ workload cấu hình. Không chia cho tổng thời gian tiến trình k6, vì thời gian đó còn gồm setup và graceful stop.
+
+### 12.2. Dữ liệu seed và xác minh
+
+| Tham số | Baseline 50 VU | Lượt 150 VU |
+|---|---:|---:|
+| Employees | 4.000 | 5.000 |
+| Requests / employee | 20 | 20 |
+| Tổng leave requests | 80.000 | 100.000 |
+| Pending percent | 50% | 50% |
+| Pending requests | 40.000 | 50.000 |
+| Managers | 25 | 25 |
+| Pending / Manager | 1.600 | 2.000 |
+| `MAX_APPROVALS_PER_VU` | 400 | 333 |
+| Request ID capacity | 20.000 | 49.950 |
+
+Seed script `scripts/load-test/seed-scale-data.sql` tạo ngày nghỉ vào business days, loại cuối tuần và các ngày lễ đã cấu hình HR; kiểm tra overlap và quota `Used + Pending` trước khi commit. Lượt 150 VU dùng `verify-approval-seed.sql` với `ManagerCount=25` và `ExpectedPendingPerManager=2000`; verifier xác nhận đủ Pending cho cả 25 Manager.
+
+### 12.3. Kết quả
+
+| Chỉ số | 50 VU / 5 phút | 150 VU / 5 phút |
+|---|---:|---:|
+| Approval attempts | 14.688 | 43.622 |
+| Completed approvals | 14.688 | 43.622 |
+| Throughput (completed / 300 giây) | 48,96/s | 145,41/s |
+| P50 | 19,70 ms | 26,01 ms |
+| P95 | 32,0955 ms | 46,40 ms |
+| Approval errors | 0 | 0 |
+| Error rate | 0% | 0% |
+| Leave → HR calls | Chưa lưu trong summary hợp lệ | 87.244 |
+| Leave → HR average | Chưa lưu trong summary hợp lệ | 3,5656 ms |
+| Leave → HR P95 | Chưa lưu trong summary hợp lệ | 7,97 ms |
+
+Ở lượt 150 VU, 87.244 HR calls tương ứng 2 lời gọi HR trên mỗi approval thành công trong workload này. Không suy rộng tỷ lệ này sang các endpoint hoặc workload khác.
+
+### 12.4. Metadata và giới hạn evidence
+
+- Baseline 50 VU: SHA của checkout thực tế và immutable image IDs không được lưu cùng summary. Kết quả 14.688 approvals là summary đã được người chạy xác nhận; raw k6 JSON tương ứng chưa được xác nhận có trong repository.
+- Lượt 150 VU: `GIT_SHA=c4497f70b1e39b3954b576a2a8ff081f7f948336`; `HR_IMAGE_ID=not-provided`; `LEAVE_IMAGE_ID=not-provided`.
+- PR #13 đang ở head `61f22ad0fb264241744f56e4fb1a2c969d3d3046` tại thời điểm rà soát. SHA của lượt 150 VU không trùng head PR; do đó không ghi nhận đây là benchmark chạy trên đúng head hiện tại của PR.
+- `test_run_duration_ms` của lượt 150 VU là khoảng 373.376 ms (6 phút 13 giây), bao gồm setup và graceful stop; scenario workload vẫn là 5 phút và output ghi nhận 43.622 complete, 0 interrupted iterations.
+- Không có raw k6 export, Docker CPU/RAM stats hoặc immutable HR/Leave image IDs mới được xác minh trong branch. Hai file `*-summary.json` trong thư mục evidence là bản tóm tắt số liệu do người chạy cung cấp, **không phải raw k6 export**.
+- File cũ `approval-constant-vus-50-5m-rerun.json` vẫn giữ nguyên và ghi nhận một lượt riêng với 14.659 completions; không dùng file đó làm raw data cho baseline 14.688 completions trong bảng trên.
+- Hai lượt dùng quy mô seed khác nhau và thiếu source SHA của baseline 50 VU; chỉ nên xem đây là hai mốc quan sát ở hai mức concurrency, không phải phép so sánh A/B hoàn toàn đồng nhất.
+- Đây là benchmark local, không phải cam kết production throughput. Không có benchmark trên 150 VU hoặc soak test bổ sung theo phạm vi đã chốt.
+
+Summary evidence:
+- `evidence/dynamic-authorization/approval-constant-vus-50-5m-valid-seed-summary.json`
+- `evidence/dynamic-authorization/approval-constant-vus-150-5m-summary.json`

@@ -210,7 +210,7 @@ LeaveRequests.ApproverId là snapshot tại thời điểm tạo đơn, chỉ ph
 5. Refactor HR Employees API và /api/v1/me/team sang Permission + Scope.
 6. Cung cấp API quản lý UserRoles có kiểm tra quyền hiện tại, chống leo thang đặc quyền, audit và bảo vệ quản trị viên cuối cùng.
 7. Chuyển HR write endpoints và EmployeeLookupController sang policy Permission; chuyển Leave API/repository sang LeaveAccess từ perm, giữ HR lookup cho Team inbox và quyết định Team.
-8. Chạy toàn bộ test SQL/Redis với skipped = 0; benchmark workforce và approval lookup ở 50/100 VU theo [hướng dẫn xác minh và benchmark](../testing/dynamic-authorization-validation.md).
+8. Chạy test HR/Leave và Web với skipped = 0; workload Approval sustained đã được đo bằng `constant-vus` ở 50 và 150 VU × 5 phút. Mức đánh giá hiện dừng tại 150 VU, không mở rộng tải hoặc soak test.
 
 Outbox, asynchronous read model, backfill/reconciliation giữa hai service không thuộc V1; chỉ xem xét nếu benchmark chứng minh HTTP lookup là nút thắt.
 
@@ -248,3 +248,14 @@ Không nên mô tả V1 là hệ thống có thể tạo Role/Permission tùy ý
 ### Trạng thái source sau merge
 
 Dynamic Authorization V1 trong tài liệu này đã được tích hợp vào `master` qua PR #6, merge commit `81b987043ce4663ad11800bb331ffdbc013bd1d2` ngày 20/11/2026. Trạng thái merge không làm thay đổi các giới hạn V1 nêu trên: React vẫn dùng legacy Role cho navigation/route guard, Department scope chưa được thực thi, và Role/Permission catalog CRUD chưa có.
+
+## Benchmark Approval sustained — 25/11/2026
+
+PR #13 bổ sung workload `constant-vus` trong `scripts/load-test/approval-sustained.js`. Kết quả 50 VU và 150 VU, seed, metadata và giới hạn evidence được lưu tại [benchmark results](../testing/dynamic-authorization-benchmark-results.md) và `../testing/evidence/dynamic-authorization/`.
+
+| Mức tải | Completed approvals | Throughput | P95 | Error rate |
+|---|---:|---:|---:|---:|
+| 50 VU × 5 phút | 14.688 | 48,96/s | 32,0955 ms | 0% |
+| 150 VU × 5 phút | 43.622 | 145,41/s | 46,40 ms | 0% |
+
+150 VU là mức cuối cùng của đợt đánh giá. Đây là benchmark local, không chứng minh production capacity. SHA của lượt 150 VU không trùng PR head tại thời điểm rà soát; HR/Leave image IDs chưa được thu thập và summary JSON không thay thế raw k6 observations. Không kết luận bottleneck khi chưa có CPU/RAM và SQL telemetry đồng bộ.
