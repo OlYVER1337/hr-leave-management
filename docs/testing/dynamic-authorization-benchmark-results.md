@@ -293,7 +293,7 @@ Lệnh PowerShell tham khảo nằm ở docs/testing/dynamic-authorization-valid
 | Phân trang | `PAGE_SIZE=50` cho workforce; approval dùng endpoint decision |
 | Môi trường | Docker Desktop (WSL2), giới hạn RAM 7,62 GiB, không giới hạn CPU trong compose |
 
-Các file JSON có trường `git_sha` và `image_tag` do k6 ghi vào `benchmark_metadata`.
+Các raw JSON Workforce có `benchmark_metadata` với `git_sha` và `image_tag`. Raw JSON Approval v4 chưa có metadata riêng cho từng lượt; SHA và Leave image ID được ghi trong phần cấu hình lần đo, nhưng không được nhúng vào từng file Approval. Vì vậy, không thể xác minh revision/image riêng của một lượt Approval chỉ bằng cách đọc raw JSON đó.
 
 ### 11.2. Workforce (đọc danh sách), trung vị ba lần sạch
 
@@ -414,3 +414,10 @@ git status --short
 ```
 
 Nếu file có tồn tại, commit raw report cùng SHA được xác minh bằng `git rev-parse HEAD` và image IDs nếu còn lưu. Phần số liệu trong mục này hiện dựa trên terminal output người chạy cung cấp, không thay thế raw k6 JSON.
+
+
+### 11.8. Metadata cho các lượt Approval tiếp theo
+
+Các file Approval v4 trong mục 11.3 là bằng chứng lịch sử và **không có** `benchmark_metadata`. Script `scripts/load-test/approval.js` đã được cập nhật sau đợt v4 để ghi metadata cho từng lượt, gồm `git_sha`, `hr_image_id`, `leave_image_id`, VU, iterations/VU, maxDuration, Manager count, thông tin seed và timestamp UTC. Hướng dẫn build, lấy image ID từ container đang chạy và chạy lại nằm trong [dynamic-authorization-validation.md](dynamic-authorization-validation.md#11-gan-metadata-cho-approval-benchmark).
+
+Muốn có bằng chứng Approval gắn revision đầy đủ, cần chạy lại benchmark bằng commit chứa bản cập nhật script, truyền đủ biến môi trường và lưu raw JSON mới. Không gắn metadata mới vào các file v4 cũ hoặc coi metadata của Workforce là metadata thay thế cho Approval.
