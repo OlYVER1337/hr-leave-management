@@ -47,7 +47,9 @@ export function parseDateOnlyUtc(value: string): Date {
   const year = Number(match[1]);
   const month = Number(match[2]);
   const day = Number(match[3]);
-  const date = new Date(Date.UTC(year, month - 1, day));
+  const date = new Date(0);
+  date.setUTCHours(0, 0, 0, 0);
+  date.setUTCFullYear(year, month - 1, day);
 
   if (
     date.getUTCFullYear() !== year
