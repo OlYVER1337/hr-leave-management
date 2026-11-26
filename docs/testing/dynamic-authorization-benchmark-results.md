@@ -548,6 +548,7 @@ Hai lượt chạy dùng cùng Git revision, HR/Leave image IDs, seed và worklo
 | Pending sau seed | 50.000 tổng cộng; 2.000 mỗi Manager |
 | Pending cần | 600 mỗi Manager |
 
+Đây là **seed dành riêng cho Approval arrival-rate** theo `approval-benchmark.config.json`: 5.000 nhân viên × 20 đơn = 100.000 đơn, 50% Pending = 50.000 Pending. Không nhầm với seed Workforce/legacy có 1.000 nhân viên × 5 đơn = 5.000 đơn; hai cấu hình phục vụ workload khác nhau.
 ### 15.2. Bảng đầy đủ các lượt constant-arrival-rate ngày 26/11
 
 Bảng dưới đây liệt kê toàn bộ bốn lượt Approval arrival-rate có raw JSON và summary JSON tương ứng trong evidence. **Commit đo** lấy từ trường `git_sha` trong summary của chính lượt chạy, không lấy commit tài liệu hoặc HEAD hiện tại của nhánh.
@@ -565,7 +566,7 @@ Bảng dưới đây liệt kê toàn bộ bốn lượt Approval arrival-rate c
 
 Lượt **11:18:07** bị loại không phải vì HTTP error (có 0 lỗi), mà vì không giữ được arrival schedule: raw JSON ghi `dropped_iterations.count=27`, threshold `dropped_iterations: count==0` không đạt, và chỉ có 14.974 approval HTTP attempts/thành công (thiếu 26 so với 15.000). Raw/summary không xuất metric out-of-plan cho lượt này, nên không gán giá trị 0. Không được làm tròn hoặc ghi lượt này thành 15.000/15.000.
 
-Lượt **11:33:47** không bị loại vì dropped iteration; raw JSON ghi 15.000 attempts, 15.000 thành công và 0 dropped. Tuy nhiên Git SHA của nó khác SHA ở lượt 50 VU 11:18:07, nên không dùng hai lượt đầu làm cặp so sánh cùng revision. Hai lượt 13:15:04 và 13:22:21 là cặp được chọn cuối cùng vì dùng cùng Git SHA và image IDs.
+Lượt **11:33:47** không bị loại vì dropped iteration; raw JSON ghi 15.000 attempts, 15.000 thành công và 0 dropped. Git SHA `031dc613fb5fec6a4719c3b79f6ed8d23274010e` khác SHA của lượt 50 VU 11:18:07. Tôi đã đối chiếu `031dc61...` với `d34ca91...`: các blob của `approval-benchmark.config.json`, `seed-scale-data.sql`, `approval-benchmark-common.js`, `approval-arrival-rate.js` và `run-approval-benchmark.ps1` giống hệt; 5 commit nằm giữa chỉ thay đổi tài liệu/evidence, không thay đổi code benchmark hoặc code Approval liên quan. Vì vậy khác revision không đồng nghĩa khác logic benchmark ở hai lượt này; tuy nhiên để có cặp A/B cùng đúng một SHA, chỉ chọn hai lượt cuối 13:15:04 và 13:22:21.
 
 Raw/summary filenames theo cùng timestamp:
 
