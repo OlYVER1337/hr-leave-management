@@ -265,7 +265,7 @@ Raw/summary report:
 - Pool 50: approval-arrival-rate-50rps-50-vu-pool-20261126-131504
 - Pool 100: approval-arrival-rate-50rps-100-vu-pool-20261126-132221
 
-Chưa thu thập CPU/RAM/SQL waits đồng bộ để kết luận bottleneck. Đây là benchmark local với revision và image nêu trên, không phải cam kết năng lực production.
+Bảng đầy đủ các lượt arrival-rate ngày 26/11 (cả lượt hợp lệ và bị loại), commit đo từng lượt và lý do loại lượt 11:18:07 vì 27 dropped iterations được ghi trong [Benchmark results, Mục 15.2](testing/dynamic-authorization-benchmark-results.md). Chưa thu thập CPU/RAM/SQL waits đồng bộ để kết luận bottleneck. Đây là benchmark local với revision và image nêu trên, không phải cam kết năng lực production.
 
 ## 9. Kiến trúc và giới hạn cần bàn giao
 
