@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "seed": {
-    "employeeCount": 4000,
+    "employeeCount": 5000,
     "requestsPerEmployee": 20,
     "managerCount": 25,
     "pendingPercent": 50,
@@ -16,7 +16,8 @@
     },
     "constantArrivalRate": {
       "ratePerSecond": 50,
-      "defaultPreAllocatedVus": 50
+      "defaultPreAllocatedVus": 50,
+      "timeUnit": "1s"
     }
   }
 }
