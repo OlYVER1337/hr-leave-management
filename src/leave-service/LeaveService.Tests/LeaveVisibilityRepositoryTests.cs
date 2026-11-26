@@ -93,6 +93,22 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
             approverId: managerId,
             start: new DateOnly(2030, 1, 11),
             end: new DateOnly(2030, 1, 11));
+        var emptyHistoryRequest = new LeaveRequest
+        {
+            EmployeeId = teamEmployeeId,
+            DepartmentId = 3,
+            LeaveTypeId = 2,
+            StartDate = new DateOnly(2030, 1, 12),
+            EndDate = new DateOnly(2030, 1, 12),
+            TotalDays = 1m,
+            Reason = "empty history",
+            CreatedAtUtc = DateTime.UtcNow
+        };
+        await using (var context = _fixture.CreateContext())
+        {
+            context.LeaveRequests.Add(emptyHistoryRequest);
+            await context.SaveChangesAsync();
+        }
 
         var sameTimestamp = teamRequest.CreatedAtUtc.AddHours(-2);
         var firstId = Guid.Parse("00000000-0000-0000-0000-000000000001");
@@ -141,6 +157,14 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
                 [teamEmployeeId]);
 
             Assert.NotNull(teamHistory);
+            var emptyHistory = await repository.GetVisibleHistoryAsync(
+                managerId,
+                emptyHistoryRequest.Id,
+                ManagerAccess(),
+                [teamEmployeeId]);
+            Assert.NotNull(emptyHistory);
+            Assert.Empty(emptyHistory);
+
             Assert.Equal(
                 new[] { firstId, secondId },
                 teamHistory.Where(item => item.Id == firstId || item.Id == secondId)
