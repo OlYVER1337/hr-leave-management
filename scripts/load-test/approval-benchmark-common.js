@@ -286,7 +286,7 @@ export function writeApprovalSummary(data, run) {
   if (run.executor === 'constant-arrival-rate') {
     summary.target_approval_rate_per_second = run.ratePerSecond;
     summary.planned_iterations = run.plannedIterations;
-    summary.started_iterations = k6Iterations;
+    summary.completed_iterations = k6Iterations;
     summary.approval_http_attempts = attempts;
     summary.dropped_iteration_rate =
       run.plannedIterations > 0 ? droppedIterations / run.plannedIterations : 0;
