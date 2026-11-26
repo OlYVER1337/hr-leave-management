@@ -398,6 +398,17 @@ Raw/summary prefix:
 
 Bảng tổng hợp đầy đủ bốn lượt arrival-rate, commit đo từng lượt và lý do loại lượt 50 VU 11:18:07 vì 27 dropped iterations nằm ở [Benchmark results, Mục 15.2](dynamic-authorization-benchmark-results.md). Đây là benchmark local, không có CPU/RAM/SQL waits thu thập đồng bộ; không kết luận bottleneck hoặc production capacity từ số liệu này.
 
+### 7.6. Backend tests sau merge — 26/11/2026
+
+| Suite | Passed | Failed | Skipped | Result |
+|---|---:|---:|---:|---:|
+| HR Service (.NET 10.0.13) | 158 | 0 | 0 | **PASS** |
+| Leave Service (.NET 10.0.13) | 129 | 0 | 0 | **PASS** |
+
+Tổng 287/287 test passed, 0 failed, 0 skipped. Người triển khai báo cáo hai lệnh chạy với `--no-restore` sau khi cập nhật source tới master commit `b9fa469c51bb25214aa6a3bef7ac8358b699ede3`; build cả hai solution thành công. Đây là output local được ghi nhận ngày 26/11/2026, không phải test chạy lại trong PR và không bao gồm frontend tests hoặc Swagger smoke test.
+
+Tên thư mục trong repository là `src/leave-service/` (viết thường); lệnh báo cáo dùng chữ `Leave-service` viết hoa nhưng vẫn chạy trên Windows.
+
 ## 8. Quy trình tái xác minh sau merge
 
 Để gắn kết quả kiểm thử với chính xác revision `master`:
