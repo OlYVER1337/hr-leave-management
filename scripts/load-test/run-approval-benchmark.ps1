@@ -106,15 +106,11 @@ function Invoke-Seed {
     $seedFile = ".\scripts\load-test\seed-scale-data.sql"
     Invoke-Compose -ComposeArguments @("cp", $seedFile, "sqlserver:/tmp/seed-scale-data.sql")
 
-    $policyDays = ([decimal]$seed.policyDaysPerEmployee).ToString(
-        [System.Globalization.CultureInfo]::InvariantCulture
-    )
     $sqlCommand = '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -b -d master' +
         " -v EmployeeCount=$([int]$seed.employeeCount)" +
         " RequestsPerEmployee=$([int]$seed.requestsPerEmployee)" +
         " ManagerCount=$([int]$seed.managerCount)" +
         " PendingPercent=$([int]$seed.pendingPercent)" +
-        " PolicyDaysPerEmployee=$policyDays" +
         " -i /tmp/seed-scale-data.sql"
 
     Invoke-Compose -ComposeArguments @(
