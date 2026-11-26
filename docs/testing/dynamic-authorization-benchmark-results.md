@@ -417,7 +417,7 @@ Nếu file có tồn tại, commit raw report cùng SHA được xác minh bằn
 
 ## 13. Approval sustained — constant-vus, 25/11/2026
 
-Đây là kết quả workload Approval chạy liên tục bằng executor `constant-vus` trong 5 phút. Phần này bổ sung cho các kết quả lịch sử ở mục 11; không thay thế hoặc ghi đè raw evidence của những lần chạy trước.
+Đây là kết quả workload Approval chạy liên tục bằng executor `constant-vus` trong 5 phút. Phần này bổ sung cho các kết quả lịch sử ở Mục 12; không thay thế hoặc ghi đè raw evidence của những lần chạy trước.
 
 ### 13.1. Môi trường và cách đo
 
@@ -487,7 +487,7 @@ Summary evidence:
 
 ## 14. Phân loại bổ sung raw Approval JSON — 26/11/2026
 
-Commit `14cea970e5b42de555b19c11747cabe106d80ea8` bổ sung ba raw k6 JSON và thay đổi `approval-sustained.js` bằng cách đặt `setupTimeout: '5m'`. Các raw JSON được kiểm tra độc lập với hai summary operator-provided ở Mục 11; không thay thế hoặc gộp số liệu giữa các lượt chạy.
+Commit `14cea970e5b42de555b19c11747cabe106d80ea8` bổ sung ba raw k6 JSON và thay đổi `approval-sustained.js` bằng cách đặt `setupTimeout: '5m'`. Các raw JSON được kiểm tra độc lập với hai summary operator-provided ở Mục 13; không thay thế hoặc gộp số liệu giữa các lượt chạy.
 
 ### 14.1. Raw 50 VU có workload Approval
 
@@ -498,7 +498,7 @@ File `approval-constant-vus-50-5m.json` ghi nhận:
 - P50/P95 của custom `approval_request_duration_ms`: 24,01 / 48,79 ms.
 - Leave → HR calls: 28.822.
 
-Đây là một lượt chạy riêng, không phải raw evidence cho summary 14.688 completions ở Mục 11. Không trộn hai lượt để tính percentile hoặc throughput đại diện.
+Đây là một lượt chạy riêng, không phải raw evidence cho summary 14.688 completions ở Mục 13. Không trộn hai lượt để tính percentile hoặc throughput đại diện.
 
 ### 14.2. Raw 150 VU có 74 approval errors
 
@@ -510,7 +510,7 @@ File `approval-constant-vus-150-5m-valid-seed.json` ghi nhận:
 - P50/P95 của custom `approval_request_duration_ms`: 23,82 / 52,16 ms.
 - Leave → HR calls: 84.560.
 
-Đây là một lượt chạy có seed capacity nhưng **không phải lượt 150 VU zero-error**. Không thay thế summary 43.622 completions/0 errors ở Mục 11; phải giữ hai lượt tách biệt và không sử dụng raw JSON này để tuyên bố error rate của lượt summary. File không chứa Git SHA/image ID nên chưa gắn được với binary cụ thể.
+Đây là một lượt chạy có seed capacity nhưng **không phải lượt 150 VU zero-error**. Không thay thế summary 43.622 completions/0 errors ở Mục 13; phải giữ hai lượt tách biệt và không sử dụng raw JSON này để tuyên bố error rate của lượt summary. File không chứa Git SHA/image ID nên chưa gắn được với binary cụ thể.
 
 ### 14.3. JSON có tên 50 VU nhưng không có Approval workload
 
@@ -523,9 +523,9 @@ Vì vậy không dùng file này để tính throughput/latency Approval. Tên f
 
 ### 14.4. Cách sử dụng evidence
 
-- Summary 50 VU (14.688/0 errors) và summary 150 VU (43.622/0 errors) ở Mục 11 vẫn là các kết quả operator-provided riêng biệt.
+- Summary 50 VU (14.688/0 errors) và summary 150 VU (43.622/0 errors) ở Mục 13 vẫn là các kết quả operator-provided riêng biệt.
 - Raw 50 VU (14.411/0 errors) và raw 150 VU (42.239/74 errors) là các lượt riêng, được giữ độc lập.
-- Không suy ra một benchmark “150 VU zero-error” từ raw JSON mới; zero-error chỉ áp dụng cho lượt được ghi trong summary ở Mục 11.
+- Không suy ra một benchmark “150 VU zero-error” từ raw JSON mới; zero-error chỉ áp dụng cho lượt được ghi trong summary ở Mục 13.
 - Cần giữ nguyên mọi raw export và mô tả rõ lượt nào là pass, lượt nào là fail/không có workload. Không xóa hoặc gộp các JSON khác lượt chạy.
 
 
