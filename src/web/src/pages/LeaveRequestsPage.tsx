@@ -1,14 +1,58 @@
-import { useCallback, useEffect, useState } from 'react';
-import { CalendarDays, ChevronDown, Download, Eye, Filter, Search, XCircle } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { CalendarDays, ChevronDown, Download, Eye, Filter, History, Search, XCircle } from 'lucide-react';
 import { PageHeader, Avatar, EmptyState, formatDate, StatusBadge } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { useAuth } from '../contexts';
 import { useToast } from '../components/ToastProvider';
-import { cancelLeaveRequest, getLeaveRequestsPage, type LeavePageQuery } from '../services/leaveService';
+import { cancelLeaveRequest, getLeaveRequestHistory, getLeaveRequestsPage, type LeavePageQuery } from '../services/leaveService';
 import { Pagination } from '../components/Pagination';
 import { usePagedBlock } from '../hooks/usePagedBlock';
 import { getApiErrorMessage } from '../services/apiClient';
-import type { LeaveRequest, LeaveStatus } from '../types';
+import type { LeaveRequest, LeaveRequestHistory, LeaveStatus } from '../types';
+import './LeaveRequestHistory.css';
+
+function historyActionLabel(action: string): string {
+  const labels: Record<string, string> = {
+    Created: 'Tạo đơn',
+    Approved: 'Phê duyệt đơn',
+    Rejected: 'Từ chối đơn',
+    Cancelled: 'Hủy đơn',
+  };
+  return labels[action] ?? action;
+}
+
+function historyStatusLabel(status: string | null): string {
+  if (!status) return 'Khởi tạo';
+  const labels: Record<string, string> = {
+    Pending: 'Chờ duyệt',
+    Approved: 'Đã duyệt',
+    Rejected: 'Bị từ chối',
+    Cancelled: 'Đã hủy',
+  };
+  return labels[status] ?? status;
+}
+
+function formatHistoryTimestamp(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('vi-VN', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date);
+}
+
+function historyActorLabel(
+  actorId: string,
+  request: LeaveRequest,
+  currentUser: { id: string; fullName: string } | null | undefined,
+): string {
+  if (actorId === request.employeeId) return `${request.employeeName} (nhân viên)`;
+  if (actorId === currentUser?.id) return `${currentUser.fullName} (bạn)`;
+  if (actorId === request.approverId && request.approverName && request.approverId) {
+    return `${request.approverName} (người duyệt)`;
+  }
+  return `Mã người thực hiện: ${actorId}`;
+}
 
 export function LeaveRequestsPage({ all = false }: { all?: boolean }) {
   const { user } = useAuth();
@@ -21,6 +65,12 @@ export function LeaveRequestsPage({ all = false }: { all?: boolean }) {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [refreshToken, setRefreshToken] = useState(0);
   const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
+  const [historyItems, setHistoryItems] = useState<LeaveRequestHistory[]>([]);
+  const [historyLoadedRequestId, setHistoryLoadedRequestId] = useState<string | null>(null);
+  const historyLoadSequence = useRef(0);
 
   useEffect(() => {
     const handle = window.setTimeout(() => setDebouncedSearch(search), 300);
@@ -74,6 +124,50 @@ export function LeaveRequestsPage({ all = false }: { all?: boolean }) {
 
 
 
+  function openRequestDetails(item: LeaveRequest) {
+    historyLoadSequence.current += 1;
+    setSelectedRequest(item);
+    setHistoryOpen(false);
+    setHistoryLoading(false);
+    setHistoryError('');
+    setHistoryItems([]);
+    setHistoryLoadedRequestId(null);
+  }
+
+  function closeRequestDetails() {
+    historyLoadSequence.current += 1;
+    setSelectedRequest(null);
+    setHistoryOpen(false);
+    setHistoryLoading(false);
+  }
+
+  async function toggleRequestHistory() {
+    if (!selectedRequest || historyLoading) return;
+    if (historyOpen) {
+      setHistoryOpen(false);
+      return;
+    }
+
+    setHistoryOpen(true);
+    if (historyLoadedRequestId === selectedRequest.id) return;
+
+    const requestId = selectedRequest.id;
+    const sequence = ++historyLoadSequence.current;
+    setHistoryLoading(true);
+    setHistoryError('');
+    try {
+      const result = await getLeaveRequestHistory(requestId);
+      if (historyLoadSequence.current !== sequence) return;
+      setHistoryItems(result);
+      setHistoryLoadedRequestId(requestId);
+    } catch (reason) {
+      if (historyLoadSequence.current !== sequence) return;
+      setHistoryError(getApiErrorMessage(reason));
+    } finally {
+      if (historyLoadSequence.current === sequence) setHistoryLoading(false);
+    }
+  }
+
   async function onCancel(item: LeaveRequest) {
     if (!window.confirm(`Bạn có chắc muốn hủy đơn ${item.id} không?`)) return;
     try { await cancelLeaveRequest(item.id); notify('Đã hủy đơn nghỉ phép.'); setRefreshToken((value) => value + 1); }
@@ -87,7 +181,7 @@ export function LeaveRequestsPage({ all = false }: { all?: boolean }) {
     {error && <div className="inline-alert alert-warning">{error}</div>}
     <section className="panel page-table-panel">
       <div className="table-toolbar"><div className="search-field"><Search size={17} /><input aria-label="Tìm đơn nghỉ phép" placeholder="Tìm theo mã đơn hoặc lý do..." value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} /></div><div className="toolbar-filters"><label className="select-wrap"><Filter size={15} /><select aria-label="Lọc theo trạng thái" value={status} onChange={(event) => { setStatus(event.target.value as 'All' | LeaveStatus); setPage(1); }}><option value="All">Tất cả trạng thái</option><option value="Pending">Chờ duyệt</option><option value="Approved">Đã duyệt</option><option value="Rejected">Bị từ chối</option><option value="Cancelled">Đã hủy</option></select><ChevronDown size={14} /></label><label className="select-wrap"><select aria-label="Lọc theo loại nghỉ" value={type} onChange={(event) => { setType(event.target.value); setPage(1); }}><option value="All">Tất cả loại nghỉ</option><option value="ANNUAL">Nghỉ phép năm</option><option value="SICK">Nghỉ ốm</option><option value="UNPAID">Nghỉ không lương</option></select><ChevronDown size={14} /></label></div></div>
-      {loading ? <div className="table-loading"><span /> Đang tải danh sách đơn…</div> : filtered.length === 0 ? <EmptyState title="Không tìm thấy đơn nghỉ" description="Thử đổi bộ lọc hoặc tạo yêu cầu nghỉ phép mới." /> : <div className="table-scroll"><table className="data-table requests-table"><thead><tr><th>Mã đơn</th>{(all || user?.role === 'HR') && <th>Nhân viên</th>}<th>Loại nghỉ</th><th>Thời gian</th><th>Số ngày</th><th>Người duyệt</th><th>Trạng thái</th><th /></tr></thead><tbody>{filtered.map((item) => <tr key={item.id}><td><div className="request-id-cell"><strong>{item.id}</strong><small>Gửi ngày {formatDate(item.createdAt.slice(0, 10))}</small></div></td>{(all || user?.role === 'HR') && <td><div className="person-cell"><Avatar name={item.employeeName} size="sm" /><div><strong>{item.employeeName}</strong><small>{item.employeeCode} · {item.departmentName}</small></div></div></td>}<td><span className="leave-type-cell"><span className={`leave-type-dot ${item.typeCode.toLowerCase()}`} />{item.typeName}</span></td><td><div className="date-range-cell">{formatDate(item.startDate)}<span>—</span>{formatDate(item.endDate)}</div></td><td><strong>{item.days}</strong> ngày</td><td>{item.approverName || '—'}</td><td><StatusBadge status={item.status} /></td><td><div className="row-actions">{item.status === 'Pending' && item.employeeId === user?.id && <button className="icon-button danger-icon" title="Hủy đơn" aria-label="Hủy đơn" onClick={() => void onCancel(item)}><XCircle size={17} /></button>}<button className="icon-button" title="Xem chi tiết đơn" aria-label={`Xem chi tiết ${item.id}`} onClick={() => setSelectedRequest(item)}><Eye size={17} /></button></div></td></tr>)}</tbody></table></div>}
+      {loading ? <div className="table-loading"><span /> Đang tải danh sách đơn…</div> : filtered.length === 0 ? <EmptyState title="Không tìm thấy đơn nghỉ" description="Thử đổi bộ lọc hoặc tạo yêu cầu nghỉ phép mới." /> : <div className="table-scroll"><table className="data-table requests-table"><thead><tr><th>Mã đơn</th>{(all || user?.role === 'HR') && <th>Nhân viên</th>}<th>Loại nghỉ</th><th>Thời gian</th><th>Số ngày</th><th>Người duyệt</th><th>Trạng thái</th><th /></tr></thead><tbody>{filtered.map((item) => <tr key={item.id}><td><div className="request-id-cell"><strong>{item.id}</strong><small>Gửi ngày {formatDate(item.createdAt.slice(0, 10))}</small></div></td>{(all || user?.role === 'HR') && <td><div className="person-cell"><Avatar name={item.employeeName} size="sm" /><div><strong>{item.employeeName}</strong><small>{item.employeeCode} · {item.departmentName}</small></div></div></td>}<td><span className="leave-type-cell"><span className={`leave-type-dot ${item.typeCode.toLowerCase()}`} />{item.typeName}</span></td><td><div className="date-range-cell">{formatDate(item.startDate)}<span>—</span>{formatDate(item.endDate)}</div></td><td><strong>{item.days}</strong> ngày</td><td>{item.approverName || '—'}</td><td><StatusBadge status={item.status} /></td><td><div className="row-actions">{item.status === 'Pending' && item.employeeId === user?.id && <button className="icon-button danger-icon" title="Hủy đơn" aria-label="Hủy đơn" onClick={() => void onCancel(item)}><XCircle size={17} /></button>}<button className="icon-button" title="Xem chi tiết đơn" aria-label={`Xem chi tiết ${item.id}`} onClick={() => openRequestDetails(item)}><Eye size={17} /></button></div></td></tr>)}</tbody></table></div>}
       <div className="table-footer">
         <span>Đang hiển thị <strong>{firstVisible}–{lastVisible}</strong> / <strong>{totalCount}</strong> đơn</span>
         <div className="employee-pagination">
@@ -100,7 +194,7 @@ export function LeaveRequestsPage({ all = false }: { all?: boolean }) {
         <span className="table-footer-note"><CalendarDays size={14} /> Ngày giờ theo múi giờ địa phương</span>
       </div>
     </section>
-    {selectedRequest && <Modal title={`Chi tiết đơn ${selectedRequest.id}`} description={`Gửi ngày ${formatDate(selectedRequest.createdAt.slice(0, 10))}`} onClose={() => setSelectedRequest(null)}>
+    {selectedRequest && <Modal title={`Chi tiết đơn ${selectedRequest.id}`} description={`Gửi ngày ${formatDate(selectedRequest.createdAt.slice(0, 10))}`} onClose={closeRequestDetails}>
       <div className="request-details">
         <div><span>Nhân viên</span><strong>{selectedRequest.employeeName} · {selectedRequest.employeeCode}</strong></div>
         <div><span>Phòng ban</span><strong>{selectedRequest.departmentName}</strong></div>
@@ -112,7 +206,57 @@ export function LeaveRequestsPage({ all = false }: { all?: boolean }) {
         <div className="request-details-full"><span>Lý do</span><p>{selectedRequest.reason}</p></div>
         {selectedRequest.decisionNote && <div className="request-details-full"><span>Ghi chú phê duyệt</span><p>{selectedRequest.decisionNote}</p></div>}
       </div>
-      <div className="modal-actions"><button className="button button-secondary" onClick={() => setSelectedRequest(null)}>Đóng</button></div>
+      <section className="request-history-panel" aria-label="Lịch sử xử lý đơn nghỉ">
+        <div className="request-history-toolbar">
+          <div>
+            <h3>Lịch sử xử lý</h3>
+            <p>Các thao tác đã được ghi nhận cho đơn nghỉ này.</p>
+          </div>
+          <button
+            className="button button-secondary"
+            type="button"
+            onClick={() => void toggleRequestHistory()}
+            disabled={historyLoading}
+            aria-expanded={historyOpen}
+            aria-controls="leave-request-history"
+          >
+            <History size={15} />
+            {historyLoading ? 'Đang tải…' : historyOpen ? 'Ẩn lịch sử' : 'Xem lịch sử'}
+          </button>
+        </div>
+        {historyOpen && (
+          <div id="leave-request-history" className="request-history-content" aria-live="polite">
+            {historyLoading && <div className="request-history-state">Đang tải lịch sử đơn nghỉ…</div>}
+            {historyError && <div className="inline-alert alert-warning" role="alert">{historyError}</div>}
+            {!historyLoading && !historyError && historyItems.length === 0 && (
+              <div className="request-history-state">Chưa có bản ghi lịch sử cho đơn này.</div>
+            )}
+            {!historyLoading && !historyError && historyItems.length > 0 && (
+              <ol className="leave-history-timeline">
+                {historyItems.map((entry) => (
+                  <li className="leave-history-item" key={entry.id}>
+                    <span className="leave-history-marker" aria-hidden="true" />
+                    <div className="leave-history-entry">
+                      <div className="leave-history-entry-heading">
+                        <strong>{historyActionLabel(entry.action)}</strong>
+                        <time dateTime={entry.createdAtUtc}>{formatHistoryTimestamp(entry.createdAtUtc)}</time>
+                      </div>
+                      <p className="leave-history-actor">
+                        Người thực hiện: {historyActorLabel(entry.actorId, selectedRequest, user)}
+                      </p>
+                      <p className="leave-history-status">
+                        {historyStatusLabel(entry.fromStatus)} <span aria-hidden="true">→</span> {historyStatusLabel(entry.toStatus)}
+                      </p>
+                      {entry.note && <p className="leave-history-note">Ghi chú: {entry.note}</p>}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        )}
+      </section>
+      <div className="modal-actions"><button className="button button-secondary" onClick={closeRequestDetails}>Đóng</button></div>
     </Modal>}
   </div>;
 }
