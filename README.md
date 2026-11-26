@@ -16,6 +16,7 @@ Các khoảng trống và thứ tự hoàn thiện được theo dõi tại [Bac
 
 ## Mục lục
 
+- [Bắt đầu nhanh (API thật)](#bắt-đầu-nhanh-api-thật)
 - [1. Công nghệ sử dụng](#1-công-nghệ-sử-dụng)
 - [2. Kiến trúc và cấu trúc thư mục](#2-kiến-trúc-và-cấu-trúc-thư-mục)
 - [3. Yêu cầu môi trường](#3-yêu-cầu-môi-trường)
@@ -27,6 +28,46 @@ Các khoảng trống và thứ tự hoàn thiện được theo dõi tại [Bac
 - [9. Lệnh Docker thường dùng](#9-lệnh-docker-thường-dùng)
 - [10. Xử lý lỗi thường gặp](#10-xử-lý-lỗi-thường-gặp)
 - [11. Lưu ý bảo mật](#11-lưu-ý-bảo-mật)
+
+## Bắt đầu nhanh (API thật)
+
+Dành cho lần chạy đầu trên máy local. Docker Compose mặc định build frontend ở chế độ API thật (`VITE_DEMO_MODE=false`).
+
+1. Clone repository và mở PowerShell tại thư mục dự án:
+
+   ~~~powershell
+   git clone https://github.com/OlYVER1337/hr-leave-management.git
+   Set-Location .\hr-leave-management
+   ~~~
+
+2. Tạo file cấu hình local:
+
+   ~~~powershell
+   Copy-Item .env.example .env
+   notepad .env
+   ~~~
+
+3. Trong `.env`, đặt `SA_PASSWORD` và `JWT_KEY` riêng. Với database mới, bật `INITIAL_HR_ENABLED=true` và điền thông tin HR. Để thực hành đủ ba vai trò, bật `DEMO_DATA_ENABLED=true` rồi điền email/mật khẩu riêng cho Manager và Employee. Giữ `VITE_DEMO_MODE=false`.
+
+4. Build và khởi chạy:
+
+   ~~~powershell
+   docker compose up --build -d
+   docker compose ps
+   ~~~
+
+5. Kiểm tra hai backend:
+
+   ~~~powershell
+   Invoke-RestMethod http://localhost:8081/health
+   Invoke-RestMethod http://localhost:8082/health
+   ~~~
+
+6. Mở [http://localhost:3000](http://localhost:3000). Đăng nhập bằng thông tin HR/Manager/Employee đã đặt trong `.env`.
+
+> Chỉ bật seed tài khoản trên database local/test mới hoặc database bạn chủ động quản lý. Không dùng mật khẩu ví dụ ở môi trường thật. Nếu database đã có tài khoản HR, không cần tạo lại HR khởi tạo.
+
+---
 
 ## 1. Công nghệ sử dụng
 
@@ -244,14 +285,27 @@ Nếu ứng dụng vẫn hiển thị nhãn **Demo mode**, frontend đang đư�
 | Frontend | http://localhost:3000 | Giao diện người dùng |
 | HR Service | http://localhost:8081 | API HR được expose ra máy host |
 | HR health | http://localhost:8081/health | Kiểm tra trạng thái HR Service |
-| HR OpenAPI | http://localhost:8081/openapi/v1.json | OpenAPI document khi môi trường là Development |
+| HR Swagger UI | http://localhost:8081/swagger | Giao diện khám phá và gửi thử request HR API khi Development |
+| HR OpenAPI JSON | http://localhost:8081/openapi/v1.json | Đặc tả OpenAPI của HR khi Development |
 | Leave Service | http://localhost:8082 | API nghỉ phép được expose ra máy host |
 | Leave health | http://localhost:8082/health | Kiểm tra trạng thái Leave Service |
-| Leave OpenAPI | http://localhost:8082/openapi/v1.json | OpenAPI document khi môi trường là Development |
+| Leave Swagger UI | http://localhost:8082/swagger | Giao diện khám phá và gửi thử request Leave API khi Development |
+| Leave OpenAPI JSON | http://localhost:8082/openapi/v1.json | Đặc tả OpenAPI của Leave khi Development |
 | SQL Server | `localhost,1433` | Kết nối từ công cụ SQL trên máy host |
 | Redis | `localhost:6379` | Kết nối từ công cụ Redis trên máy host |
 
 Đăng nhập bằng tài khoản HR mà bạn khai báo trong `INITIAL_HR_EMAIL` và `INITIAL_HR_PASSWORD` nếu đã bật tạo tài khoản ban đầu. Nếu bật seed dữ liệu demo, các tài khoản Manager và Employee dùng thông tin tương ứng trong `.env`.
+
+### Swagger UI và đăng nhập API
+
+Khi `ASPNETCORE_ENVIRONMENT=Development`, mở:
+
+- HR Swagger UI: [http://localhost:8081/swagger](http://localhost:8081/swagger)
+- Leave Swagger UI: [http://localhost:8082/swagger](http://localhost:8082/swagger)
+
+Dùng Swagger UI để xem route/schema và gửi thử API. Với endpoint cần xác thực, gọi HR `POST /api/v1/auth/login` trước; lấy access token trong response rồi nhập vào nút **Authorize** của Swagger UI theo dạng Bearer token. Refresh token được lưu trong HttpOnly cookie; không sao chép cookie này vào tài liệu hoặc Git.
+
+OpenAPI JSON tương ứng là `/openapi/v1.json` trên từng service.
 
 Endpoint đăng nhập HR:
 
@@ -271,28 +325,79 @@ Thay email và mật khẩu trong ví dụ bằng giá trị thật đã cấu h
 
 ## 8. Chạy automated tests
 
-Chạy test của HR Service:
+### Backend — .NET 10 SDK
 
-```bash
-dotnet test src/hr-service/HrService.slnx
-```
+Chạy tại thư mục gốc repository. Unit tests có thể chạy trực tiếp bằng .NET CLI; để các integration tests dùng SQL Server và Redis thật, trước tiên khởi động stack kiểm thử cô lập `hrbench` (không dùng chung volume/cổng với stack local `hr-leave`):
 
-Chạy test của Leave Service:
+~~~powershell
+if (-not (Test-Path .env)) { throw "Chưa có .env. Hãy copy .env.example thành .env và cấu hình trước." }
 
-```bash
-dotnet test src/leave-service/LeaveService.slnx
-```
+$compose = @(
+  "-p", "hrbench",
+  "-f", "docker-compose.yml",
+  "-f", "docker-compose.loadtest.yml"
+)
 
-Một số integration test cần SQL Server hoặc Redis riêng dành cho kiểm thử. Nếu thiếu dịch vụ hoặc biến môi trường cần thiết, test tích hợp có thể được đánh dấu `Skipped`; điều đó không đồng nghĩa với việc chức năng tích hợp đã được kiểm thử thành công. Không trỏ các test có khả năng tạo/xóa database hoặc xóa cache vào môi trường production.
+docker compose --env-file .env @compose up --build -d
+docker compose --env-file .env @compose ps
 
-Các integration test cần connection string qua biến môi trường. Nếu không cấu hình, test phụ thuộc SQL Server/Redis sẽ bị `Skipped`. Để chạy đầy đủ trên stack `hrbench`, cấu hình hai biến sau trong phiên PowerShell (thay `<SA_PASSWORD>` bằng giá trị cục bộ trong `.env`), rồi chạy lại hai lệnh `dotnet test` ở trên:
+Invoke-RestMethod http://localhost:18081/health
+Invoke-RestMethod http://localhost:18082/health
+~~~
 
-```powershell
-$env:HR_TEST_SQL_CONNECTION_STRING = "Server=localhost,11433;Database=master;User Id=sa;Password=<SA_PASSWORD>;Encrypt=False;TrustServerCertificate=True;Connect Timeout=5"
+Compose đọc cấu hình từ file `.env` qua `--env-file .env`. Để test persistence kết nối đúng SQL Server/Redis của project `hrbench`, nạp mật khẩu SQL từ chính file này vào phiên PowerShell, sau đó thiết lập connection strings:
+
+~~~powershell
+$saPasswordLine = Get-Content .env | Where-Object { $_ -match '^SA_PASSWORD=' } | Select-Object -First 1
+if (-not $saPasswordLine) { throw "Không tìm thấy SA_PASSWORD trong .env." }
+
+$env:SA_PASSWORD = $saPasswordLine.Substring("SA_PASSWORD=".Length).Trim('"').Trim("'")
+if ([string]::IsNullOrWhiteSpace($env:SA_PASSWORD)) { throw "SA_PASSWORD trong .env đang để trống." }
+
+$env:HR_TEST_SQL_CONNECTION_STRING = "Server=localhost,11433;Database=master;User Id=sa;Password=$env:SA_PASSWORD;Encrypt=False;TrustServerCertificate=True;Connect Timeout=5"
 $env:HR_TEST_REDIS_CONNECTION_STRING = "localhost:16379,abortConnect=false,connectTimeout=5000"
-```
+~~~
 
-Các test tích hợp có thể tạo và xóa database kiểm thử ngẫu nhiên; HR integration test sử dụng Redis database 15. Chỉ dùng SQL Server/Redis riêng cho kiểm thử, không trỏ vào production.
+Chạy hai solution và dừng ngay khi một suite có lỗi:
+
+~~~powershell
+dotnet test .\src\hr-service\HrService.slnx
+if ($LASTEXITCODE -ne 0) { throw "HR Service tests failed" }
+
+dotnet test .\src\leave-service\LeaveService.slnx
+if ($LASTEXITCODE -ne 0) { throw "Leave Service tests failed" }
+~~~
+
+Một số integration test phụ thuộc SQL Server/Redis. Nếu thiếu connection string hoặc dịch vụ, test có thể bị `Skipped`; skipped không có nghĩa là tích hợp đã được xác minh. HR integration tests dùng Redis database 15; test persistence có thể tạo/xóa database kiểm thử. Chỉ dùng SQL Server/Redis riêng cho test, tuyệt đối không trỏ production.
+
+Khi hoàn tất, có thể dừng riêng stack kiểm thử nhưng giữ nguyên volume/database:
+
+~~~powershell
+docker compose --env-file .env @compose down
+~~~
+
+Không thêm `-v` nếu cần giữ database để kiểm tra hoặc chạy test tiếp.
+
+### Frontend — Node.js 20
+
+Có thể chạy trực tiếp nếu máy đã cài Node.js 20 và npm:
+
+~~~powershell
+Push-Location .\src\web
+npm ci
+npm audit
+npm test -- --run
+npm run build
+Pop-Location
+~~~
+
+Hoặc chạy bằng Docker, không cần cài npm trên máy host:
+
+~~~powershell
+docker run --rm -v "${PWD}\src\web:/app" -w /app --tmpfs /app/node_modules:exec node:20-alpine sh -lc "npm ci && npm audit && npm test -- --run && npm run build"
+~~~
+
+Lệnh chạy audit dependency, Vitest một lần và TypeScript/Vite production build. Nếu bất kỳ bước nào lỗi, dừng và xử lý trước khi coi frontend đã đạt.
 
 ## 9. Lệnh Docker thường dùng
 

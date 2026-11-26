@@ -177,7 +177,6 @@ function Invoke-K6Workload {
 
     if ($WorkloadKind -eq "ConstantVus") {
         $vusToRun = if ($Vus -gt 0) { $Vus } else { [int]$workload.constantVus.defaultVus }
-        $maxPerVu = [int]$workload.constantVus.maxApprovalsPerVu
         $reportPrefix = "approval-constant-vus-$vusToRun-$timestamp"
 
         $runArgs = @(

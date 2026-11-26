@@ -76,6 +76,21 @@ hoặc dùng mật khẩu mẫu trong production. Để dừng stack nhưng gi�
 `docker compose down`. Lệnh `docker compose down -v` xóa volume SQL/Redis; chỉ
 dùng khi chủ ý xóa dữ liệu local.
 
+### Swagger UI — xem và thử API
+
+Khi backend chạy với `ASPNETCORE_ENVIRONMENT=Development`, mở:
+
+- [HR Swagger UI](http://localhost:8081/swagger)
+- [Leave Swagger UI](http://localhost:8082/swagger)
+
+Chọn endpoint để xem request/response schema. Với endpoint cần đăng nhập, gọi HR `POST /api/v1/auth/login` trước, lấy access token từ response rồi chọn **Authorize** và nhập `Bearer <access-token>`. Refresh token được lưu trong HttpOnly cookie; không chia sẻ token/cookie hoặc chụp màn hình có bí mật.
+
+OpenAPI JSON:
+- HR: `http://localhost:8081/openapi/v1.json`
+- Leave: `http://localhost:8082/openapi/v1.json`
+
+Swagger/OpenAPI chỉ được bật ở Development; nếu không truy cập được, kiểm tra `ASPNETCORE_ENVIRONMENT` trong `.env` và khởi động lại service.
+
 ## 2. Thao tác theo vai trò
 
 Các mục menu được giới hạn theo vai trò; nếu không thấy một mục, hãy đăng nhập
@@ -190,18 +205,25 @@ dotnet test src\hr-service\HrService.slnx
 dotnet test src\leave-service\LeaveService.slnx
 ```
 
-Frontend cần Node.js 20 trở lên và npm:
+Frontend cần Node.js 20 trở lên và npm. Có thể chạy trực tiếp:
 
-```powershell
+~~~powershell
 Push-Location src\web
 npm ci
+npm audit
 npm test -- --run
 npm run build
 Pop-Location
-```
+~~~
 
-`npm test -- --run` chạy Vitest một lần; `npm run build` chạy kiểm tra TypeScript
-và build production.
+Hoặc dùng Docker Node 20 nếu máy chưa cài npm:
+
+~~~powershell
+docker run --rm -v "${PWD}\src\web:/app" -w /app --tmpfs /app/node_modules:exec node:20-alpine sh -lc "npm ci && npm audit && npm test -- --run && npm run build"
+~~~
+
+`npm test -- --run` chạy Vitest một lần; `npm run build` chạy TypeScript check và
+Vite production build.
 
 Một số integration test backend cần SQL Server/Redis dành riêng cho kiểm thử và
 các biến kết nối `HR_TEST_SQL_CONNECTION_STRING`,
@@ -216,6 +238,8 @@ dữ liệu cần giữ. Hướng dẫn và bằng chứng kiểm thử chi ti�
 - Mở `http://localhost:3000`, đăng nhập đúng chế độ và đúng vai trò.
 - Kiểm tra health endpoint: `http://localhost:8081/health` (HR) và
   `http://localhost:8082/health` (Leave).
+- Dùng Swagger UI ở `http://localhost:8081/swagger` (HR) và
+  `http://localhost:8082/swagger` (Leave) khi chạy Development.
 - Nếu đăng nhập demo không gọi được backend, xác nhận web có nhãn **Chế độ dùng
   thử**; nếu cần dữ liệu thật, rebuild web với `VITE_DEMO_MODE=false`.
 - Nếu API lỗi, xem log bằng `docker compose logs --tail 100 hr-service

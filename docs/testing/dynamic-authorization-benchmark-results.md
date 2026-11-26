@@ -143,7 +143,9 @@ File Docker Stats được thu thập từ 11:44:24 đến 11:51:21 ngày 12/11/
 
 Đây là trung bình và cực đại của các **mẫu Docker Stats trong cả cửa sổ thu thập**, không phải phép đo peak CPU chính xác trong thời điểm xử lý approval. Scenario Approval chỉ kéo dài khoảng 1–2 giây, ngắn hơn khoảng lấy mẫu. Vì vậy không dùng bảng này để kết luận service không bị spike CPU trong workload hoặc xác định bottleneck.
 
-## 7. Kết luận và việc còn lại
+## 7. Kết luận và việc còn lại — snapshot lịch sử 12/11/2026
+
+> Phần này tổng hợp evidence có tại thời điểm 12/11/2026, trước các benchmark Approval bổ sung ngày 20–26/11. Các nhận xét cũ về Approval chỉ có burst/per-vu-iterations và thiếu raw JSON không còn mô tả trạng thái mới nhất. Kết quả arrival-rate mới nhất, bốn lượt hợp lệ/loại, raw evidence và commit đo được ghi riêng tại [Mục 15](#15-approval-constant-arrival-rate--kết-quả-xác-nhận-cuối-cùng-26112026).
 
 ### Kết luận có thể rút ra
 
@@ -153,13 +155,12 @@ File Docker Stats được thu thập từ 11:44:24 đến 11:51:21 ngày 12/11/
 4. Approval repeat có p95 thấp hơn Workforce rất nhiều, nhưng nó là workload burst rất ngắn; không đại diện cho tải liên tục.
 5. Số liệu hiện tại chưa đủ để xác định bottleneck hoặc kết luận năng lực production.
 
-### Việc cần hoàn thiện nếu dùng làm bằng chứng nghiệm thu
+### Việc còn thiếu đối với baseline lịch sử 12/11
 
-- Ghi SHA chính xác trên máy chạy benchmark bằng `git rev-parse HEAD`.
-- Lưu/commit các JSON k6 được tạo bởi `REPORT_JSON` trong `docs/testing/evidence/dynamic-authorization/`. Các file JSON thô chưa được xác nhận có trong branch remote khi tài liệu này được cập nhật; tài liệu này hiện ghi lại summary đã được cung cấp.
-- Lặp lại Approval tối thiểu 3–5 lần cho mỗi mức VU nếu cần kết luận ổn định.
-- Nếu muốn đánh giá Approval sustained load, cần tạo scenario riêng dùng executor theo thời gian (ví dụ `constant-vus` hoặc `ramping-vus`) và xử lý dữ liệu Pending đủ lớn/được seed luân phiên. Không chỉ đổi `DURATION` trong scenario `per-vu-iterations`.
-- Thu thập metrics CPU, memory, SQL waits/query duration và response size đồng bộ với khoảng chạy workload.
+- Các raw JSON, SHA và image IDs của **các lượt lịch sử ở Mục 1–14** có thể thiếu hoặc không gắn với cùng revision; các hạn chế đó vẫn áp dụng cho đúng những lượt cũ, không áp dụng cho cặp arrival-rate ngày 26/11 tại Mục 15.
+- Cặp arrival-rate ngày 26/11 đã có raw/summary JSON, commit đo `d34ca9100f1db34261b7792dcc2058855bcd29aa` và immutable image IDs. Bảng đủ bốn lượt, trong đó lượt 11:18:07 bị loại vì 27 dropped iterations, nằm tại Mục 15.2.
+- Chưa thu thập metrics CPU, memory, SQL waits/query duration và response size đồng bộ với khoảng chạy workload. Vì vậy chưa kết luận bottleneck hoặc production capacity.
+- Lặp lại 3–5 lần chỉ cần thiết nếu muốn có phân tích biến động/thống kê ổn định; không phải điều kiện để xác nhận hai lượt benchmark đã có evidence.
 
 ## 8. Bằng chứng và nguồn số liệu
 
@@ -356,9 +357,9 @@ Trung vị approval 50 VU: p50 **30,9 ms**, p95 **66,8 ms** (ba lượt hợp l�
 5. Không chạy đồng thời hai lượt k6.
 
 
-## 11. Approval benchmark mới sau seed — 20/11/2026
+## 12. Approval benchmark mới sau seed — 20/11/2026
 
-### 11.1. Seed data đã xác minh
+### 12.1. Seed data đã xác minh
 
 Người chạy xác nhận seed script hoàn tất trên stack cô lập `hrbench` bằng SQL Server 2022. Lệnh `sqlcmd` có `-b` và PowerShell kiểm tra `$LASTEXITCODE`; không phát sinh SQL error.
 
@@ -375,7 +376,7 @@ Người chạy xác nhận seed script hoàn tất trên stack cô lập `hrben
 
 Các trạng thái được kiểm tra trực tiếp bằng SELECT từ `Leave_DB.dbo.LeaveRequests` với `Reason LIKE 'LOADTEST:%'`. Bộ dữ liệu này được tạo cho workload load-test, không phải dữ liệu nhân viên nghiệp vụ.
 
-### 11.2. Approval 100 VU — một lần chạy ngày 20/11
+### 12.2. Approval 100 VU — một lần chạy ngày 20/11
 
 Cấu hình scenario: `VUS=100`, `ITERATIONS_PER_VU=10`, `DURATION=5m` (maxDuration), `LOADTEST_MANAGER_COUNT=25`. Script dùng `per-vu-iterations`; mỗi VU thực hiện 10 quyết định approve trên request ID riêng sau bước login và đọc pending inbox trong setup.
 
@@ -395,7 +396,7 @@ Cấu hình scenario: `VUS=100`, `ITERATIONS_PER_VU=10`, `DURATION=5m` (maxDurat
 | Scenario elapsed theo output k6 | khoảng 1,4 giây |
 | Tổng thời gian lệnh k6 theo terminal | khoảng 3,7 giây |
 
-### 11.3. Diễn giải và giới hạn
+### 12.3. Diễn giải và giới hạn
 
 - Tất cả 1.000 quyết định hoàn tất, không có approval error và error rate bằng 0 trong lượt chạy này.
 - P95 193,42 ms cao hơn mức trung bình P95 khoảng 98,98 ms của ba lượt 100 VU v3 trước đó. Đây là so sánh tham khảo: workload/setup/revision có thể khác nhau và lần chạy mới chỉ có một mẫu. Cần lặp lại cùng điều kiện trước khi kết luận hiệu năng thay đổi.
@@ -404,7 +405,7 @@ Cấu hình scenario: `VUS=100`, `ITERATIONS_PER_VU=10`, `DURATION=5m` (maxDurat
 - Summary không cung cấp raw request throughput hoặc resource metrics đủ để tính/đánh giá CPU, RAM, SQL waits và connection pool.
 - Git SHA và immutable image ID tại thời điểm chạy chưa được ghi lại. Không gắn kết quả vào merge commit `81b98704` nếu chưa xác nhận checkout thực tế.
 
-### 11.4. Raw report
+### 12.4. Raw report
 
 Lệnh k6 được cấu hình `REPORT_JSON=/reports/approval-100vu-after-seed.json`; thư mục `/reports` được mount tới `docs/testing/evidence/dynamic-authorization/`. Tuy nhiên, tại lần rà soát GitHub sau khi merge, file này chưa được tìm thấy trên `master`. Hãy kiểm tra tại máy chạy:
 
@@ -415,11 +416,11 @@ git status --short
 
 Nếu file có tồn tại, commit raw report cùng SHA được xác minh bằng `git rev-parse HEAD` và image IDs nếu còn lưu. Phần số liệu trong mục này hiện dựa trên terminal output người chạy cung cấp, không thay thế raw k6 JSON.
 
-## 12. Approval sustained — constant-vus, 25/11/2026
+## 13. Approval sustained — constant-vus, 25/11/2026
 
-Đây là kết quả workload Approval chạy liên tục bằng executor `constant-vus` trong 5 phút. Phần này bổ sung cho các kết quả lịch sử ở mục 11; không thay thế hoặc ghi đè raw evidence của những lần chạy trước.
+Đây là kết quả workload Approval chạy liên tục bằng executor `constant-vus` trong 5 phút. Phần này bổ sung cho các kết quả lịch sử ở Mục 12; không thay thế hoặc ghi đè raw evidence của những lần chạy trước.
 
-### 12.1. Môi trường và cách đo
+### 13.1. Môi trường và cách đo
 
 | Thuộc tính | Giá trị |
 |---|---|
@@ -436,7 +437,7 @@ Nếu file có tồn tại, commit raw report cùng SHA được xác minh bằn
 
 RPS trong bảng là `completed approvals / 300 giây` theo cửa sổ workload cấu hình. Không chia cho tổng thời gian tiến trình k6, vì thời gian đó còn gồm setup và graceful stop.
 
-### 12.2. Dữ liệu seed và xác minh
+### 13.2. Dữ liệu seed và xác minh
 
 | Tham số | Baseline 50 VU | Lượt 150 VU |
 |---|---:|---:|
@@ -452,7 +453,7 @@ RPS trong bảng là `completed approvals / 300 giây` theo cửa sổ workload 
 
 Seed script `scripts/load-test/seed-scale-data.sql` tạo ngày nghỉ vào business days, loại cuối tuần và các ngày lễ đã cấu hình HR; kiểm tra overlap và quota `Used + Pending` trước khi commit. Lượt 150 VU dùng `verify-approval-seed.sql` với `ManagerCount=25` và `ExpectedPendingPerManager=2000`; verifier xác nhận đủ Pending cho cả 25 Manager.
 
-### 12.3. Kết quả
+### 13.3. Kết quả
 
 | Chỉ số | 50 VU / 5 phút | 150 VU / 5 phút |
 |---|---:|---:|
@@ -469,7 +470,7 @@ Seed script `scripts/load-test/seed-scale-data.sql` tạo ngày nghỉ vào busi
 
 Ở lượt 150 VU, 87.244 HR calls tương ứng 2 lời gọi HR trên mỗi approval thành công trong workload này. Không suy rộng tỷ lệ này sang các endpoint hoặc workload khác.
 
-### 12.4. Metadata và giới hạn evidence
+### 13.4. Metadata và giới hạn evidence
 
 - Baseline 50 VU: SHA của checkout thực tế và immutable image IDs không được lưu cùng summary. Kết quả 14.688 approvals là summary đã được người chạy xác nhận; raw k6 JSON tương ứng chưa được xác nhận có trong repository.
 - Lượt 150 VU: `GIT_SHA=c4497f70b1e39b3954b576a2a8ff081f7f948336`; `HR_IMAGE_ID=not-provided`; `LEAVE_IMAGE_ID=not-provided`.
@@ -485,11 +486,11 @@ Summary evidence:
 - `evidence/dynamic-authorization/approval-constant-vus-150-5m-summary.json`
 
 
-## 12. Phân loại bổ sung raw Approval JSON — 26/11/2026
+## 14. Phân loại bổ sung raw Approval JSON — 26/11/2026
 
-Commit `14cea970e5b42de555b19c11747cabe106d80ea8` bổ sung ba raw k6 JSON và thay đổi `approval-sustained.js` bằng cách đặt `setupTimeout: '5m'`. Các raw JSON được kiểm tra độc lập với hai summary operator-provided ở Mục 11; không thay thế hoặc gộp số liệu giữa các lượt chạy.
+Commit `14cea970e5b42de555b19c11747cabe106d80ea8` bổ sung ba raw k6 JSON và thay đổi `approval-sustained.js` bằng cách đặt `setupTimeout: '5m'`. Các raw JSON được kiểm tra độc lập với hai summary operator-provided ở Mục 13; không thay thế hoặc gộp số liệu giữa các lượt chạy.
 
-### 12.1. Raw 50 VU có workload Approval
+### 14.1. Raw 50 VU có workload Approval
 
 File `approval-constant-vus-50-5m.json` ghi nhận:
 - `vus_max=50`, thời gian process khoảng 319,6 giây.
@@ -498,9 +499,9 @@ File `approval-constant-vus-50-5m.json` ghi nhận:
 - P50/P95 của custom `approval_request_duration_ms`: 24,01 / 48,79 ms.
 - Leave → HR calls: 28.822.
 
-Đây là một lượt chạy riêng, không phải raw evidence cho summary 14.688 completions ở Mục 11. Không trộn hai lượt để tính percentile hoặc throughput đại diện.
+Đây là một lượt chạy riêng, không phải raw evidence cho summary 14.688 completions ở Mục 13. Không trộn hai lượt để tính percentile hoặc throughput đại diện.
 
-### 12.2. Raw 150 VU có 74 approval errors
+### 14.2. Raw 150 VU có 74 approval errors
 
 File `approval-constant-vus-150-5m-valid-seed.json` ghi nhận:
 - `vus_max=150`, process khoảng 371,2 giây.
@@ -510,9 +511,9 @@ File `approval-constant-vus-150-5m-valid-seed.json` ghi nhận:
 - P50/P95 của custom `approval_request_duration_ms`: 23,82 / 52,16 ms.
 - Leave → HR calls: 84.560.
 
-Đây là một lượt chạy có seed capacity nhưng **không phải lượt 150 VU zero-error**. Không thay thế summary 43.622 completions/0 errors ở Mục 11; phải giữ hai lượt tách biệt và không sử dụng raw JSON này để tuyên bố error rate của lượt summary. File không chứa Git SHA/image ID nên chưa gắn được với binary cụ thể.
+Đây là một lượt chạy có seed capacity nhưng **không phải lượt 150 VU zero-error**. Không thay thế summary 43.622 completions/0 errors ở Mục 13; phải giữ hai lượt tách biệt và không sử dụng raw JSON này để tuyên bố error rate của lượt summary. File không chứa Git SHA/image ID nên chưa gắn được với binary cụ thể.
 
-### 12.3. JSON có tên 50 VU nhưng không có Approval workload
+### 14.3. JSON có tên 50 VU nhưng không có Approval workload
 
 File `approval-constant-vus-50-5m-valid-seed.json` không phải kết quả benchmark 50 VU × 5 phút:
 - `vus_max=150`, process khoảng 60 giây.
@@ -521,9 +522,91 @@ File `approval-constant-vus-50-5m-valid-seed.json` không phải kết quả ben
 
 Vì vậy không dùng file này để tính throughput/latency Approval. Tên file không khớp với nội dung; cần đổi tên hoặc bổ sung chú thích trước khi xem là evidence đã phân loại.
 
-### 12.4. Cách sử dụng evidence
+### 14.4. Cách sử dụng evidence
 
-- Summary 50 VU (14.688/0 errors) và summary 150 VU (43.622/0 errors) ở Mục 11 vẫn là các kết quả operator-provided riêng biệt.
+- Summary 50 VU (14.688/0 errors) và summary 150 VU (43.622/0 errors) ở Mục 13 vẫn là các kết quả operator-provided riêng biệt.
 - Raw 50 VU (14.411/0 errors) và raw 150 VU (42.239/74 errors) là các lượt riêng, được giữ độc lập.
-- Không suy ra một benchmark “150 VU zero-error” từ raw JSON mới; zero-error chỉ áp dụng cho lượt được ghi trong summary ở Mục 11.
+- Không suy ra một benchmark “150 VU zero-error” từ raw JSON mới; zero-error chỉ áp dụng cho lượt được ghi trong summary ở Mục 13.
 - Cần giữ nguyên mọi raw export và mô tả rõ lượt nào là pass, lượt nào là fail/không có workload. Không xóa hoặc gộp các JSON khác lượt chạy.
+
+
+## 15. Approval constant-arrival-rate — kết quả xác nhận cuối cùng, 26/11/2026
+
+Hai lượt chạy dùng cùng Git revision, HR/Leave image IDs, seed và workload; chỉ khác VU pool.
+
+### 15.1. Metadata
+
+| Thuộc tính | Giá trị |
+|---|---|
+| Git SHA | `d34ca9100f1db34261b7792dcc2058855bcd29aa` |
+| HR image | `sha256:8eccc09571553866449c312854526453e167ee01f1009491318b22dda8de4d04` |
+| Leave image | `sha256:fbb2ed6121920bbabc9923fdd3396c300331ebab098b91403c4c2a35dcb30911` |
+| Executor | `constant-arrival-rate` |
+| Target rate / duration | 50 iteration/s × 300 giây |
+| Planned approvals | 15.000 |
+| Seed | 5.000 nhân viên, 100.000 đơn, 50% Pending |
+| Pending sau seed | 50.000 tổng cộng; 2.000 mỗi Manager |
+| Pending cần | 600 mỗi Manager |
+
+Đây là **seed dành riêng cho Approval arrival-rate** theo `approval-benchmark.config.json`: 5.000 nhân viên × 20 đơn = 100.000 đơn, 50% Pending = 50.000 Pending. Không nhầm với seed Workforce/legacy có 1.000 nhân viên × 5 đơn = 5.000 đơn; hai cấu hình phục vụ workload khác nhau.
+### 15.2. Bảng đầy đủ các lượt constant-arrival-rate ngày 26/11
+
+Bảng dưới đây liệt kê toàn bộ bốn lượt Approval arrival-rate có raw JSON và summary JSON tương ứng trong evidence. **Commit đo** lấy từ trường `git_sha` trong summary của chính lượt chạy, không lấy commit tài liệu hoặc HEAD hiện tại của nhánh.
+
+| Thời điểm | Pool | Attempts / thành công | Rate theo 300s | Raw k6 rate | p95 | Dropped | Out-of-plan | HTTP errors | Commit đo (Git SHA) | Phân loại |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| 11:18:07 | 50/50 | 14.974 / 14.974 | 49,9133/s | 46,3519/s | 19,729 ms | **27** | —* | 0 | `8d7bb4772fe279ab60e1c49fcf2749e3a5526cd0` | **Loại khỏi kết quả đạt chuẩn**: dropped khác 0, threshold `count==0` không đạt; thiếu 26 approvals so với 15.000 dự kiến. |
+| 11:33:47 | 100/100 | 15.000 / 15.000 | 50/s | 46,4469/s | 15,839 ms | 0 | 1 | 0 | `031dc613fb5fec6a4719c3b79f6ed8d23274010e` | Đạt workload riêng lẻ; iteration ngoài kế hoạch bị guard bỏ qua trước HTTP. Không ghép A/B với lượt 50 VU 11:18 vì khác Git SHA. |
+| 13:15:04 | 50/50 | 15.000 / 15.000 | 50/s | 46,4328/s | 16,213 ms | 0 | 0 | 0 | `d34ca9100f1db34261b7792dcc2058855bcd29aa` | **Hợp lệ — cặp so sánh cuối**. |
+| 13:22:21 | 100/100 | 15.000 / 15.000 | 50/s | 46,5210/s | 20,496 ms | 0 | 1 | 0 | `d34ca9100f1db34261b7792dcc2058855bcd29aa` | **Hợp lệ — cặp so sánh cuối**; iteration ngoài kế hoạch bị guard bỏ trước HTTP. |
+
+`Rate theo 300s` là số approval HTTP attempts chia cho cửa sổ workload 300 giây. `Raw k6 rate` là `approval_requests.rate` chia theo toàn bộ `testRunDurationMs`, gồm setup/teardown.
+
+* Raw và summary của lượt 11:18:07 không có metric `approval_out_of_plan_iterations`/trường `out_of_plan_iterations`; ký hiệu — nghĩa là không được xuất trong evidence, không suy diễn thành 0.
+
+Lượt **11:18:07** bị loại không phải vì HTTP error (có 0 lỗi), mà vì không giữ được arrival schedule: raw JSON ghi `dropped_iterations.count=27`, threshold `dropped_iterations: count==0` không đạt, và chỉ có 14.974 approval HTTP attempts/thành công (thiếu 26 so với 15.000). Raw/summary không xuất metric out-of-plan cho lượt này, nên không gán giá trị 0. Không được làm tròn hoặc ghi lượt này thành 15.000/15.000.
+
+Lượt **11:33:47** không bị loại vì dropped iteration; raw JSON ghi 15.000 attempts, 15.000 thành công và 0 dropped. Git SHA `031dc613fb5fec6a4719c3b79f6ed8d23274010e` khác SHA của lượt 50 VU 11:18:07. Tôi đã đối chiếu `031dc61...` với `d34ca91...`: các blob của `approval-benchmark.config.json`, `seed-scale-data.sql`, `approval-benchmark-common.js`, `approval-arrival-rate.js` và `run-approval-benchmark.ps1` giống hệt; 5 commit nằm giữa chỉ thay đổi tài liệu/evidence, không thay đổi code benchmark hoặc code Approval liên quan. Vì vậy khác revision không đồng nghĩa khác logic benchmark ở hai lượt này; tuy nhiên để có cặp A/B cùng đúng một SHA, chỉ chọn hai lượt cuối 13:15:04 và 13:22:21.
+
+Raw/summary filenames theo cùng timestamp:
+
+- 11:18:07 — [raw JSON](evidence/dynamic-authorization/approval-arrival-rate-50rps-50-vu-pool-20261126-111807-raw.json) · [summary JSON](evidence/dynamic-authorization/approval-arrival-rate-50rps-50-vu-pool-20261126-111807-summary.json)
+- 11:33:47 — [raw JSON](evidence/dynamic-authorization/approval-arrival-rate-50rps-100-vu-pool-20261126-113347-raw.json) · [summary JSON](evidence/dynamic-authorization/approval-arrival-rate-50rps-100-vu-pool-20261126-113347-summary.json)
+- 13:15:04 — [raw JSON](evidence/dynamic-authorization/approval-arrival-rate-50rps-50-vu-pool-20261126-131504-raw.json) · [summary JSON](evidence/dynamic-authorization/approval-arrival-rate-50rps-50-vu-pool-20261126-131504-summary.json)
+- 13:22:21 — [raw JSON](evidence/dynamic-authorization/approval-arrival-rate-50rps-100-vu-pool-20261126-132221-raw.json) · [summary JSON](evidence/dynamic-authorization/approval-arrival-rate-50rps-100-vu-pool-20261126-132221-summary.json)
+
+### 15.3. Kết quả cặp benchmark cuối
+
+| Chỉ số | Pool 50/50 | Pool 100/100 |
+|---|---:|---:|
+| Approval HTTP attempts | 15.000 | 15.000 |
+| Completed approvals | 15.000 | 15.000 |
+| Approval rate chuẩn hóa theo cửa sổ workload 300s (15.000 / 300) | 50/s | 50/s |
+| Raw k6 `approval_requests.rate` (toàn `testRunDuration`) | 46,43/s | 46,52/s |
+| Dropped iterations | 0 | 0 |
+| Dropped rate | 0% | 0% |
+| Approval errors | 0 | 0 |
+| Error rate | 0% | 0% |
+| p50 | 12,879 ms | 13,426 ms |
+| p95 | 16,213 ms | 20,496 ms |
+| Leave → HR calls | 30.000 | 30.000 |
+| Leave → HR average | 2,220 ms | 2,394 ms |
+| Leave → HR p95 | 3,31 ms | 3,91 ms |
+| k6 iterations | 15.000 | 15.001 |
+| Out-of-plan iterations | 0 | 1 |
+
+
+`approval_requests.rate` trong raw JSON được k6 tính trên toàn bộ `testRunDurationMs`, gồm cả thời gian setup/teardown: pool 50 chạy 323,048 giây nên raw rate là 46,4328/s; pool 100 chạy 322,435 giây nên raw rate là 46,5210/s. Đây khác với rate chuẩn hóa theo cửa sổ workload 300 giây (15.000 / 300 = 50/s). Vì vậy 50/s là target/throughput chuẩn hóa theo scenario, không phải counter rate của toàn bộ tiến trình k6.
+
+### 15.4. Diễn giải
+
+- Cả hai pool đều đạt đủ 15.000 approvals trong 300 giây, giữ target 50 approvals/s, không có dropped iteration hoặc approval error.
+- Pool 100/100 có thêm một lần gọi scenario với index 15000. Guard bỏ qua lần gọi đó trước HTTP call; không có approval thứ 15.001. Vì vậy k6 có 15.001 iterations nhưng chỉ gửi 15.000 approval HTTP requests.
+- Pool 50/50 đã duy trì được target. Pool 100/100 không tăng throughput trong workload này và có p95 cao hơn; chưa có CPU/RAM/SQL waits thu đồng bộ để xác định nguyên nhân.
+- Đây là benchmark local, không phải cam kết production throughput.
+
+Raw/summary evidence:
+- Pool 50/50: `approval-arrival-rate-50rps-50-vu-pool-20261126-131504`
+- Pool 100/100: `approval-arrival-rate-50rps-100-vu-pool-20261126-132221`
+
+Các file được lưu trong `docs/testing/evidence/dynamic-authorization/`.
