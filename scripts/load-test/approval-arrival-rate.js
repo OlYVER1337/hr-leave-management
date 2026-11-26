@@ -19,7 +19,7 @@ const timeUnit = arrival.timeUnit || '1s';
 const durationSeconds = workload.durationSeconds;
 const duration = durationSeconds + 's';
 const plannedIterations = ratePerSecond * durationSeconds;
-const preAllocatedVUs = Number(__ENV.PREALLOCATED_VUS || arrival.defaultPreAllocatedVUs);
+const preAllocatedVUs = Number(__ENV.PREALLOCATED_VUS || arrival.defaultPreAllocatedVus);
 const maxVUs = Number(__ENV.MAX_VUS || arrival.maxVUs || preAllocatedVUs);
 const managerCount = seed.managerCount;
 
