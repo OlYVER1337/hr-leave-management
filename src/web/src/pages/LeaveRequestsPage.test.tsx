@@ -89,7 +89,7 @@ describe('LeaveRequestsPage', () => {
     expect(document.activeElement).toBe(viewButton);
   });
 
-  it('loads the history only when requested and renders the timeline details', async () => {
+  it('loads request and history together and renders the timeline details', async () => {
     const user = userEvent.setup();
     mocks.getLeaveRequestDetails.mockResolvedValue({
       request,
@@ -122,7 +122,7 @@ describe('LeaveRequestsPage', () => {
     expect(statusLine).toHaveTextContent('Khởi tạo → Chờ duyệt');
     expect(screen.getByText('Ghi chú: Đã gửi yêu cầu')).toBeInTheDocument();
     expect(mocks.getLeaveRequestDetails).toHaveBeenCalledTimes(1);
-    expect(mocks.getLeaveRequestDetails).toHaveBeenCalledWith('request-1');
+    expect(mocks.getLeaveRequestDetails).toHaveBeenCalledWith('request-1', employee);
   });
 
   it('shows an empty history state when the request has no history records', async () => {
@@ -139,6 +139,7 @@ describe('LeaveRequestsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Xem lịch sử' }));
 
     expect(await screen.findByText('Chưa có bản ghi lịch sử cho đơn này.')).toBeInTheDocument();
+    expect(mocks.getLeaveRequestDetails).toHaveBeenCalledTimes(1);
   });
 
   it('shows a history loading error without hiding request details', async () => {
@@ -154,16 +155,15 @@ describe('LeaveRequestsPage', () => {
     );
 
     await user.click(await screen.findByRole('button', { name: 'Xem chi tiết request-1' }));
-    await user.click(screen.getByRole('button', { name: 'Xem lịch sử' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Không thể tải chi tiết đơn nghỉ.');
     expect(screen.getByText('Việc gia đình cần giải quyết.')).toBeInTheDocument();
 
-    // Timeline vẫn mở sau lỗi nên nút có nhiệm vụ đóng panel; người dùng có thể mở lại để retry.
+    // Panel được mở khi tải lỗi; đóng rồi nhấn thử lại sẽ gọi lại chính API chi tiết.
     await user.click(screen.getByRole('button', { name: 'Ẩn lịch sử' }));
-    expect(screen.getByRole('button', { name: 'Xem lịch sử' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Thử lại' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Xem lịch sử' }));
+    await user.click(screen.getByRole('button', { name: 'Thử lại' }));
     expect(await screen.findByText('Chưa có bản ghi lịch sử cho đơn này.')).toBeInTheDocument();
     expect(mocks.getLeaveRequestDetails).toHaveBeenCalledTimes(2);
   });
