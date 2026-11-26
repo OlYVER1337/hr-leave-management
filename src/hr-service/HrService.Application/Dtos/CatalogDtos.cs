@@ -43,7 +43,7 @@ public sealed record LeavePolicyResponse(
     int Year,
     decimal DaysPerYear,
     DateOnly EffectiveFrom,
-    DateTime CreatedAtUtc = default,
+    DateTime CreatedAtUtc,
     string Reason = "");
 
 public sealed record HolidayRequest(DateOnly HolidayDate, string Name);
