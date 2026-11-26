@@ -170,7 +170,10 @@ public sealed class LeaveRequestService(
             throw new LeaveNotFoundException($"Leave request with id '{requestId}' was not found.");
         }
 
-        var history = result.Value.History.Select(item => new LeaveRequestHistoryResponse(
+        var history = result.Value.Request.Histories
+            .OrderBy(item => item.CreatedAtUtc)
+            .ThenBy(item => item.Id)
+            .Select(item => new LeaveRequestHistoryResponse(
             item.Id,
             item.ActorId,
             item.Action,
