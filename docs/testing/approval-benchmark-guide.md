@@ -90,7 +90,7 @@ So sánh cùng rate 50 iteration/giây với hai VU pool:
 
 Mỗi lệnh sẽ seed lại cùng dataset từ JSON, xác minh đủ Pending cho từng Manager rồi chạy workload. Chạy tuần tự, không chạy song song.
 
-Ở đây 50/100 là kích thước VU pool được pre-allocate và giới hạn tối đa, không khẳng định tất cả VU đều hoạt động đồng thời. Cả hai lượt dùng cùng arrival rate, duration, seed, API workload và cấu hình service; khác biệt là kích thước VU pool. Điều này cho biết pool nhỏ có giữ được target rate không và việc cấp thêm VU có làm giảm `dropped_iterations) hay không.
+Ở đây 50/100 là kích thước VU pool được pre-allocate và giới hạn tối đa, không khẳng định tất cả VU đều hoạt động đồng thời. Cả hai lượt dùng cùng arrival rate, duration, seed, API workload và cấu hình service; khác biệt là kích thước VU pool. Điều này cho biết pool nhỏ có giữ được target rate không và việc cấp thêm VU có làm giảm `dropped_iterations` hay không.
 
 Executor `constant-arrival-rate` đã tự điều tiết thời điểm bắt đầu iteration, vì vậy script **không gọi `sleep()`** sau request. Tài liệu k6 cũng lưu ý arrival-rate executor bắt đầu iteration theo rate độc lập với thời gian phản hồi; iteration sẽ bị drop nếu không còn VU rảnh để nhận iteration mới.
 
