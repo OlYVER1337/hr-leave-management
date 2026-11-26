@@ -10,11 +10,13 @@ Tài liệu dành cho người tiếp nhận source, dựng môi trường, ki�
 |---|---|
 | Repository | [OlYVER1337/hr-leave-management](https://github.com/OlYVER1337/hr-leave-management) |
 | Branch source đã tích hợp | **master** |
-| HEAD master tại thời điểm cập nhật | **01be3cfa7a03efcf6ad63d3a16b4d6eafb706444** |
+| Source HEAD trước lần cập nhật tài liệu này | **01be3cfa7a03efcf6ad63d3a16b4d6eafb706444** |
 | Trạng thái tài liệu | Tài liệu bàn giao được cập nhật trực tiếp trên master. |
 | Sửa lỗi HR OpenAPI | [0a34e13](https://github.com/OlYVER1337/hr-leave-management/commit/0a34e131fb7550695492d42614a3d74e385beab0) và [01be3cf](https://github.com/OlYVER1337/hr-leave-management/commit/01be3cfa7a03efcf6ad63d3a16b4d6eafb706444). |
 | Merge Dynamic Authorization V1 | [PR #6](https://github.com/OlYVER1337/hr-leave-management/pull/6), merge commit **81b987043ce4663ad11800bb331ffdbc013bd1d2** |
 | Trạng thái production | Chưa có bằng chứng triển khai hoặc nghiệm thu production. |
+| Nhánh remote đã dọn | `Update-docs`, `benchmark/approval-constant-vus`, `feature/approval-arrival-rate-config` không còn trên remote. |
+| Nhánh giữ lại | `fix/approval-benchmark-metadata` được giữ để tránh mất 3 commit chưa tích hợp. |
 
 **Quy tắc đối chiếu:** Approval benchmark ngày 26/11 chạy trên source SHA **d34ca91** và image ID ghi tại Mục 8. Không lấy HEAD của branch tài liệu thay cho revision benchmark. Khi tài liệu khác với implementation, đối chiếu source code và EF Core migrations.
 
@@ -214,7 +216,7 @@ Cả hai solution build thành công trên .NET 10.0.13. Thời gian build đư�
 
 Source HR đã sửa hai tham số mặc định trong `LeavePolicyResponse`:
 - [0a34e13](https://github.com/OlYVER1337/hr-leave-management/commit/0a34e131fb7550695492d42614a3d74e385beab0): bỏ `= default` khỏi `DateOnly EffectiveFrom`.
-- [01be3cf](https://github.com/OlYVER1337/hr-leave-management/commit/01be3cfa7a03efcf6ad63d8fef753f8a67e2313): bỏ `= default` khỏi `DateTime CreatedAtUtc`.
+- [01be3cf](https://github.com/OlYVER1337/hr-leave-management/commit/01be3cfa7a03efcf6ad63d3a16b4d6eafb706444): bỏ `= default` khỏi `DateTime CreatedAtUtc`.
 
 **Ghi chú provenance:** kết quả test và runtime do người triển khai cung cấp từ PowerShell ngày 26/11/2026, sau khi áp dụng hai commit trên. Terminal output không in `git rev-parse HEAD`; khi cần gắn chính xác kết quả với revision, chạy lệnh đó tại checkout đã test và lưu kèm log/TRX.
 
