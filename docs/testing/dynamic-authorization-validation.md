@@ -554,3 +554,21 @@ if ($LASTEXITCODE -ne 0) { throw "Web audit, tests or build failed" }
 ```
 
 Không ghi nhận các bài kiểm tra trên là PASS cho commit tài liệu mới cho tới khi có output từ máy chạy local. Chỉ merge PR sau khi cả HR, Leave, Web audit/test/build đều thành công và thay đổi được rà soát.
+
+
+## 12. Approval benchmark — cấu hình dùng chung và constant-arrival-rate
+
+Từ nhánh `feature/approval-arrival-rate-config`, quy trình Approval mới dùng một nguồn cấu hình tại `scripts/load-test/approval-benchmark.config.json`.
+
+- `run-approval-benchmark.ps1` đọc JSON và truyền cùng seed values vào `seed-scale-data.sql` và `verify-approval-seed.sql`.
+- Hai k6 script đọc cùng JSON thông qua `approval-benchmark-common.js`; không phải truyền lặp lại các biến `SEED_*`.
+- Mỗi lần `Run*` tự seed lại, xác minh Pending theo từng Manager rồi mới chạy k6.
+- `constant-vus` được giữ nguyên để đo concurrency.
+- `constant-arrival-rate` chạy target 50 iteration/giây trong 300 giây (15.000 iteration dự kiến); ID Pending được chia duy nhất theo Manager và theo scenario iteration. Không gọi `sleep()` trong workload này.
+- Workload arrival-rate có threshold `dropped_iterations: count==0`; summary lưu target rate, planned/started iterations, dropped iterations và dropped rate cùng latency/error/HR metrics.
+
+Với cấu hình mặc định: 5.000 nhân viên × 20 đơn, 50% Pending, 25 Manager, có 50.000 Pending (ít nhất 2.000 mỗi Manager). Target arrival mặc định cần 15.000 Pending ID (600 mỗi Manager). Hai lần so sánh VU pool 50 và 100 phải chạy tuần tự; mỗi lượt script tự seed lại từ cùng JSON.
+
+Hướng dẫn và lệnh PowerShell chi tiết: [Approval benchmark guide](approval-benchmark-guide.md).
+
+**Chưa có kết quả benchmark constant-arrival-rate được ghi nhận.** Không chạy benchmark trong lúc triển khai thay đổi này; cần kiểm tra script, seed và verifier trên máy local trước, rồi mới thực hiện phép đo.
