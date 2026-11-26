@@ -328,7 +328,38 @@ Thay email và mật khẩu trong ví dụ bằng giá trị thật đã cấu h
 
 ### Backend — .NET 10 SDK
 
-Tại thư mục gốc repository:
+Chạy tại thư mục gốc repository. Unit tests có thể chạy trực tiếp bằng .NET CLI; để các integration tests dùng SQL Server và Redis thật, trước tiên khởi động stack kiểm thử cô lập `hrbench` (không dùng chung volume/cổng với stack local `hr-leave`):
+
+~~~powershell
+if (-not (Test-Path .env)) { throw "Chưa có .env. Hãy copy .env.example thành .env và cấu hình trước." }
+
+$compose = @(
+  "-p", "hrbench",
+  "-f", "docker-compose.yml",
+  "-f", "docker-compose.loadtest.yml"
+)
+
+docker compose --env-file .env @compose up --build -d
+docker compose --env-file .env @compose ps
+
+Invoke-RestMethod http://localhost:18081/health
+Invoke-RestMethod http://localhost:18082/health
+~~~
+
+Compose đọc cấu hình từ file `.env` qua `--env-file .env`. Để test persistence kết nối đúng SQL Server/Redis của project `hrbench`, nạp mật khẩu SQL từ chính file này vào phiên PowerShell, sau đó thiết lập connection strings:
+
+~~~powershell
+$saPasswordLine = Get-Content .env | Where-Object { $_ -match '^SA_PASSWORD=' } | Select-Object -First 1
+if (-not $saPasswordLine) { throw "Không tìm thấy SA_PASSWORD trong .env." }
+
+$env:SA_PASSWORD = $saPasswordLine.Substring("SA_PASSWORD=".Length).Trim('"').Trim("'")
+if ([string]::IsNullOrWhiteSpace($env:SA_PASSWORD)) { throw "SA_PASSWORD trong .env đang để trống." }
+
+$env:HR_TEST_SQL_CONNECTION_STRING = "Server=localhost,11433;Database=master;User Id=sa;Password=$env:SA_PASSWORD;Encrypt=False;TrustServerCertificate=True;Connect Timeout=5"
+$env:HR_TEST_REDIS_CONNECTION_STRING = "localhost:16379,abortConnect=false,connectTimeout=5000"
+~~~
+
+Chạy hai solution và dừng ngay khi một suite có lỗi:
 
 ~~~powershell
 dotnet test .\src\hr-service\HrService.slnx
@@ -338,14 +369,15 @@ dotnet test .\src\leave-service\LeaveService.slnx
 if ($LASTEXITCODE -ne 0) { throw "Leave Service tests failed" }
 ~~~
 
-Một số integration test cần SQL Server/Redis dành riêng cho kiểm thử. Nếu thiếu connection string hoặc phụ thuộc, test có thể bị `Skipped`; skipped không có nghĩa là tích hợp đã được xác minh. Với stack cô lập `hrbench`, cấu hình trong phiên PowerShell (thay placeholder bằng mật khẩu local trong `.env`):
+Một số integration test phụ thuộc SQL Server/Redis. Nếu thiếu connection string hoặc dịch vụ, test có thể bị `Skipped`; skipped không có nghĩa là tích hợp đã được xác minh. HR integration tests dùng Redis database 15; test persistence có thể tạo/xóa database kiểm thử. Chỉ dùng SQL Server/Redis riêng cho test, tuyệt đối không trỏ production.
+
+Khi hoàn tất, có thể dừng riêng stack kiểm thử nhưng giữ nguyên volume/database:
 
 ~~~powershell
-$env:HR_TEST_SQL_CONNECTION_STRING = "Server=localhost,11433;Database=master;User Id=sa;Password=<SA_PASSWORD>;Encrypt=False;TrustServerCertificate=True;Connect Timeout=5"
-$env:HR_TEST_REDIS_CONNECTION_STRING = "localhost:16379,abortConnect=false,connectTimeout=5000"
+docker compose --env-file .env @compose down
 ~~~
 
-Các test persistence có thể tạo/xóa database kiểm thử; HR integration test dùng Redis database 15. Chỉ dùng SQL Server/Redis riêng cho test, tuyệt đối không trỏ production.
+Không thêm `-v` nếu cần giữ database để kiểm tra hoặc chạy test tiếp.
 
 ### Frontend — Node.js 20
 
