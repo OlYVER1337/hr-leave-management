@@ -234,6 +234,8 @@ Không lấy DURATION=5m của executor per-vu-iterations làm bằng chứng so
 | Phân bổ Pending | 25 Manager, 2.000 Pending/Manager |
 | Pending cần cho workload | 600 ID/Manager |
 
+Đây là seed Approval arrival-rate (5.000 × 20 = 100.000 requests, 50% Pending), không phải seed Workforce/legacy 1.000 × 5 = 5.000 requests.
+
 ### 8.2. Kết quả hai VU pool
 
 | Metric | Pool 50/50 | Pool 100/100 |
