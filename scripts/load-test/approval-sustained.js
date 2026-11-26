@@ -3,6 +3,7 @@ import {
   approvalConfig,
   approvalMetrics,
   loadManagerPools,
+  leaveBaseUrl,
   recordHrCalls,
   writeApprovalSummary,
 } from './approval-benchmark-common.js';
@@ -67,7 +68,7 @@ export default function (data) {
   }
 
   const response = http.patch(
-    'http://leave-service:8080/api/v1/leave-requests/' + requestId + '/decision',
+    leaveBaseUrl + '/api/v1/leave-requests/' + requestId + '/decision',
     JSON.stringify({ decision: 'approve', note: 'Load-test constant-vus approval' }),
     {
       headers: {
