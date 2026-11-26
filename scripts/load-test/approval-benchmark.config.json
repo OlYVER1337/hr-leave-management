@@ -4,8 +4,7 @@
     "employeeCount": 5000,
     "requestsPerEmployee": 20,
     "managerCount": 25,
-    "pendingPercent": 50,
-    "policyDaysPerEmployee": 12
+    "pendingPercent": 50
   },
   "workload": {
     "durationSeconds": 300,
