@@ -1,5 +1,6 @@
 import http from 'k6/http';
 import { check } from 'k6';
+import { Counter } from 'k6/metrics';
 import exec from 'k6/execution';
 import {
   approvalConfig,
@@ -22,6 +23,7 @@ const plannedIterations = ratePerSecond * durationSeconds;
 const preAllocatedVUs = Number(__ENV.PREALLOCATED_VUS || arrival.defaultPreAllocatedVus);
 const maxVUs = Number(__ENV.MAX_VUS || arrival.maxVUs || preAllocatedVUs);
 const managerCount = seed.managerCount;
+const outOfPlanIterations = new Counter('approval_out_of_plan_iterations');
 
 if (!Number.isSafeInteger(ratePerSecond) || ratePerSecond < 1) {
   throw new Error('constantArrivalRate.ratePerSecond must be a positive integer.');
@@ -73,6 +75,18 @@ export function setup() {
 
 export default function (data) {
   const iteration = exec.scenario.iterationInTest;
+
+  // Không gửi approval vượt quá số lượt đã tính capacity từ rate x duration.
+  // Một iteration ngoài phạm vi vẫn được ghi nhận riêng, không tái sử dụng Pending ID.
+  if (iteration >= plannedIterations) {
+    outOfPlanIterations.add(1);
+    console.warn(
+      'Ignoring scenario iteration ' + iteration +
+      ' because it exceeds planned approval iterations ' + plannedIterations + '.',
+    );
+    return;
+  }
+
   const managerIndex = iteration % managerCount;
   const requestIndex = Math.floor(iteration / managerCount);
   const manager = data.managers[managerIndex];
