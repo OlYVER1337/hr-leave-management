@@ -86,13 +86,13 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
         var teamRequest = await CreateAsync(
             teamEmployeeId,
             approverId: Guid.NewGuid(),
-            new DateOnly(2030, 1, 10),
-            new DateOnly(2030, 1, 10));
+            start: new DateOnly(2030, 1, 10),
+            end: new DateOnly(2030, 1, 10));
         var outsideRequest = await CreateAsync(
             outsideEmployeeId,
             approverId: managerId,
-            new DateOnly(2030, 1, 11),
-            new DateOnly(2030, 1, 11));
+            start: new DateOnly(2030, 1, 11),
+            end: new DateOnly(2030, 1, 11));
 
         var sameTimestamp = teamRequest.CreatedAtUtc.AddHours(-2);
         var firstId = Guid.Parse("00000000-0000-0000-0000-000000000001");
@@ -142,7 +142,7 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
 
             Assert.NotNull(teamHistory);
             Assert.Equal(
-                [firstId, secondId],
+                new[] { firstId, secondId },
                 teamHistory.Where(item => item.Id == firstId || item.Id == secondId)
                     .Select(item => item.Id)
                     .ToArray());
