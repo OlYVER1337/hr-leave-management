@@ -29,14 +29,7 @@ public interface ILeaveRequestRepository
         Guid requestId,
         CancellationToken cancellationToken = default);
 
-    Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)?> GetVisibleByIdAsync(
-        Guid employeeId,
-        Guid requestId,
-        LeaveAccess access,
-        IReadOnlyCollection<Guid> teamEmployeeIds,
-        CancellationToken cancellationToken = default);
-
-    Task<IReadOnlyList<LeaveRequestHistory>?> GetVisibleHistoryAsync(
+    Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances, IReadOnlyList<LeaveRequestHistory> History)?> GetVisibleByIdAsync(
         Guid employeeId,
         Guid requestId,
         LeaveAccess access,
