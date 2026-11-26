@@ -42,7 +42,7 @@ public sealed record LeavePolicyResponse(
     string LeaveTypeName,
     int Year,
     decimal DaysPerYear,
-    DateOnly EffectiveFrom = default,
+    DateOnly EffectiveFrom,
     DateTime CreatedAtUtc = default,
     string Reason = "");
 
