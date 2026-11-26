@@ -50,7 +50,7 @@ Dynamic Authorization V1 đã được merge vào `master` qua PR #6, merge comm
 2. Hoàn tất Approval sustained: đã sửa seed để không overlap và đủ Pending cho 100 VU; tiếp theo chạy lại hai mức 50/100 VU trong 5 phút, lưu raw JSON và metadata sau khi verifier pass.
 3. Lưu raw JSON và gắn revision/image ID cho Approval và Workforce benchmark; ghi PAGE_SIZE, seed version, CPU/RAM limit và timestamps; đo tài nguyên đồng bộ.
 4. Kiểm tra thêm business timezone tại boundary 31/12–01/01 khi có thể mô phỏng thời điểm phù hợp.
-5. Cân nhắc bulk balance reconciliation, History API, readiness và HR client resilience theo nhu cầu.
+5. Cân nhắc bulk balance reconciliation, readiness và HR client resilience theo nhu cầu; API chi tiết kèm history đang được hoàn thiện ở feature branch.
 6. Permission-driven UI và Role assignment UI.
 7. Role/Permission catalog CRUD, Department scope và các phần mở rộng.
 
