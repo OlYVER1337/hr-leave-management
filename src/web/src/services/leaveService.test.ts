@@ -704,7 +704,8 @@ describe('leave request detail service', () => {
     };
     mocks.leaveGet.mockResolvedValue({
       data: {
-        request: { ...requestRecord, employeeId: detailUser.id },
+        ...requestRecord,
+        employeeId: detailUser.id,
         history,
       },
     });
@@ -736,7 +737,7 @@ describe('leave request detail service', () => {
 
   it('returns an empty history when detail response has no history entries', async () => {
     mocks.leaveGet.mockResolvedValue({
-      data: { request: requestRecord, history: [] },
+      data: { ...requestRecord, history: [] },
     });
     mocks.hrGet.mockImplementation(async (path: string) => {
       if (path === '/api/v1/me') return { data: currentEmployee };
