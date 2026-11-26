@@ -197,7 +197,43 @@ Cả hai solution build thành công trên .NET 10.0.13; HR test hoàn tất tro
 
 **Lưu ý đường dẫn:** repository dùng thư mục `src/leave-service/` viết thường. Lượt chạy được báo cáo dùng `src\Leave-service\`; lệnh vẫn hoạt động trên Windows do filesystem không phân biệt hoa/thường. Tài liệu thống nhất cách viết thường để tương thích với Git/Linux.
 
-Đây là kết quả local do người triển khai báo cáo, không phải lượt test được chạy lại bởi tài liệu/PR. Khi tái xác minh, ghi lại `git rev-parse HEAD` và output test đầy đủ; không suy rộng kết quả này sang frontend hoặc Swagger runtime.
+Đây là kết quả local do người triển khai báo cáo sau merge PR #17. Revision được ghi nhận theo checkout sau merge là `b9fa469c51bb25214aa6a3bef7ac8358b699ede3`; output terminal được gửi không in `git rev-parse HEAD`, vì vậy khi cần provenance tuyệt đối phải chạy `git rev-parse HEAD` tại chính thư mục đã chạy test. Không suy rộng kết quả này sang frontend hoặc Swagger runtime.
+
+
+### 6.4. Swagger smoke test và demo end-to-end
+
+**Điều kiện:** API mode (`VITE_DEMO_MODE=false`), `ASPNETCORE_ENVIRONMENT=Development`, HR/Leave services healthy và đã seed ba tài khoản API thật từ `.env`. Không dùng tài khoản Demo mode/localStorage cho bước này.
+
+Kiểm tra endpoint từ PowerShell:
+
+~~~powershell
+$hrSwagger = Invoke-WebRequest http://localhost:8081/swagger
+$leaveSwagger = Invoke-WebRequest http://localhost:8082/swagger
+$hrOpenApi = Invoke-RestMethod http://localhost:8081/openapi/v1.json
+$leaveOpenApi = Invoke-RestMethod http://localhost:8082/openapi/v1.json
+
+if ($hrSwagger.StatusCode -ne 200 -or $leaveSwagger.StatusCode -ne 200) {
+    throw "Swagger UI chưa trả HTTP 200."
+}
+if (-not $hrOpenApi.openapi -or -not $leaveOpenApi.openapi) {
+    throw "OpenAPI document chưa được tải đúng."
+}
+"Swagger UI và OpenAPI JSON đều phản hồi."
+~~~
+
+Hai service chỉ map Swagger/OpenAPI khi Development. Source mapping đã được kiểm tra; các lệnh trên phải chạy trên máy nhận bàn giao để xác nhận runtime. HR login endpoint là `POST /api/v1/auth/login`; có thể đăng nhập trong Swagger bằng tài khoản HR API, lấy access token rồi dùng nút **Authorize** với dạng `Bearer <accessToken>`. Cùng token được dùng để thử các endpoint Leave yêu cầu xác thực.
+
+**Kịch bản demo ngắn (5–7 phút):**
+
+1. HR đăng nhập API mode; xác nhận phòng ban và nhân viên Employee được gán đúng Manager.
+2. Employee đăng nhập; mở số dư, tạo một đơn nghỉ ANNUAL hợp lệ trong một ngày làm việc tương lai, ghi nhận trạng thái Pending.
+3. Manager đăng nhập; mở Approval Inbox, xác nhận nhìn thấy đơn trong phạm vi Team và duyệt đơn.
+4. Employee đăng nhập lại; xác nhận đơn chuyển Approved và số dư cập nhật: Pending giảm, Used tăng, Available giảm theo số ngày được duyệt.
+5. HR mở danh sách đơn nghỉ hoặc dashboard để xác nhận đơn đã được xử lý.
+
+Dùng tài khoản API mode đã cấu hình trong `.env`, đăng xuất/chuyển profile trình duyệt giữa các vai trò, và chọn ngày nghỉ chưa có đơn trùng. Không tạo dữ liệu trên production.
+
+**Trạng thái tại bản ghi này:** Swagger UI/OpenAPI được xác nhận ở cấp source (Development-only); chưa có output HTTP runtime từ máy nhận bàn giao. Kịch bản đăng nhập ba vai trò và duyệt đơn cần được thực hiện trực tiếp trên stack local trước khi đánh dấu hoàn tất.
 
 ## 7. Chạy Approval benchmark
 
