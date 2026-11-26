@@ -258,7 +258,7 @@ export function writeApprovalSummary(data, run) {
     git_sha: __ENV.GIT_SHA || 'not-provided',
     hr_image_id: __ENV.HR_IMAGE_ID || 'not-provided',
     leave_image_id: __ENV.LEAVE_IMAGE_ID || 'not-provided',
-    vus: run.vus,
+    vus: run.vus || run.maxVUs,
     duration_seconds: workload.durationSeconds,
     test_run_duration_ms: data.state?.testRunDurationMs || 0,
     manager_count: seed.managerCount,
@@ -291,12 +291,12 @@ export function writeApprovalSummary(data, run) {
   if (run.executor === 'constant-arrival-rate') {
     summary.target_approval_rate_per_second = run.ratePerSecond;
     summary.planned_iterations = run.plannedIterations;
-    summary.started_iterations = attempts;
+    summary.started_iterations = k6Iterations;
+    summary.approval_http_attempts = attempts;
     summary.dropped_iteration_rate =
       run.plannedIterations > 0 ? droppedIterations / run.plannedIterations : 0;
     summary.pre_allocated_vus = run.preAllocatedVUs;
     summary.max_vus = run.maxVUs;
-    summary.k6_iterations: k6Iterations;
   } else {
     summary.max_approvals_per_vu = run.maxApprovalsPerVu;
     summary.approval_id_capacity = run.vus * run.maxApprovalsPerVu;
