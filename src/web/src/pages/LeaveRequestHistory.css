@@ -1,0 +1,114 @@
+.request-history-panel {
+  margin: 18px 22px 0;
+  padding-top: 17px;
+  border-top: 1px solid var(--line);
+}
+.request-history-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.request-history-toolbar h3 {
+  margin: 0;
+  color: var(--ink);
+  font: 700 12px 'Manrope', sans-serif;
+}
+.request-history-toolbar p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+.request-history-toolbar .button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0 11px;
+  font-size: 10px;
+}
+.request-history-content {
+  margin-top: 15px;
+}
+.request-history-state {
+  padding: 15px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+.leave-history-timeline {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0 0 0 8px;
+  list-style: none;
+}
+.leave-history-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 13px minmax(0, 1fr);
+  gap: 11px;
+  padding: 0 0 17px;
+}
+.leave-history-item:not(:last-child)::before {
+  position: absolute;
+  top: 12px;
+  bottom: -1px;
+  left: 5px;
+  width: 1px;
+  background: var(--line);
+  content: '';
+}
+.leave-history-marker {
+  z-index: 1;
+  width: 11px;
+  height: 11px;
+  margin-top: 3px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 0 1px #cbd7fb;
+}
+.leave-history-entry {
+  min-width: 0;
+}
+.leave-history-entry-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 5px 12px;
+}
+.leave-history-entry-heading strong {
+  color: var(--ink);
+  font-size: 11px;
+}
+.leave-history-entry-heading time {
+  color: var(--muted);
+  font-size: 9px;
+}
+.leave-history-actor,
+.leave-history-status,
+.leave-history-note {
+  margin: 5px 0 0;
+  color: #65728a;
+  font-size: 10px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.leave-history-status {
+  color: #43516a;
+  font-weight: 600;
+}
+.leave-history-note {
+  padding: 7px 9px;
+  border-radius: 7px;
+  background: #f6f8fc;
+  white-space: pre-wrap;
+}
+@media (max-width: 560px) {
+  .request-history-panel { margin-right: 16px; margin-left: 16px; }
+  .request-history-toolbar { align-items: flex-start; flex-direction: column; }
+}
