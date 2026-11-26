@@ -140,7 +140,7 @@ public sealed class LeaveRequestService(
             totalCount);
     }
 
-    public async Task<LeaveRequestDetailResponse> GetVisibleByIdAsync(
+    public async Task<LeaveRequestResponse> GetVisibleByIdAsync(
         Guid employeeId,
         string authorization,
         Guid requestId,
@@ -182,9 +182,10 @@ public sealed class LeaveRequestService(
                 item.Note,
                 item.CreatedAtUtc)).ToArray();
 
-        return new LeaveRequestDetailResponse(
-            ToResponse(result.Value.Request, result.Value.Balances),
-            history);
+        return ToResponse(result.Value.Request, result.Value.Balances) with
+        {
+            History = history
+        };
     }
 
     public async Task<IReadOnlyList<LeaveRequestResponse>> GetPendingAsync(
