@@ -29,6 +29,8 @@ Cấu hình mặc định:
 | Pending tối thiểu mỗi Manager | 2.000 |
 | Duration workload | 300 giây |
 
+Seed này dành cho Approval arrival-rate: 5.000 nhân viên × 20 đơn = 100.000 đơn; 50% Pending tương ứng 50.000 Pending. Không dùng nhầm seed Workforce/legacy 1.000 × 5 (5.000 đơn), vì đó là dataset cho workload khác.
+
 Khi dùng Pending 50%, seed tạo 10 Pending và 2 Approved trên mỗi nhân viên; `Used + Pending = 12`, không vượt quota 12 ngày. SQL seed kiểm tra quota, ngày nghỉ không trùng nhau và lịch làm việc/ngày lễ trước khi commit.
 
 Không tự chỉnh riêng tham số SQL hoặc k6. Muốn thay đổi seed hoặc workload, sửa JSON duy nhất rồi chạy lại script điều phối.
