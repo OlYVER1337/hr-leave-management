@@ -678,7 +678,7 @@ public async Task CreateAsync_UsesPolicyEffectiveOnCreationDate()
         var result = await service.GetVisibleByIdAsync(
             employeeId, "Bearer employee", request.Id, access);
 
-        Assert.Equal(request.Id, result.Request.Id);
+        Assert.Equal(request.Id, result.Id);
         var history = Assert.Single(result.History);
         Assert.Equal("Created", history.Action);
         Assert.Equal(employeeId, history.ActorId);
@@ -721,7 +721,7 @@ public async Task CreateAsync_UsesPolicyEffectiveOnCreationDate()
         var result = await service.GetVisibleByIdAsync(
             managerId, "Bearer manager", request.Id, access);
 
-        Assert.Equal(request.Id, result.Request.Id);
+        Assert.Equal(request.Id, result.Id);
         hrClient.Verify(item => item.GetTeamEmployeeIdsAsync(
             managerId, "Bearer manager", It.IsAny<CancellationToken>()), Times.Once);
         repository.Verify(item => item.GetVisibleByIdAsync(
@@ -758,7 +758,7 @@ public async Task CreateAsync_UsesPolicyEffectiveOnCreationDate()
         var result = await service.GetVisibleByIdAsync(
             employeeId, "Bearer hr", request.Id, access);
 
-        Assert.Equal(request.Id, result.Request.Id);
+        Assert.Equal(request.Id, result.Id);
         hrClient.VerifyNoOtherCalls();
     }
 
