@@ -8,7 +8,7 @@ export const approvalConfig = JSON.parse(open('/scripts/approval-benchmark.confi
 const seed = approvalConfig.seed;
 const workload = approvalConfig.workload;
 const hrBaseUrl = __ENV.HR_BASE_URL || 'http://host.docker.internal:18081';
-const leaveBaseUrl = __ENV.LEAVE_BASE_URL || 'http://host.docker.internal:18082';
+export const leaveBaseUrl = __ENV.LEAVE_BASE_URL || 'http://host.docker.internal:18082';
 const pageSize = 100;
 
 function requirePositiveInteger(value, name) {
@@ -250,6 +250,7 @@ export function writeApprovalSummary(data, run) {
   const attempts = requestMetrics.count || 0;
   const errors = data.metrics.approval_http_errors?.values?.count || 0;
   const droppedIterations = data.metrics.dropped_iterations?.values?.count || 0;
+  const k6Iterations = data.metrics.iterations?.values?.count || 0;
 
   const summary = {
     workload: run.workload,
@@ -279,6 +280,7 @@ export function writeApprovalSummary(data, run) {
     error_rate: attempts > 0 ? errors / attempts : 0,
     approval_errors: errors,
     dropped_iterations: droppedIterations,
+    k6_iterations: k6Iterations,
     leave_to_hr_calls: data.metrics.approval_leave_to_hr_calls?.values?.count || 0,
     leave_to_hr_total_time_ms:
       data.metrics.approval_leave_to_hr_total_duration_ms?.values?.count || 0,
@@ -292,8 +294,9 @@ export function writeApprovalSummary(data, run) {
     summary.started_iterations = attempts;
     summary.dropped_iteration_rate =
       run.plannedIterations > 0 ? droppedIterations / run.plannedIterations : 0;
-    summary.pre_allocated_vus = run.vus;
-    summary.max_vus = run.vus;
+    summary.pre_allocated_vus = run.preAllocatedVUs;
+    summary.max_vus = run.maxVUs;
+    summary.k6_iterations: k6Iterations;
   } else {
     summary.max_approvals_per_vu = run.maxApprovalsPerVu;
     summary.approval_id_capacity = run.vus * run.maxApprovalsPerVu;
