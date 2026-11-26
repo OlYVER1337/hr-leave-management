@@ -359,7 +359,7 @@ Raw JSON `approval-100vu-after-seed.json` được chỉ định qua `REPORT_JSO
 - Leave Balance GET và POST self-sync đều cập nhật `PolicyDays` authoritative từ HR; `Entitled = max(PolicyDays, Used + Pending)`. Request lưu `PolicyVersionId` và `PolicyDaysAtCreation` trong yearly allocation. Chưa có API/worker bulk reconciliation cho mọi nhân viên.
 - Backend HR policy year, Leave request validation và balance default year dùng UTC+07; frontend `leaveService.ts` dùng `Asia/Ho_Chi_Minh`. Cần rà soát các màn hình frontend còn lại ở ranh giới ngày/năm.
 - Employee lookup cần thống nhất active-state behavior giữa lookup by ID/batch và Team listing.
-- Leave History có ghi nhưng chưa có GET endpoint.
+- API `GET /api/v1/leave-requests/{id}` trả thông tin chi tiết đơn và `history` trong cùng response; permission/scope trên request được áp dụng trước khi trả lịch sử. Frontend gọi API này khi mở modal chi tiết; nút **Xem lịch sử** chỉ đóng/mở timeline.
 - Health endpoint chưa tách readiness/liveness và chưa kiểm tra database readiness.
 - HR HttpClient timeout 5 giây, chưa có circuit breaker/retry.
 - Annual demo policy có sai khác giữa backend DemoDataSeeder (12 ngày) và frontend built-in fallback (15 ngày).
