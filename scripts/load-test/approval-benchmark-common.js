@@ -247,6 +247,8 @@ export function writeApprovalSummary(data, run) {
   const errors = data.metrics.approval_http_errors?.values?.count || 0;
   const droppedIterations = data.metrics.dropped_iterations?.values?.count || 0;
   const k6Iterations = data.metrics.iterations?.values?.count || 0;
+  const outOfPlanIterations =
+    data.metrics.approval_out_of_plan_iterations?.values?.count || 0;
 
   const summary = {
     workload: run.workload,
@@ -287,6 +289,7 @@ export function writeApprovalSummary(data, run) {
     summary.target_approval_rate_per_second = run.ratePerSecond;
     summary.planned_iterations = run.plannedIterations;
     summary.completed_iterations = k6Iterations;
+    summary.out_of_plan_iterations = outOfPlanIterations;
     summary.approval_http_attempts = attempts;
     summary.dropped_iteration_rate =
       run.plannedIterations > 0 ? droppedIterations / run.plannedIterations : 0;
