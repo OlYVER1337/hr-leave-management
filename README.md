@@ -323,7 +323,6 @@ Content-Type: application/json
 
 Thay email và mật khẩu trong ví dụ bằng giá trị thật đã cấu hình. Khi API mode được bật, frontend sẽ nhận access token từ HR Service rồi gửi token trong header `Authorization: Bearer <token>` ở các request cần xác thực.
 
-
 ## 8. Chạy automated tests
 
 ### Backend — .NET 10 SDK
