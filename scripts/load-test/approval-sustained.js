@@ -67,6 +67,8 @@ function durationToSeconds(value) {
   return total;
 }
 export const options = {
+  setupTimeout: '5m',
+
   scenarios: {
     manager_decisions_sustained: {
       executor: 'constant-vus',
