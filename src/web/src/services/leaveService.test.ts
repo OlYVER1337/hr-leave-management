@@ -681,3 +681,38 @@ describe('leave policy version editing', () => {
     }));
   });
 });
+
+describe('leave request history service', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // Lịch sử được tải từ endpoint riêng của request và giữ nguyên thứ tự backend trả về.
+  it('loads the history from the request-specific API endpoint', async () => {
+    const history = [{
+      id: 'history-1',
+      actorId: employee.id,
+      action: 'Created',
+      fromStatus: null,
+      toStatus: 'Pending',
+      note: null,
+      createdAtUtc: '2026-11-26T01:00:00Z',
+    }];
+    mocks.leaveGet.mockResolvedValue({ data: history });
+
+    const { getLeaveRequestHistory } = await import('./leaveService');
+    await expect(getLeaveRequestHistory('request / 1')).resolves.toEqual(history);
+
+    expect(mocks.leaveGet).toHaveBeenCalledTimes(1);
+    expect(mocks.leaveGet).toHaveBeenCalledWith(
+      '/api/v1/leave-requests/request%20%2F%201/history',
+    );
+  });
+
+  it('returns an empty list when the API has no history records', async () => {
+    mocks.leaveGet.mockResolvedValue({ data: [] });
+    const { getLeaveRequestHistory } = await import('./leaveService');
+
+    await expect(getLeaveRequestHistory('request-1')).resolves.toEqual([]);
+  });
+});
