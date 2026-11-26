@@ -13,7 +13,7 @@ Nguồn cấu hình duy nhất là:
 
 `scripts/load-test/approval-benchmark.config.json`
 
-File này chứa seed, policy quota, duration và tham số của hai workload. Script PowerShell `run-approval-benchmark.ps1` đọc file rồi truyền cùng giá trị cho SQLCMD seed, SQLCMD verifier và k6. Các script k6 cũng đọc trực tiếp JSON thông qua `approval-benchmark-common.js`; không còn phải khai báo lại các biến `SEED_*` ở lệnh chạy k6.
+File này chứa các tham số seed, duration và hai workload. Quota fixture 12 ngày là điều kiện domain cố định trong SQL seed, không phải một biến môi trường cần truyền riêng. Script PowerShell `run-approval-benchmark.ps1` đọc file rồi truyền cùng giá trị cho SQLCMD seed, SQLCMD verifier và k6. Các script k6 cũng đọc trực tiếp JSON thông qua `approval-benchmark-common.js`; không còn phải khai báo lại các biến `SEED_*` ở lệnh chạy k6.
 
 Cấu hình mặc định:
 
@@ -23,7 +23,7 @@ Cấu hình mặc định:
 | Đơn mỗi nhân viên | 20 |
 | Manager | 25 |
 | Pending percent | 50% |
-| Policy days mỗi nhân viên | 12 |
+| Quota fixture mỗi nhân viên (cố định trong seed) | 12 ngày |
 | Tổng đơn | 100.000 |
 | Pending sau seed | 50.000 |
 | Pending tối thiểu mỗi Manager | 2.000 |
