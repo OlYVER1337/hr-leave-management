@@ -21,9 +21,24 @@ public sealed class LeaveRequestHistoryServiceTests
             Status = LeaveRequestStatus.Pending
         };
         var timestamp = new DateTime(2026, 11, 26, 1, 0, 0, DateTimeKind.Utc);
+        var firstId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+        var secondId = Guid.Parse("00000000-0000-0000-0000-000000000002");
+
+        // Cố ý thêm ngược thứ tự ID; service phải trả timeline theo CreatedAtUtc rồi Id.
         request.Histories.Add(new LeaveRequestHistory
         {
-            Id = Guid.NewGuid(),
+            Id = secondId,
+            LeaveRequestId = request.Id,
+            ActorId = employeeId,
+            Action = "Reviewed",
+            FromStatus = LeaveRequestStatus.Pending,
+            ToStatus = LeaveRequestStatus.Pending,
+            Note = "Đã kiểm tra",
+            CreatedAtUtc = timestamp
+        });
+        request.Histories.Add(new LeaveRequestHistory
+        {
+            Id = firstId,
             LeaveRequestId = request.Id,
             ActorId = employeeId,
             Action = "Created",
@@ -46,12 +61,14 @@ public sealed class LeaveRequestHistoryServiceTests
         var result = await service.GetVisibleByIdAsync(employeeId, "Bearer employee", request.Id, access);
 
         Assert.Equal(request.Id, result.Request.Id);
-        var history = Assert.Single(result.History);
-        Assert.Equal(employeeId, history.ActorId);
-        Assert.Equal("Created", history.Action);
-        Assert.Null(history.FromStatus);
-        Assert.Equal("Pending", history.ToStatus);
-        Assert.Equal(timestamp, history.CreatedAtUtc);
+        Assert.Equal(new[] { firstId, secondId }, result.History.Select(item => item.Id));
+        var created = result.History[0];
+        Assert.Equal(employeeId, created.ActorId);
+        Assert.Equal("Created", created.Action);
+        Assert.Null(created.FromStatus);
+        Assert.Equal("Pending", created.ToStatus);
+        Assert.Equal(timestamp, created.CreatedAtUtc);
+        Assert.Equal("Đã kiểm tra", result.History[1].Note);
         hrClient.VerifyNoOtherCalls();
     }
 
