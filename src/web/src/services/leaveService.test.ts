@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthUser, LeavePolicy } from '../types';
 import { getBusinessYear } from '../utils/businessTime';
-import { decideLeaveRequest, editPolicyVersion, getBalances, getLeaveRequestSummary, getLeaveRequests, getLeaveRequestsPage, getPolicies, getPolicyVersions, restoreBuiltInLeaveType, savePolicies } from './leaveService';
+import { decideLeaveRequest, editPolicyVersion, getBalances, getLeaveRequestDetails, getLeaveRequestSummary, getLeaveRequests, getLeaveRequestsPage, getPolicies, getPolicyVersions, restoreBuiltInLeaveType, savePolicies } from './leaveService';
 
 const mocks = vi.hoisted(() => ({
   hrGet: vi.fn(),
@@ -682,13 +682,13 @@ describe('leave policy version editing', () => {
   });
 });
 
-describe('leave request history service', () => {
+describe('leave request detail service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  // Lịch sử được tải từ endpoint riêng của request và giữ nguyên thứ tự backend trả về.
-  it('loads the history from the request-specific API endpoint', async () => {
+  // Một API chi tiết trả cả request và history; frontend chỉ ánh xạ metadata hiển thị sau đó.
+  it('loads request and history from one encoded detail endpoint', async () => {
     const history = [{
       id: 'history-1',
       actorId: employee.id,
@@ -698,21 +698,59 @@ describe('leave request history service', () => {
       note: null,
       createdAtUtc: '2026-11-26T01:00:00Z',
     }];
-    mocks.leaveGet.mockResolvedValue({ data: history });
+    const detailUser: AuthUser = {
+      ...employee,
+      id: 'employee-detail-test',
+    };
+    mocks.leaveGet.mockResolvedValue({
+      data: {
+        request: { ...requestRecord, employeeId: detailUser.id },
+        history,
+      },
+    });
+    mocks.hrGet.mockImplementation(async (path: string) => {
+      if (path === '/api/v1/me') {
+        return { data: { ...currentEmployee, id: detailUser.id } };
+      }
+      if (path === '/api/v1/leave-types') {
+        return { data: [{ id: 1, code: 'ANNUAL', name: 'Annual leave', isPaid: true, deductsBalance: true }] };
+      }
+      throw new Error('Unexpected HR API path: ' + path);
+    });
 
-    const { getLeaveRequestHistory } = await import('./leaveService');
-    await expect(getLeaveRequestHistory('request / 1')).resolves.toEqual(history);
+    const result = await getLeaveRequestDetails('request / 1', detailUser);
 
+    expect(result.request).toMatchObject({
+      id: 'request-1',
+      employeeId: detailUser.id,
+      employeeName: 'Nguyễn An',
+      typeCode: 'ANNUAL',
+      status: 'Approved',
+    });
+    expect(result.history).toEqual(history);
     expect(mocks.leaveGet).toHaveBeenCalledTimes(1);
     expect(mocks.leaveGet).toHaveBeenCalledWith(
-      '/api/v1/leave-requests/request%20%2F%201/history',
+      '/api/v1/leave-requests/request%20%2F%201',
     );
   });
 
-  it('returns an empty list when the API has no history records', async () => {
-    mocks.leaveGet.mockResolvedValue({ data: [] });
-    const { getLeaveRequestHistory } = await import('./leaveService');
+  it('returns an empty history when detail response has no history entries', async () => {
+    mocks.leaveGet.mockResolvedValue({
+      data: { request: requestRecord, history: [] },
+    });
+    mocks.hrGet.mockImplementation(async (path: string) => {
+      if (path === '/api/v1/me') return { data: currentEmployee };
+      if (path === '/api/v1/leave-types') {
+        return { data: [{ id: 1, code: 'ANNUAL', name: 'Annual leave', isPaid: true, deductsBalance: true }] };
+      }
+      throw new Error('Unexpected HR API path: ' + path);
+    });
 
-    await expect(getLeaveRequestHistory('request-1')).resolves.toEqual([]);
+    const result = await getLeaveRequestDetails('request-1', employee);
+
+    expect(result.request.id).toBe('request-1');
+    expect(result.history).toEqual([]);
+    expect(mocks.leaveGet).toHaveBeenCalledTimes(1);
+    expect(mocks.leaveGet).toHaveBeenCalledWith('/api/v1/leave-requests/request-1');
   });
 });
