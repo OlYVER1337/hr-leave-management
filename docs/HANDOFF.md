@@ -26,7 +26,7 @@ Tài liệu dành cho người tiếp nhận source, dựng môi trường, ki�
 - Git để clone repository.
 - Internet trong lần build đầu để tải image và package.
 - .NET 10 SDK nếu chạy backend tests trực tiếp trên host.
-- Node.js 20+ và npm nếu chạy frontend tests trực tiếp. Không cần cài npm trên host nếu dùng Docker như Mục 7.
+- Node.js 20+ và npm nếu chạy frontend tests trực tiếp. Không cần cài npm trên host nếu dùng Docker như Mục 6.2.
 
 ### 2.2. Clone source và tạo cấu hình
 
@@ -277,13 +277,62 @@ Chưa thu thập CPU/RAM/SQL waits đồng bộ để kết luận bottleneck. �
 
 Các gap đã xác nhận và thứ tự ưu tiên phải đối chiếu [Backlog](planning/BACKLOG.md); không tự ghi đề xuất thành tính năng đã hoàn thành.
 
-## 10. Sự cố benchmark và cách diễn giải
+
+## 10. Đối chiếu đầu ra theo đề tài thực tập
+
+Đối chiếu với mục **9. Đầu ra mong muốn** trong [đề tài thực tập 2026](requirements/internship-project-2026.docx):
+
+| # | Đầu ra bắt buộc | Tài liệu/source/evidence trong repository | Trạng thái khi bàn giao |
+|---:|---|---|---|
+| 1 | Source code Git: frontend, hai backend, test và cấu hình triển khai | Thư mục `src/`, `scripts/`, lịch sử Git, `docker-compose.yml`, Dockerfiles | Đã có trong repository; người nhận cần clone và xác nhận revision. |
+| 2 | Ứng dụng chạy được: Employee gửi đơn, Manager xử lý, HR quản trị | [User guide](USER-GUIDE.md), [Acceptance/demo](testing/demo-and-acceptance.md) | Các luồng chính đã triển khai và có bằng chứng demo API lịch sử; cần chạy lại từ môi trường nhận bàn giao. |
+| 3 | System design: kiến trúc, service ownership, giao tiếp và lỗi | [System design](architecture/SYSTEM_DESIGN.md), [Architecture diagrams](architecture/README.md) | Tài liệu đã có; đối chiếu lại với source khi có thay đổi. |
+| 4 | Database design: ERD, schema, index/constraint, migrations và seed | [Database design](architecture/DATABASE_DESIGN.md), EF Core migrations trong từng service, scripts seed | Đã có tài liệu/source; migration và seed cần xác nhận chạy được trên database mới. |
+| 5 | API documentation: Swagger/OpenAPI, request/response và lỗi | [API reference](API_REFERENCE.md), Swagger UI và OpenAPI JSON ở Development | Đã có; Swagger runtime chỉ được bật trong Development. |
+| 6 | Frontend Design System và components tái sử dụng | [Design System](design/DESIGN_SYSTEM.md), [Wireframes](design/WIREFRAMES.md), `src/web/src/` | Đã có tài liệu và UI; React authorization vẫn dùng Role legacy như Mục 9. |
+| 7 | Redis design/evidence: key, TTL, invalidation, miss và fallback | [Redis performance report](performance/redis-performance.md), cache implementation và tests | Đã có báo cáo Catalog Redis ON/OFF, cache key/TTL/invalidation/fallback; không dùng cache làm căn cứ duy nhất để quyết định số dư/duyệt đơn. |
+| 8 | Test & performance report: unit/integration, k6, Redis ON/OFF | [Demo/acceptance](testing/demo-and-acceptance.md), [Validation guide](testing/dynamic-authorization-validation.md), [Approval benchmark guide](testing/approval-benchmark-guide.md), [evidence](testing/evidence/) | Đã có kết quả lịch sử và benchmark Approval ngày 26/11; regression tests cần chạy lại và gắn SHA nếu cần sign-off theo revision hiện tại. |
+| 9 | Deployment package: Dockerfile, Compose, `.env.example`, README và chạy máy mới | `docker-compose.yml`, `docker-compose.loadtest.yml`, Dockerfiles, `.env.example`, [README](../README.md) | Đã có cấu hình; chưa có bằng chứng clean-machine deployment/production. |
+| 10 | Demo cuối kỳ và trình bày quyết định, sự cố, cách xử lý, cải tiến | Kịch bản demo trong [Acceptance/demo](testing/demo-and-acceptance.md), kiến trúc, backlog và benchmark reports | Nội dung kỹ thuật đã có để chuẩn bị demo; buổi trình bày/sign-off phải thực hiện trực tiếp, không thể coi file tài liệu là bằng chứng đã trình bày. |
+
+## 11. Kịch bản nghiệm thu tối thiểu theo đề tài
+
+Khi nghiệm thu API mode, thực hiện lần lượt các kịch bản sau. Dùng tài khoản và dữ liệu demo local được tạo từ `.env`; không dùng dữ liệu production.
+
+- [ ] HR tạo nhân viên, gán phòng ban/quản lý trực tiếp và cấu hình chính sách nghỉ phép.
+- [ ] Employee đăng nhập, xem số dư, gửi đơn hợp lệ và đọc trạng thái đơn.
+- [ ] Đơn trùng ngày hoặc vượt số phép bị từ chối với thông báo phù hợp.
+- [ ] Manager chỉ nhìn thấy và xử lý đơn thuộc phạm vi quản lý được cấp.
+- [ ] User không có quyền không thể duyệt đơn hoặc xem dữ liệu ngoài phạm vi.
+- [ ] Hai thao tác đồng thời không làm sai trạng thái đơn hoặc số dư.
+- [ ] Thay đổi chính sách được phản ánh qua cơ chế cache invalidation; cache cũ không làm sai quyết định nghiệp vụ.
+- [ ] Dừng Redis không làm mất các chức năng cốt lõi dựa trên SQL fallback.
+- [ ] Có thể dựng hệ thống từ Docker Compose và hoàn thành luồng demo end-to-end theo README.
+
+Các kiểm thử concurrency, authorization và Redis outage có bằng chứng automation trong test suites/reports. Người tiếp nhận vẫn nên chạy lại các luồng trực quan và API trên revision/môi trường thực tế trước khi ký nghiệm thu.
+
+## 12. Cơ cấu đánh giá tham chiếu
+
+Đề tài phân bổ trọng số đánh giá như sau:
+
+| Nhóm | Trọng số |
+|---|---:|
+| Kiến trúc hệ thống và thiết kế database | 25% |
+| Backend .NET, nghiệp vụ, API và phân quyền | 25% |
+| Redis, xử lý đồng thời, testing và hiệu năng | 20% |
+| React UI/UX và Design System | 15% |
+| Docker Compose, tài liệu, chất lượng bàn giao và demo | 15% |
+| **Tổng** | **100%** |
+
+Đây là trọng số trong tài liệu đề tài, không phải điểm tự đánh giá hoặc kết quả chấm thực tế.
+
+## 13. Sự cố benchmark và cách diễn giải
 
 Một lượt Workforce load test trước đây ghi nhận 21 HTTP 500 khi Docker bị dừng giữa chừng trong lúc benchmark. Nguyên nhân gián đoạn môi trường đã được xác nhận; không cần mở lại điều tra sự cố cũ. Chỉ xem xét lại khi HTTP 500 tái xuất hiện trong một lượt chạy ổn định, có log/stack trace và có thể tái hiện.
 
 Benchmark và integration tests có thể thay đổi dữ liệu trong database test. Chỉ chạy seed/cleanup trên stack kiểm thử riêng. Không dùng docker compose down -v để dọn dữ liệu nếu chưa xác định chính xác project và volume.
 
-## 11. Checklist sign-off cho người tiếp nhận
+## 14. Checklist sign-off cho người tiếp nhận
 
 - [ ] Clone đúng repository và xác nhận branch/revision source.
 - [ ] Tạo .env local; xác nhận không có secret thật được commit.
@@ -299,7 +348,7 @@ Benchmark và integration tests có thể thay đổi dữ liệu trong database
 
 Không đánh dấu checklist hoàn tất chỉ dựa trên tài liệu hoặc kết quả lịch sử; người tiếp nhận cần chạy lại trên môi trường/revision bàn giao thực tế.
 
-## 12. Tài liệu tham chiếu
+## 15. Tài liệu tham chiếu
 
 - [README — cài đặt và chạy local](../README.md)
 - [Docs index](README.md)
