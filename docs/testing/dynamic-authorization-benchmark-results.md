@@ -483,3 +483,47 @@ Seed script `scripts/load-test/seed-scale-data.sql` tạo ngày nghỉ vào busi
 Summary evidence:
 - `evidence/dynamic-authorization/approval-constant-vus-50-5m-valid-seed-summary.json`
 - `evidence/dynamic-authorization/approval-constant-vus-150-5m-summary.json`
+
+
+## 12. Phân loại bổ sung raw Approval JSON — 26/11/2026
+
+Commit `14cea970e5b42de555b19c11747cabe106d80ea8` bổ sung ba raw k6 JSON và thay đổi `approval-sustained.js` bằng cách đặt `setupTimeout: '5m'`. Các raw JSON được kiểm tra độc lập với hai summary operator-provided ở Mục 11; không thay thế hoặc gộp số liệu giữa các lượt chạy.
+
+### 12.1. Raw 50 VU có workload Approval
+
+File `approval-constant-vus-50-5m.json` ghi nhận:
+- `vus_max=50`, thời gian process khoảng 319,6 giây.
+- 14.411 attempts, 14.411 approvals thành công, 0 approval errors.
+- Throughput chuẩn hóa theo 300 giây cấu hình: 48,04 approvals/s.
+- P50/P95 của custom `approval_request_duration_ms`: 24,01 / 48,79 ms.
+- Leave → HR calls: 28.822.
+
+Đây là một lượt chạy riêng, không phải raw evidence cho summary 14.688 completions ở Mục 11. Không trộn hai lượt để tính percentile hoặc throughput đại diện.
+
+### 12.2. Raw 150 VU có 74 approval errors
+
+File `approval-constant-vus-150-5m-valid-seed.json` ghi nhận:
+- `vus_max=150`, process khoảng 371,2 giây.
+- 42,313 attempts, 42,239 approvals thành công và 74 approval errors.
+- Error ratio theo custom counter: 0.1749%; ngưỡng `approval_http_errors: count==0` không đạt.
+- Throughput success chuẩn hóa theo 300 giây cấu hình: 140.80 approvals/s.
+- P50/P95 của custom `approval_request_duration_ms`: 23,82 / 52,16 ms.
+- Leave → HR calls: 84.560.
+
+Đây là một lượt chạy có seed capacity nhưng **không phải lượt 150 VU zero-error**. Không thay thế summary 43.622 completions/0 errors ở Mục 11; phải giữ hai lượt tách biệt và không sử dụng raw JSON này để tuyên bố error rate của lượt summary. File không chứa Git SHA/image ID nên chưa gắn được với binary cụ thể.
+
+### 12.3. JSON có tên 50 VU nhưng không có Approval workload
+
+File `approval-constant-vus-50-5m-valid-seed.json` không phải kết quả benchmark 50 VU × 5 phút:
+- `vus_max=150`, process khoảng 60 giây.
+- Không có `approval_requests`, `approval_successes` hoặc `approval_http_errors`.
+- Có 473 HTTP requests nhưng không có approval check ở root group.
+
+Vì vậy không dùng file này để tính throughput/latency Approval. Tên file không khớp với nội dung; cần đổi tên hoặc bổ sung chú thích trước khi xem là evidence đã phân loại.
+
+### 12.4. Cách sử dụng evidence
+
+- Summary 50 VU (14.688/0 errors) và summary 150 VU (43.622/0 errors) ở Mục 11 vẫn là các kết quả operator-provided riêng biệt.
+- Raw 50 VU (14.411/0 errors) và raw 150 VU (42.239/74 errors) là các lượt riêng, được giữ độc lập.
+- Không suy ra một benchmark “150 VU zero-error” từ raw JSON mới; zero-error chỉ áp dụng cho lượt được ghi trong summary ở Mục 11.
+- Cần giữ nguyên mọi raw export và mô tả rõ lượt nào là pass, lượt nào là fail/không có workload. Không xóa hoặc gộp các JSON khác lượt chạy.
