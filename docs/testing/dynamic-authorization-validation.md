@@ -253,7 +253,7 @@ File Docker Stats được thu thập theo chu kỳ dự kiến 5 giây, thực 
 - **Tính đúng đắn:** Workforce và cả bốn lượt Approval đều có 0 HTTP/approval errors theo summary được cung cấp.
 - **Workforce:** tăng từ 50 lên 100 VU làm throughput tăng ít, p95 tăng khoảng gấp đôi. Đây là tín hiệu cần điều tra trước khi tăng tải cao hơn.
 - **Approval:** kiểm tra burst concurrency thành công với 50 và 100 VU; một HR lookup được ghi nhận cho mỗi approval. p95 và HR lookup latency có biến động giữa các lượt.
-- **Chưa nghiệm thu sustained Approval load:** kịch bản hiện tại không duy trì 5 phút. Nếu yêu cầu kiểm tra Approval tải liên tục, cần thiết kế scenario theo thời lượng thực (ví dụ `constant-vus` hoặc `constant-arrival-rate`) và chuẩn bị đủ đơn Pending mới cho toàn bộ số quyết định.
+- **Trạng thái tại ngày 12/11/2026:** khi viết kết luận lịch sử này, Approval mới chỉ có burst/per-vu-iterations nên chưa có sustained workload 5 phút. Nội dung này đã được supersede bởi benchmark `constant-arrival-rate` ngày 26/11/2026 ở Mục 13: target 50 approvals/s × 300 giây, hai pool 50/100 VU đều hoàn tất 15.000/15.000 với 0 dropped và 0 HTTP error.
 - **Chưa xác định bottleneck:** cần đo tài nguyên liên tục hoặc dùng tracing/SQL metrics theo đúng thời gian scenario, rồi mới quyết định tối ưu query, connection pool hay HTTP HR lookup.
 - **Không thực hiện Redis on/off comparison:** dữ liệu ở đây chỉ phản ánh cấu hình Redis đang hoạt động; không được diễn giải thành bằng chứng về mức cải thiện nhờ Redis.
 
