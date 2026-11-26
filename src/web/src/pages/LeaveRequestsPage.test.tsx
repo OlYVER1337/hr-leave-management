@@ -114,7 +114,7 @@ describe('LeaveRequestsPage', () => {
     expect(mocks.getLeaveRequestDetails).toHaveBeenCalledTimes(1);
     expect(mocks.getLeaveRequestDetails).toHaveBeenCalledWith('request-1', employee);
 
-    await user.click(screen.getByRole('button', { name: 'Xem lịch sử' }));
+    await user.click(await screen.findByRole('button', { name: 'Xem lịch sử' }));
 
     expect(await screen.findByText('Tạo đơn')).toBeInTheDocument();
     expect(screen.getByText('Người thực hiện: Nguyễn An (nhân viên)')).toBeInTheDocument();
@@ -136,7 +136,7 @@ describe('LeaveRequestsPage', () => {
     );
 
     await user.click(await screen.findByRole('button', { name: 'Xem chi tiết request-1' }));
-    await user.click(screen.getByRole('button', { name: 'Xem lịch sử' }));
+    await user.click(await screen.findByRole('button', { name: 'Xem lịch sử' }));
 
     expect(await screen.findByText('Chưa có bản ghi lịch sử cho đơn này.')).toBeInTheDocument();
     expect(mocks.getLeaveRequestDetails).toHaveBeenCalledTimes(1);
