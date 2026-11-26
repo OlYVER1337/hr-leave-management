@@ -150,21 +150,14 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
         await using (var context = _fixture.CreateContext())
         {
             var repository = new LeaveRequestRepository(context);
-            var teamHistory = await repository.GetVisibleHistoryAsync(
+            var teamDetail = await repository.GetVisibleByIdAsync(
                 managerId,
                 teamRequest.Id,
                 ManagerAccess(),
                 [teamEmployeeId]);
 
-            Assert.NotNull(teamHistory);
-            var emptyHistory = await repository.GetVisibleHistoryAsync(
-                managerId,
-                emptyHistoryRequest.Id,
-                ManagerAccess(),
-                [teamEmployeeId]);
-            Assert.NotNull(emptyHistory);
-            Assert.Empty(emptyHistory);
-
+            Assert.NotNull(teamDetail);
+            var teamHistory = teamDetail.Value.Request.Histories;
             Assert.Equal(
                 new[] { firstId, secondId },
                 teamHistory.Where(item => item.Id == firstId || item.Id == secondId)
@@ -175,31 +168,40 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
                     .Select(item => item.Id),
                 teamHistory.Select(item => item.Id));
 
+            // Một request không có bản ghi audit vẫn là request hợp lệ, với History rỗng.
+            var emptyHistory = await repository.GetVisibleByIdAsync(
+                managerId,
+                emptyHistoryRequest.Id,
+                ManagerAccess(),
+                [teamEmployeeId]);
+            Assert.NotNull(emptyHistory);
+            Assert.Empty(emptyHistory.Value.Request.Histories);
+
             // ApproverId còn trỏ tới manager không làm đơn ngoài Team hiện tại trở nên visible.
-            var outsideHistory = await repository.GetVisibleHistoryAsync(
+            var outsideDetail = await repository.GetVisibleByIdAsync(
                 managerId,
                 outsideRequest.Id,
                 ManagerAccess(),
                 [teamEmployeeId]);
-            Assert.Null(outsideHistory);
+            Assert.Null(outsideDetail);
 
-            // Self scope không thể đọc lịch sử của nhân viên khác.
-            var selfHistory = await repository.GetVisibleHistoryAsync(
+            // Self scope không thể đọc chi tiết và lịch sử của nhân viên khác.
+            var selfDetail = await repository.GetVisibleByIdAsync(
                 managerId,
                 teamRequest.Id,
                 SelfAccess(),
                 []);
-            Assert.Null(selfHistory);
+            Assert.Null(selfDetail);
 
-            // All scope đọc được lịch sử của request ngoài Team.
-            var allHistory = await repository.GetVisibleHistoryAsync(
+            // All scope đọc được lịch sử trong cùng response detail của request ngoài Team.
+            var allDetail = await repository.GetVisibleByIdAsync(
                 managerId,
                 outsideRequest.Id,
                 GlobalAccess(),
                 []);
-            Assert.NotNull(allHistory);
-            Assert.Contains(allHistory, item => item.Action == "Private");
-            Assert.Contains(allHistory, item => item.Action == "Created");
+            Assert.NotNull(allDetail);
+            Assert.Contains(allDetail.Value.Request.Histories, item => item.Action == "Private");
+            Assert.Contains(allDetail.Value.Request.Histories, item => item.Action == "Created");
         }
     }
 
