@@ -102,6 +102,28 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
         return Ok(request);
     }
 
+    [HttpGet("{id:guid}/history")]
+    [Authorize(Policy = LeavePermissionPolicies.LeavesRead)]
+    public async Task<ActionResult<IReadOnlyList<LeaveRequestHistoryResponse>>> GetHistory(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var employeeId = GetCurrentEmployeeId();
+        var authorization = Request.Headers.Authorization.ToString();
+        if (!employeeId.HasValue || string.IsNullOrWhiteSpace(authorization))
+        {
+            return Unauthorized();
+        }
+
+        var history = await leaveRequestService.GetHistoryAsync(
+            employeeId.Value,
+            authorization,
+            id,
+            LeaveAccess.FromClaims(User),
+            cancellationToken);
+        return Ok(history);
+    }
+
     [HttpGet("mine")]
     [Authorize(Policy = LeavePermissionPolicies.LeavesReadSelfOrAll)]
     public async Task<ActionResult<IReadOnlyList<LeaveRequestResponse>>> GetMine(

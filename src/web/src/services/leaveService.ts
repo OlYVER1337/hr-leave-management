@@ -1,4 +1,4 @@
-import type { AuthUser, Holiday, LeaveBalance, LeavePolicy, LeaveRequest } from '../types';
+import type { AuthUser, Holiday, LeaveBalance, LeavePolicy, LeaveRequest, LeaveRequestHistory } from '../types';
 import { DEMO_MODE } from './config';
 import { getApiErrorMessage, hrApi, leaveApi } from './apiClient';
 import { loadDemoState, updateDemoState } from './mockStore';
@@ -354,6 +354,7 @@ async function mapApiRequests(records: LeaveRequestRecord[], user: AuthUser): Pr
       reason: record.reason,
       status: mapLeaveStatus(record.status),
       approverName: approver?.fullName ?? (record.approverId ? 'Người duyệt không xác định' : '—'),
+      approverId: record.approverId,
       createdAt: record.createdAtUtc,
     };
   });
@@ -446,6 +447,20 @@ export async function getLeaveRequests(user: AuthUser): Promise<LeaveRequest[]> 
 
 export async function getApprovalsInbox(user: AuthUser): Promise<LeaveRequest[]> {
   return (await getApprovalsInboxPage(user, { page: 1, pageSize: 100 })).items;
+}
+
+export async function getLeaveRequestHistory(requestId: string): Promise<LeaveRequestHistory[]> {
+  // Demo mode không có event store; không tự dựng lịch sử giả cho dữ liệu mẫu.
+  if (DEMO_MODE) return [];
+
+  try {
+    const { data } = await leaveApi.get<LeaveRequestHistory[]>(
+      `/api/v1/leave-requests/${encodeURIComponent(requestId)}/history`,
+    );
+    return data;
+  } catch (error) {
+    throw new Error(getApiErrorMessage(error));
+  }
 }
 
 export async function getLeaveRequestSummary(user: AuthUser): Promise<LeaveRequestSummaryRecord> {

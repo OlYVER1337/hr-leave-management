@@ -76,6 +76,133 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
         Assert.False(await CanReadByIdAsync(manager, teamRequest.Id, TeamOnlyAccess(), []));
     }
 
+    // Lịch sử chỉ được trả về khi request nằm trong Self/Team/All và luôn có thứ tự ổn định.
+    [LeaveSqlFact]
+    public async Task GetVisibleHistory_EnforcesRequestVisibilityAndOrdersByTimestampThenId()
+    {
+        var managerId = Guid.NewGuid();
+        var teamEmployeeId = Guid.NewGuid();
+        var outsideEmployeeId = Guid.NewGuid();
+        var teamRequest = await CreateAsync(
+            teamEmployeeId,
+            approverId: Guid.NewGuid(),
+            start: new DateOnly(2030, 1, 10),
+            end: new DateOnly(2030, 1, 10));
+        var outsideRequest = await CreateAsync(
+            outsideEmployeeId,
+            approverId: managerId,
+            start: new DateOnly(2030, 1, 11),
+            end: new DateOnly(2030, 1, 11));
+        var emptyHistoryRequest = new LeaveRequest
+        {
+            EmployeeId = teamEmployeeId,
+            DepartmentId = 3,
+            LeaveTypeId = 2,
+            StartDate = new DateOnly(2030, 1, 12),
+            EndDate = new DateOnly(2030, 1, 12),
+            TotalDays = 1m,
+            Reason = "empty history",
+            CreatedAtUtc = DateTime.UtcNow
+        };
+        await using (var context = _fixture.CreateContext())
+        {
+            context.LeaveRequests.Add(emptyHistoryRequest);
+            await context.SaveChangesAsync();
+        }
+
+        var sameTimestamp = teamRequest.CreatedAtUtc.AddHours(-2);
+        var firstId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+        var secondId = Guid.Parse("00000000-0000-0000-0000-000000000002");
+        await using (var context = _fixture.CreateContext())
+        {
+            context.LeaveRequestHistories.AddRange(
+                new LeaveRequestHistory
+                {
+                    Id = secondId,
+                    LeaveRequestId = teamRequest.Id,
+                    ActorId = managerId,
+                    Action = "Approved",
+                    FromStatus = LeaveRequestStatus.Pending,
+                    ToStatus = LeaveRequestStatus.Approved,
+                    CreatedAtUtc = sameTimestamp
+                },
+                new LeaveRequestHistory
+                {
+                    Id = firstId,
+                    LeaveRequestId = teamRequest.Id,
+                    ActorId = managerId,
+                    Action = "Reviewed",
+                    FromStatus = LeaveRequestStatus.Pending,
+                    ToStatus = LeaveRequestStatus.Pending,
+                    CreatedAtUtc = sameTimestamp
+                },
+                new LeaveRequestHistory
+                {
+                    LeaveRequestId = outsideRequest.Id,
+                    ActorId = outsideEmployeeId,
+                    Action = "Private",
+                    ToStatus = LeaveRequestStatus.Pending,
+                    CreatedAtUtc = sameTimestamp
+                });
+            await context.SaveChangesAsync();
+        }
+
+        await using (var context = _fixture.CreateContext())
+        {
+            var repository = new LeaveRequestRepository(context);
+            var teamHistory = await repository.GetVisibleHistoryAsync(
+                managerId,
+                teamRequest.Id,
+                ManagerAccess(),
+                [teamEmployeeId]);
+
+            Assert.NotNull(teamHistory);
+            var emptyHistory = await repository.GetVisibleHistoryAsync(
+                managerId,
+                emptyHistoryRequest.Id,
+                ManagerAccess(),
+                [teamEmployeeId]);
+            Assert.NotNull(emptyHistory);
+            Assert.Empty(emptyHistory);
+
+            Assert.Equal(
+                new[] { firstId, secondId },
+                teamHistory.Where(item => item.Id == firstId || item.Id == secondId)
+                    .Select(item => item.Id)
+                    .ToArray());
+            Assert.Equal(
+                teamHistory.OrderBy(item => item.CreatedAtUtc).ThenBy(item => item.Id)
+                    .Select(item => item.Id),
+                teamHistory.Select(item => item.Id));
+
+            // ApproverId còn trỏ tới manager không làm đơn ngoài Team hiện tại trở nên visible.
+            var outsideHistory = await repository.GetVisibleHistoryAsync(
+                managerId,
+                outsideRequest.Id,
+                ManagerAccess(),
+                [teamEmployeeId]);
+            Assert.Null(outsideHistory);
+
+            // Self scope không thể đọc lịch sử của nhân viên khác.
+            var selfHistory = await repository.GetVisibleHistoryAsync(
+                managerId,
+                teamRequest.Id,
+                SelfAccess(),
+                []);
+            Assert.Null(selfHistory);
+
+            // All scope đọc được lịch sử của request ngoài Team.
+            var allHistory = await repository.GetVisibleHistoryAsync(
+                managerId,
+                outsideRequest.Id,
+                GlobalAccess(),
+                []);
+            Assert.NotNull(allHistory);
+            Assert.Contains(allHistory, item => item.Action == "Private");
+            Assert.Contains(allHistory, item => item.Action == "Created");
+        }
+    }
+
     private static LeaveAccess ManagerAccess() =>
         new([
             new LeavePermissionGrant("leaves.read", ["Self", "Team"]),

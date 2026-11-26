@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   notify: vi.fn(),
   cancelLeaveRequest: vi.fn(),
   getLeaveRequestsPage: vi.fn(),
+  getLeaveRequestHistory: vi.fn(),
 }));
 
 vi.mock('../contexts', () => ({ useAuth: mocks.useAuth }));
@@ -19,6 +20,7 @@ vi.mock('../components/ToastProvider', () => ({ useToast: () => mocks.notify }))
 vi.mock('../services/leaveService', () => ({
   cancelLeaveRequest: mocks.cancelLeaveRequest,
   getLeaveRequestsPage: mocks.getLeaveRequestsPage,
+  getLeaveRequestHistory: mocks.getLeaveRequestHistory,
 }));
 
 const employee: AuthUser = {
@@ -84,6 +86,81 @@ describe('LeaveRequestsPage', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(document.activeElement).toBe(viewButton);
+  });
+
+  it('loads the history only when requested and renders the timeline details', async () => {
+    const user = userEvent.setup();
+    mocks.getLeaveRequestHistory.mockResolvedValue([{
+      id: 'history-1',
+      actorId: employee.id,
+      action: 'Created',
+      fromStatus: null,
+      toStatus: 'Pending',
+      note: 'Đã gửi yêu cầu',
+      createdAtUtc: '2026-10-30T10:00:00Z',
+    }]);
+
+    render(
+      <MemoryRouter>
+        <LeaveRequestsPage />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Xem chi tiết request-1' }));
+    expect(mocks.getLeaveRequestHistory).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Xem lịch sử' }));
+
+    expect(await screen.findByText('Tạo đơn')).toBeInTheDocument();
+    expect(screen.getByText('Người thực hiện: Nguyễn An (nhân viên)')).toBeInTheDocument();
+    const statusLine = screen.getByText((_content, element) => element?.classList.contains('leave-history-status') === true);
+    expect(statusLine).toHaveTextContent('Khởi tạo → Chờ duyệt');
+    expect(screen.getByText('Ghi chú: Đã gửi yêu cầu')).toBeInTheDocument();
+    expect(mocks.getLeaveRequestHistory).toHaveBeenCalledTimes(1);
+    expect(mocks.getLeaveRequestHistory).toHaveBeenCalledWith('request-1');
+  });
+
+  it('shows an empty history state when the request has no history records', async () => {
+    const user = userEvent.setup();
+    mocks.getLeaveRequestHistory.mockResolvedValue([]);
+
+    render(
+      <MemoryRouter>
+        <LeaveRequestsPage />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Xem chi tiết request-1' }));
+    await user.click(screen.getByRole('button', { name: 'Xem lịch sử' }));
+
+    expect(await screen.findByText('Chưa có bản ghi lịch sử cho đơn này.')).toBeInTheDocument();
+  });
+
+  it('shows a history loading error without hiding request details', async () => {
+    const user = userEvent.setup();
+    mocks.getLeaveRequestHistory
+      .mockRejectedValueOnce(new Error('Không có quyền xem lịch sử.'))
+      .mockResolvedValueOnce([]);
+
+    render(
+      <MemoryRouter>
+        <LeaveRequestsPage />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Xem chi tiết request-1' }));
+    await user.click(screen.getByRole('button', { name: 'Xem lịch sử' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Không có quyền xem lịch sử.');
+    expect(screen.getByText('Việc gia đình cần giải quyết.')).toBeInTheDocument();
+
+    // Timeline vẫn mở sau lỗi nên nút có nhiệm vụ đóng panel; người dùng có thể mở lại để retry.
+    await user.click(screen.getByRole('button', { name: 'Ẩn lịch sử' }));
+    expect(screen.getByRole('button', { name: 'Xem lịch sử' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Xem lịch sử' }));
+    expect(await screen.findByText('Chưa có bản ghi lịch sử cho đơn này.')).toBeInTheDocument();
+    expect(mocks.getLeaveRequestHistory).toHaveBeenCalledTimes(2);
   });
 
   it('marks report export unavailable instead of offering a non-working action', async () => {
