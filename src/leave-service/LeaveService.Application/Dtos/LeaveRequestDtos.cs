@@ -12,6 +12,15 @@ public sealed record LeaveDecisionRequest(string? Note);
 
 public sealed record LeaveDecisionCommand(string Decision, string? Note);
 
+public sealed record LeaveRequestHistoryResponse(
+    Guid Id,
+    Guid ActorId,
+    string Action,
+    string? FromStatus,
+    string ToStatus,
+    string? Note,
+    DateTime CreatedAtUtc);
+
 public sealed record LeaveRequestSummaryResponse(int Pending, int? Approved, int? Total);
 
 public sealed record CancelLeaveRequest(string? Note);
