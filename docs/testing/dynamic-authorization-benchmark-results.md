@@ -551,14 +551,18 @@ Hai lượt chạy dùng cùng Git revision, HR/Leave image IDs, seed và worklo
 
 Bảng dưới đây liệt kê toàn bộ bốn lượt Approval arrival-rate có raw JSON và summary JSON tương ứng trong evidence. **Commit đo** lấy từ trường `git_sha` trong summary của chính lượt chạy, không lấy commit tài liệu hoặc HEAD hiện tại của nhánh.
 
-| Thời điểm | Pool | Attempts / thành công | Dropped iterations | Out-of-plan | HTTP errors | Commit đo (Git SHA) | Phân loại |
-|---|---:|---:|---:|---:|---:|---|---|
-| 11:18:07 | 50/50 | 14.974 / 14.974 | **27** | 0 | 0 | `8d7bb4772fe279ab60e1c49fcf2749e3a5526cd0` | **Loại khỏi kết quả đạt chuẩn**: dropped khác 0, không đạt threshold `count==0`; chỉ hoàn thành 14.974/15.000 approvals dự kiến. |
-| 11:33:47 | 100/100 | 15.000 / 15.000 | 0 | 1 | 0 | `031dc613fb5fec6a4719c3b79f6ed8d23274010e` | Đạt workload riêng lẻ. Một iteration ngoài kế hoạch bị guard bỏ qua trước HTTP; không có approval vượt kế hoạch. Không ghép thành cặp A/B cuối vì Git SHA khác lượt 50 VU cùng đợt. |
-| 13:15:04 | 50/50 | 15.000 / 15.000 | 0 | 0 | 0 | `d34ca9100f1db34261b7792dcc2058855bcd29aa` | **Hợp lệ — cặp so sánh cuối**. |
-| 13:22:21 | 100/100 | 15.000 / 15.000 | 0 | 1 | 0 | `d34ca9100f1db34261b7792dcc2058855bcd29aa` | **Hợp lệ — cặp so sánh cuối**. Iteration ngoài kế hoạch bị guard bỏ qua trước HTTP. |
+| Thời điểm | Pool | Attempts / thành công | Rate theo 300s | Raw k6 rate | p95 | Dropped | Out-of-plan | HTTP errors | Commit đo (Git SHA) | Phân loại |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| 11:18:07 | 50/50 | 14.974 / 14.974 | 49,9133/s | 46,3519/s | 19,729 ms | **27** | —* | 0 | `8d7bb4772fe279ab60e1c49fcf2749e3a5526cd0` | **Loại khỏi kết quả đạt chuẩn**: dropped khác 0, threshold `count==0` không đạt; thiếu 26 approvals so với 15.000 dự kiến. |
+| 11:33:47 | 100/100 | 15.000 / 15.000 | 50/s | 46,4469/s | 15,839 ms | 0 | 1 | 0 | `031dc613fb5fec6a4719c3b79f6ed8d23274010e` | Đạt workload riêng lẻ; iteration ngoài kế hoạch bị guard bỏ qua trước HTTP. Không ghép A/B với lượt 50 VU 11:18 vì khác Git SHA. |
+| 13:15:04 | 50/50 | 15.000 / 15.000 | 50/s | 46,4328/s | 16,213 ms | 0 | 0 | 0 | `d34ca9100f1db34261b7792dcc2058855bcd29aa` | **Hợp lệ — cặp so sánh cuối**. |
+| 13:22:21 | 100/100 | 15.000 / 15.000 | 50/s | 46,5210/s | 20,496 ms | 0 | 1 | 0 | `d34ca9100f1db34261b7792dcc2058855bcd29aa` | **Hợp lệ — cặp so sánh cuối**; iteration ngoài kế hoạch bị guard bỏ trước HTTP. |
 
-Lượt **11:18:07** bị loại không phải vì HTTP error (có 0 lỗi), mà vì không giữ được arrival schedule: raw JSON ghi `dropped_iterations.count=27`, threshold `dropped_iterations: count==0` không đạt, và chỉ có 14.974 approval HTTP attempts/thành công. Không được làm tròn hoặc ghi lượt này thành 15.000/15.000.
+`Rate theo 300s` là số approval HTTP attempts chia cho cửa sổ workload 300 giây. `Raw k6 rate` là `approval_requests.rate` chia theo toàn bộ `testRunDurationMs`, gồm setup/teardown.
+
+* Raw và summary của lượt 11:18:07 không có metric `approval_out_of_plan_iterations`/trường `out_of_plan_iterations`; ký hiệu — nghĩa là không được xuất trong evidence, không suy diễn thành 0.
+
+Lượt **11:18:07** bị loại không phải vì HTTP error (có 0 lỗi), mà vì không giữ được arrival schedule: raw JSON ghi `dropped_iterations.count=27`, threshold `dropped_iterations: count==0` không đạt, và chỉ có 14.974 approval HTTP attempts/thành công (thiếu 26 so với 15.000). Raw/summary không xuất metric out-of-plan cho lượt này, nên không gán giá trị 0. Không được làm tròn hoặc ghi lượt này thành 15.000/15.000.
 
 Lượt **11:33:47** không bị loại vì dropped iteration; raw JSON ghi 15.000 attempts, 15.000 thành công và 0 dropped. Tuy nhiên Git SHA của nó khác SHA ở lượt 50 VU 11:18:07, nên không dùng hai lượt đầu làm cặp so sánh cùng revision. Hai lượt 13:15:04 và 13:22:21 là cặp được chọn cuối cùng vì dùng cùng Git SHA và image IDs.
 
