@@ -174,13 +174,13 @@ public sealed class LeaveRequestService(
             .OrderBy(item => item.CreatedAtUtc)
             .ThenBy(item => item.Id)
             .Select(item => new LeaveRequestHistoryResponse(
-            item.Id,
-            item.ActorId,
-            item.Action,
-            item.FromStatus?.ToString(),
-            item.ToStatus.ToString(),
-            item.Note,
-            item.CreatedAtUtc)).ToArray();
+                item.Id,
+                item.ActorId,
+                item.Action,
+                item.FromStatus?.ToString(),
+                item.ToStatus.ToString(),
+                item.Note,
+                item.CreatedAtUtc)).ToArray();
 
         return new LeaveRequestDetailResponse(
             ToResponse(result.Value.Request, result.Value.Balances),
