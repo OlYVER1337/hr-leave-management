@@ -122,7 +122,8 @@ Các trường cần đối chiếu:
 |---|---|
 | `target_approval_rate_per_second` | Arrival rate yêu cầu |
 | `planned_iterations` | `rate x durationSeconds` |
-| `completed_iterations` | Số iteration k6 hoàn tất theo built-in metric `iterations` |
+| `completed_iterations` | Số lần k6 thực thi hàm `default` theo built-in metric `iterations` |
+| `out_of_plan_iterations` | Số lần gọi `default` có index vượt phạm vi `rate x duration`; script bỏ qua, không gửi approval và không tái sử dụng ID |
 | `approval_http_attempts` | Số request approve thực sự gửi |
 | `completed_approvals` | Số approve HTTP 200 |
 | `dropped_iterations` | Iteration không được bắt đầu đúng lịch do không có VU rảnh |
