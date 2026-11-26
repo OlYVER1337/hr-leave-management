@@ -605,6 +605,7 @@ Hai lần chạy dùng cùng source revision, image IDs, seed và workload; ch�
 - Pool 100/100 có một lần gọi scenario ngoài kế hoạch với index 15000. Guard bỏ qua lần gọi đó trước HTTP request. Vì vậy `k6_iterations=15001` và `out_of_plan_iterations=1`, nhưng chỉ có 15.000 approval HTTP attempts và thành công; không phát sinh approval thứ 15.001.
 - Pool 50/50 đã đủ để duy trì target. Trong hai lượt đo này, tăng lên 100 VU không làm tăng throughput và có p95 cao hơn; chưa có dữ liệu CPU/RAM/SQL waits đồng bộ để giải thích khác biệt.
 - Đây là benchmark local, không suy ra production capacity hoặc kết luận bottleneck.
+- Bảng đầy đủ bốn lượt constant-arrival-rate ngày 26/11, commit đo theo từng lượt và lý do loại lượt 50 VU 11:18:07 (27 dropped iterations) được lưu tại [Benchmark results, Mục 15.2](dynamic-authorization-benchmark-results.md).
 
 Evidence raw và summary đã được lưu trong `docs/testing/evidence/dynamic-authorization/`:
 - Pool 50/50: `approval-arrival-rate-50rps-50-vu-pool-20261126-131504`
