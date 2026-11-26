@@ -184,6 +184,21 @@ docker run --rm -v "$($PWD.Path)\src\web:/app" -w /app --tmpfs /app/node_modules
 
 Lệnh lần lượt cài package theo lockfile, quét dependency, chạy Vitest một lần và build production. Không bỏ qua exit code của bước nào khi ghi nhận kết quả.
 
+### 6.3. Kết quả backend sau merge — 26/11/2026
+
+Kết quả chạy local do người triển khai cung cấp sau khi cập nhật `master` tới commit `b9fa469c51bb25214aa6a3bef7ac8358b699ede3`:
+
+| Suite | Lệnh | Passed | Failed | Skipped | Tổng |
+|---|---|---:|---:|---:|---:|
+| HR Service | `dotnet test src\hr-service\HrService.slnx --no-restore` | 158 | 0 | 0 | **158/158** |
+| Leave Service | `dotnet test src\leave-service\LeaveService.slnx --no-restore` | 129 | 0 | 0 | **129/129** |
+
+Cả hai solution build thành công trên .NET 10.0.13; HR test hoàn tất trong 7,2 giây, Leave test trong 17,7 giây. Tổng cộng **287 tests passed, 0 failed, 0 skipped**.
+
+**Lưu ý đường dẫn:** repository dùng thư mục `src/leave-service/` viết thường. Lượt chạy được báo cáo dùng `src\Leave-service\`; lệnh vẫn hoạt động trên Windows do filesystem không phân biệt hoa/thường. Tài liệu thống nhất cách viết thường để tương thích với Git/Linux.
+
+Đây là kết quả local do người triển khai báo cáo, không phải lượt test được chạy lại bởi tài liệu/PR. Khi tái xác minh, ghi lại `git rev-parse HEAD` và output test đầy đủ; không suy rộng kết quả này sang frontend hoặc Swagger runtime.
+
 ## 7. Chạy Approval benchmark
 
 Chỉ chạy trên stack cô lập hrbench. Không benchmark đồng thời với demo hoặc workload khác trên cùng database.
