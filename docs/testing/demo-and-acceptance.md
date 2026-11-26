@@ -376,7 +376,8 @@ Hai lượt benchmark mới dùng chung source SHA, image HR/Leave, seed, worklo
 | Target rate / duration | 50/s × 300s | 50/s × 300s |
 | Planned approvals | 15.000 | 15.000 |
 | HTTP attempts / approvals thành công | 15.000 / 15.000 | 15.000 / 15.000 |
-| Throughput | 50/s | 50/s |
+| Approval rate chuẩn hóa theo cửa sổ workload 300s (15.000 / 300) | 50/s | 50/s |
+| Raw k6 `approval_requests.rate` (toàn `testRunDuration`) | 46,43/s | 46,52/s |
 | Dropped iterations | 0 | 0 |
 | Approval errors / error rate | 0 / 0% | 0 / 0% |
 | Approval p50 | 12,88 ms | 13,43 ms |
@@ -385,6 +386,9 @@ Hai lượt benchmark mới dùng chung source SHA, image HR/Leave, seed, worklo
 | Leave → HR average / p95 | 2,22 / 3,31 ms | 2,39 / 3,91 ms |
 | k6 iterations | 15.000 | 15.001 |
 | Out-of-plan iterations | 0 | 1 |
+
+
+`approval_requests.rate` trong raw JSON được k6 tính trên toàn bộ `testRunDurationMs`, gồm cả thời gian setup/teardown: pool 50 chạy 323,048 giây nên raw rate là 46,4328/s; pool 100 chạy 322,435 giây nên raw rate là 46,5210/s. Đây khác với rate chuẩn hóa theo cửa sổ workload 300 giây (15.000 / 300 = 50/s). Vì vậy 50/s là target/throughput chuẩn hóa theo scenario, không phải counter rate của toàn bộ tiến trình k6.
 
 **Diễn giải:** cả hai pool đều đáp ứng target 50/s trong 300 giây, không có dropped iteration hoặc approval error. Pool 50 đã đáp ứng workload; pool 100 không tăng throughput và có p95 cao hơn trong hai lượt đo này. Pool 100 có một lần gọi iteration với index 15.000; guard trong script bỏ qua trước HTTP, nên attempts và approvals vẫn đúng 15.000, không có approval thứ 15.001.
 
