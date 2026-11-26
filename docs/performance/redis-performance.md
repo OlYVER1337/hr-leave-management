@@ -276,7 +276,9 @@ Chi tiết từng lượt và phân tích p95 nằm trong [Dynamic Authorization
 
 ## 7. Approval sustained load với k6 constant-vus
 
-Kịch bản sustained được tách khỏi `approval.js` để giữ nguyên khả năng tái lập benchmark burst lịch sử. Script mới là `scripts/load-test/approval-sustained.js`, dùng executor `constant-vus`: số VU được giữ liên tục trong suốt `DURATION`, mỗi vòng approve một request ID duy nhất rồi nghỉ theo `THINK_TIME_SECONDS`.
+Kịch bản `constant-vus` trong mục này là workload lịch sử riêng, được tách khỏi `approval.js` để giữ khả năng tái lập benchmark burst. Script `scripts/load-test/approval-sustained.js` dùng executor `constant-vus`: số VU được giữ liên tục trong suốt `DURATION`, mỗi vòng approve một request ID duy nhất rồi nghỉ theo `THINK_TIME_SECONDS`.
+
+**Cập nhật trạng thái đến 26/11/2026:** Approval đã có một workload khác là `constant-arrival-rate` 50 approvals/s × 300 giây, dùng seed chung mới 5.000 nhân viên × 20 đơn (100.000 requests, 50.000 Pending). Hai lượt 50/100 VU trên source SHA `d34ca91` đều hoàn tất 15.000 approvals, 0 dropped và 0 HTTP errors. Không dùng seed/metrics của mục constant-vus này (4.000 × 20, 40.000 Pending) thay cho cặp arrival-rate mới. Xem [Approval benchmark guide](../testing/approval-benchmark-guide.md) và [bảng phân loại bốn lượt](../testing/dynamic-authorization-benchmark-results.md#15-approval-constant-arrival-rate--kết-quả-xác-nhận-cuối-cùng-26112026).
 
 ### 7.1. Cấu hình baseline
 
@@ -407,7 +409,7 @@ Raw k6 JSON của lượt sơ bộ đã được parse thành công tại:
 
 Artifact này chỉ là bằng chứng lịch sử cho fixture trước khi phát hiện overlap. Không lấy số liệu trên để tuyên bố hoàn thành yêu cầu performance. Chưa có bản ghi `docker stats` đồng bộ cho lượt này; không suy luận CPU/RAM từ dữ liệu không tồn tại.
 
-### 7.6. Seed hợp lệ và ma trận Approval sustained 50/100 VU
+### 7.6. Fixture và hướng dẫn lịch sử của constant-vus 50/100 VU
 
 Seed chuẩn 1.000 × 5 dùng `PendingPercent=25` để giữ fixture cũ. Seed dành cho Approval sustained dùng 4.000 × 20 và `PendingPercent=50`; mỗi nhân viên có 10 Pending + 2 Approved, mỗi đơn một ngày. Ngày được chọn từ HR business calendar, bỏ thứ Bảy, Chủ nhật và ngày lễ đã cấu hình, với một đơn sau mỗi 5 ngày làm việc. Seed fail nếu có overlap, không đủ ngày hợp lệ hoặc Used + Pending vượt 12 ngày.
 
