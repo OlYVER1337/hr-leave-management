@@ -141,6 +141,10 @@ interface LeaveRequestRecord {
   createdAtUtc: string;
 }
 
+interface LeaveRequestDetailRecord extends LeaveRequestRecord {
+  history: LeaveRequestHistory[];
+}
+
 function mapLeaveStatus(status: LeaveRequestRecord['status']): LeaveRequest['status'] {
   if (typeof status === 'string') {
     switch (status) {
@@ -449,15 +453,24 @@ export async function getApprovalsInbox(user: AuthUser): Promise<LeaveRequest[]>
   return (await getApprovalsInboxPage(user, { page: 1, pageSize: 100 })).items;
 }
 
-export async function getLeaveRequestHistory(requestId: string): Promise<LeaveRequestHistory[]> {
-  // Demo mode không có event store; không tự dựng lịch sử giả cho dữ liệu mẫu.
-  if (DEMO_MODE) return [];
+export async function getLeaveRequestDetails(
+  requestId: string,
+  user: AuthUser,
+): Promise<{ request: LeaveRequest; history: LeaveRequestHistory[] }> {
+  if (DEMO_MODE) {
+    // Demo mode chỉ trả request có trong dữ liệu được phép xem, không tự tạo lịch sử giả.
+    const request = filterDemoRequests(user, { page: 1, pageSize: 100 })
+      .find((item) => item.id === requestId);
+    if (!request) throw new Error('Không tìm thấy đơn nghỉ phép.');
+    return { request, history: [] };
+  }
 
   try {
-    const { data } = await leaveApi.get<LeaveRequestHistory[]>(
-      `/api/v1/leave-requests/${encodeURIComponent(requestId)}/history`,
+    const { data } = await leaveApi.get<LeaveRequestDetailRecord>(
+      `/api/v1/leave-requests/${encodeURIComponent(requestId)}`,
     );
-    return data;
+    const [request] = await mapApiRequests([data], user);
+    return { request, history: data.history ?? [] };
   } catch (error) {
     throw new Error(getApiErrorMessage(error));
   }

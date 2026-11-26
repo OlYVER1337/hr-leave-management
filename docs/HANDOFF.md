@@ -24,7 +24,7 @@ PR #6 được merge bằng merge commit, giữ lịch sử 558 commits của fe
 | 4 | Frontend authorization | Còn giới hạn | React vẫn dùng Role legacy HR/Manager/Employee cho menu/route guard; chưa có permission-driven UI hoặc màn hình quản trị Role/Permission catalog. Backend vẫn là lớp enforcement cuối. |
 | 5 | Service boundary | Đã triển khai | HR sở hữu HR_DB; Leave sở hữu Leave_DB; Leave chỉ gọi HR qua HTTP; Nginx route API, không có API Gateway riêng. |
 | 6 | Database và migrations | Đã có | HR migrations gồm Dynamic Authorization và Leave Policy versions. Leave migrations gồm balance constraints và policy snapshots. EF Core migrations/model là nguồn quyết định schema. |
-| 7 | API reference | Đã cập nhật theo API hiện có | Có permission/scope, pagination, current Team lookup và UserRole assignment. History GET, export và notifications chưa có. |
+| 7 | API reference | Đã cập nhật theo API hiện có | Có permission/scope, pagination, current Team lookup và UserRole assignment. API chi tiết đơn nghỉ trả kèm History; không có endpoint history riêng. Export và notifications chưa có. |
 | 8 | Redis | Đã có | Cache-aside best-effort cho HR catalog; SQL là nguồn dữ liệu chính. Redis lỗi phải fallback SQL, không phải nguồn dữ liệu nghiệp vụ. |
 | 9 | Backend tests | Có kết quả local đã báo cáo | HR 155/155 pass; Leave 123/123 pass; 0 failed/0 skipped ở lượt chạy được báo cáo. SHA của checkout lúc chạy chưa được ghi lại. |
 | 10 | Web tests/build | Có kết quả local đã báo cáo | 79 tests pass; TypeScript/production build thành công trong lượt chạy đã ghi nhận. Chưa có SHA chính xác gắn với kết quả. |
@@ -88,7 +88,7 @@ Scenario hoàn tất khoảng 1,4 giây; tổng thời gian lệnh k6 khoảng 3
 - Department scope có trong schema/rule catalog nhưng chưa được thực thi thành data filter.
 - Leave Balance lưu `PolicyDays`, `Used`, `Pending`; `Entitled = max(PolicyDays, Used + Pending)`. Self GET/POST sync và các luồng create/decision refresh policy hiện hành; chưa có bulk reconciliation cho toàn bộ nhân viên.
 - Request giữ `PolicyVersionId` và `PolicyDaysAtCreation` theo từng yearly allocation. Policy version được chọn theo ngày tạo đơn của business timezone UTC+07.
-- Leave History được ghi nhưng chưa có GET endpoint riêng.
+- `GET /api/v1/leave-requests/{id}` trả chi tiết đơn cùng danh sách `history`; quyền Self/Team/All được kiểm tra trên đơn trước khi trả lịch sử. Không có endpoint `/history` riêng.
 - `/health` chưa tách readiness/liveness có dependency status; HR client chưa có circuit breaker.
 - Access JWT đã phát không bị thu hồi tức thời khi UserRole bị revoke hoặc nhân viên deactivate; quyền mới có hiệu lực khi token mới được phát hành/refresh.
 - Approval benchmark ngày 20/11 là burst ngắn; không đại diện cho tải liên tục 5 phút hoặc production capacity.

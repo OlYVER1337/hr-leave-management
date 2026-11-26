@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using LeaveService.Domain.Entities;
 
 namespace LeaveService.Application.Dtos;
@@ -46,7 +47,9 @@ public sealed record LeaveRequestResponse(
     string Reason,
     LeaveRequestStatus Status,
     DateTime CreatedAtUtc,
-    IReadOnlyList<LeaveBalanceResponse> Balances);
+    IReadOnlyList<LeaveBalanceResponse> Balances,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<LeaveRequestHistoryResponse>? History = null);
 
 public sealed record HrEmployeeSnapshot(
     Guid Id,

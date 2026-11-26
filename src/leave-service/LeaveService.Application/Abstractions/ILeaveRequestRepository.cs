@@ -36,13 +36,6 @@ public interface ILeaveRequestRepository
         IReadOnlyCollection<Guid> teamEmployeeIds,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<LeaveRequestHistory>?> GetVisibleHistoryAsync(
-        Guid employeeId,
-        Guid requestId,
-        LeaveAccess access,
-        IReadOnlyCollection<Guid> teamEmployeeIds,
-        CancellationToken cancellationToken = default);
-
     Task<(int Pending, int Approved, int Total)> GetSummaryAsync(
         Guid employeeId,
         LeaveAccess access,

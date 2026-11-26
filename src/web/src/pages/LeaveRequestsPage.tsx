@@ -4,7 +4,7 @@ import { PageHeader, Avatar, EmptyState, formatDate, StatusBadge } from '../comp
 import { Modal } from '../components/Modal';
 import { useAuth } from '../contexts';
 import { useToast } from '../components/ToastProvider';
-import { cancelLeaveRequest, getLeaveRequestHistory, getLeaveRequestsPage, type LeavePageQuery } from '../services/leaveService';
+import { cancelLeaveRequest, getLeaveRequestDetails, getLeaveRequestsPage, type LeavePageQuery } from '../services/leaveService';
 import { Pagination } from '../components/Pagination';
 import { usePagedBlock } from '../hooks/usePagedBlock';
 import { getApiErrorMessage } from '../services/apiClient';
@@ -124,14 +124,38 @@ export function LeaveRequestsPage({ all = false }: { all?: boolean }) {
 
 
 
+  async function loadRequestDetails(requestId: string, sequence: number) {
+    if (!user) {
+      setHistoryLoading(false);
+      return;
+    }
+    setHistoryLoading(true);
+    setHistoryError('');
+    try {
+      // API chi tiết trả cả request và lịch sử trong một lần gọi.
+      const details = await getLeaveRequestDetails(requestId, user);
+      if (historyLoadSequence.current !== sequence) return;
+      setSelectedRequest(details.request);
+      setHistoryItems(details.history);
+      setHistoryLoadedRequestId(requestId);
+    } catch (reason) {
+      if (historyLoadSequence.current !== sequence) return;
+      setHistoryError(getApiErrorMessage(reason));
+      setHistoryOpen(true);
+    } finally {
+      if (historyLoadSequence.current === sequence) setHistoryLoading(false);
+    }
+  }
+
   function openRequestDetails(item: LeaveRequest) {
-    historyLoadSequence.current += 1;
+    const sequence = ++historyLoadSequence.current;
     setSelectedRequest(item);
     setHistoryOpen(false);
-    setHistoryLoading(false);
+    setHistoryLoading(true);
     setHistoryError('');
     setHistoryItems([]);
     setHistoryLoadedRequestId(null);
+    void loadRequestDetails(item.id, sequence);
   }
 
   function closeRequestDetails() {
@@ -141,31 +165,18 @@ export function LeaveRequestsPage({ all = false }: { all?: boolean }) {
     setHistoryLoading(false);
   }
 
-  async function toggleRequestHistory() {
-    if (!selectedRequest || historyLoading) return;
+  function toggleRequestHistory() {
+    if (!selectedRequest) return;
     if (historyOpen) {
       setHistoryOpen(false);
       return;
     }
 
     setHistoryOpen(true);
-    if (historyLoadedRequestId === selectedRequest.id) return;
+    if (historyLoadedRequestId === selectedRequest.id || historyLoading) return;
 
-    const requestId = selectedRequest.id;
     const sequence = ++historyLoadSequence.current;
-    setHistoryLoading(true);
-    setHistoryError('');
-    try {
-      const result = await getLeaveRequestHistory(requestId);
-      if (historyLoadSequence.current !== sequence) return;
-      setHistoryItems(result);
-      setHistoryLoadedRequestId(requestId);
-    } catch (reason) {
-      if (historyLoadSequence.current !== sequence) return;
-      setHistoryError(getApiErrorMessage(reason));
-    } finally {
-      if (historyLoadSequence.current === sequence) setHistoryLoading(false);
-    }
+    void loadRequestDetails(selectedRequest.id, sequence);
   }
 
   async function onCancel(item: LeaveRequest) {
@@ -221,12 +232,12 @@ export function LeaveRequestsPage({ all = false }: { all?: boolean }) {
             aria-controls="leave-request-history"
           >
             <History size={15} />
-            {historyLoading ? 'Đang tải…' : historyOpen ? 'Ẩn lịch sử' : 'Xem lịch sử'}
+            {historyLoading ? 'Đang tải…' : historyOpen ? 'Ẩn lịch sử' : historyError ? 'Thử lại' : 'Xem lịch sử'}
           </button>
         </div>
         {historyOpen && (
           <div id="leave-request-history" className="request-history-content" aria-live="polite">
-            {historyLoading && <div className="request-history-state">Đang tải lịch sử đơn nghỉ…</div>}
+            {historyLoading && <div className="request-history-state">Đang tải thông tin đơn và lịch sử…</div>}
             {historyError && <div className="inline-alert alert-warning" role="alert">{historyError}</div>}
             {!historyLoading && !historyError && historyItems.length === 0 && (
               <div className="request-history-state">Chưa có bản ghi lịch sử cho đơn này.</div>
