@@ -254,38 +254,8 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
         IReadOnlyCollection<Guid> teamEmployeeIds,
         CancellationToken cancellationToken = default)
     {
-        IQueryable<LeaveRequest> query = context.LeaveRequests
-            .AsNoTracking()
-            .Where(item => item.Id == requestId);
-
-        if (!access.CanReadAll)
-        {
-            var self = access.CanReadSelf;
-            var teamIds = access.CanReadTeam
-                ? teamEmployeeIds.Distinct().ToArray()
-                : Array.Empty<Guid>();
-            var team = teamIds.Length > 0;
-
-            if (self && team)
-            {
-                query = query.Where(item =>
-                    item.EmployeeId == employeeId || teamIds.Contains(item.EmployeeId));
-            }
-            else if (team)
-            {
-                query = query.Where(item => teamIds.Contains(item.EmployeeId));
-            }
-            else if (self)
-            {
-                query = query.Where(item => item.EmployeeId == employeeId);
-            }
-            else
-            {
-                query = query.Where(item => false);
-            }
-        }
-
-        var request = await query.SingleOrDefaultAsync(cancellationToken);
+        var request = await QueryVisibleById(employeeId, requestId, access, teamEmployeeIds)
+            .SingleOrDefaultAsync(cancellationToken);
         if (request is null)
         {
             return null;
@@ -302,6 +272,71 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
             .ToArrayAsync(cancellationToken);
 
         return (request, balances);
+    }
+
+    public async Task<IReadOnlyList<LeaveRequestHistory>?> GetVisibleHistoryAsync(
+        Guid employeeId,
+        Guid requestId,
+        LeaveAccess access,
+        IReadOnlyCollection<Guid> teamEmployeeIds,
+        CancellationToken cancellationToken = default)
+    {
+        // Nullable projection distinguishes a visible request with no history from
+        // a missing/out-of-scope request without loading leave balances.
+        var visibleRequestId = await QueryVisibleById(employeeId, requestId, access, teamEmployeeIds)
+            .Select(item => (Guid?)item.Id)
+            .SingleOrDefaultAsync(cancellationToken);
+        if (!visibleRequestId.HasValue)
+        {
+            return null;
+        }
+
+        return await context.LeaveRequestHistories
+            .AsNoTracking()
+            .Where(item => item.LeaveRequestId == visibleRequestId.Value)
+            .OrderBy(item => item.CreatedAtUtc)
+            .ThenBy(item => item.Id)
+            .ToArrayAsync(cancellationToken);
+    }
+
+    private IQueryable<LeaveRequest> QueryVisibleById(
+        Guid employeeId,
+        Guid requestId,
+        LeaveAccess access,
+        IReadOnlyCollection<Guid> teamEmployeeIds)
+    {
+        IQueryable<LeaveRequest> query = context.LeaveRequests
+            .AsNoTracking()
+            .Where(item => item.Id == requestId);
+
+        if (access.CanReadAll)
+        {
+            return query;
+        }
+
+        var self = access.CanReadSelf;
+        var teamIds = access.CanReadTeam
+            ? teamEmployeeIds.Distinct().ToArray()
+            : Array.Empty<Guid>();
+        var team = teamIds.Length > 0;
+
+        if (self && team)
+        {
+            return query.Where(item =>
+                item.EmployeeId == employeeId || teamIds.Contains(item.EmployeeId));
+        }
+
+        if (team)
+        {
+            return query.Where(item => teamIds.Contains(item.EmployeeId));
+        }
+
+        if (self)
+        {
+            return query.Where(item => item.EmployeeId == employeeId);
+        }
+
+        return query.Where(item => false);
     }
 
     public async Task<(int Pending, int Approved, int Total)> GetSummaryAsync(
