@@ -652,6 +652,15 @@ public async Task CreateAsync_UsesPolicyEffectiveOnCreationDate()
             StartDate = new DateOnly(2026, 12, 1),
             EndDate = new DateOnly(2026, 12, 1)
         };
+        request.Histories.Add(new LeaveRequestHistory
+        {
+            Id = Guid.NewGuid(),
+            LeaveRequestId = request.Id,
+            ActorId = employeeId,
+            Action = "Created",
+            ToStatus = LeaveRequestStatus.Pending,
+            CreatedAtUtc = DateTime.UtcNow
+        });
         var access = new LeaveAccess([
             new LeavePermissionGrant("leaves.read", ["Self"])
         ]);
@@ -669,7 +678,10 @@ public async Task CreateAsync_UsesPolicyEffectiveOnCreationDate()
         var result = await service.GetVisibleByIdAsync(
             employeeId, "Bearer employee", request.Id, access);
 
-        Assert.Equal(request.Id, result.Id);
+        Assert.Equal(request.Id, result.Request.Id);
+        var history = Assert.Single(result.History);
+        Assert.Equal("Created", history.Action);
+        Assert.Equal(employeeId, history.ActorId);
         hrClient.VerifyNoOtherCalls();
         repository.Verify(item => item.GetVisibleByIdAsync(
             employeeId, request.Id, access,
@@ -709,7 +721,7 @@ public async Task CreateAsync_UsesPolicyEffectiveOnCreationDate()
         var result = await service.GetVisibleByIdAsync(
             managerId, "Bearer manager", request.Id, access);
 
-        Assert.Equal(request.Id, result.Id);
+        Assert.Equal(request.Id, result.Request.Id);
         hrClient.Verify(item => item.GetTeamEmployeeIdsAsync(
             managerId, "Bearer manager", It.IsAny<CancellationToken>()), Times.Once);
         repository.Verify(item => item.GetVisibleByIdAsync(
@@ -746,7 +758,7 @@ public async Task CreateAsync_UsesPolicyEffectiveOnCreationDate()
         var result = await service.GetVisibleByIdAsync(
             employeeId, "Bearer hr", request.Id, access);
 
-        Assert.Equal(request.Id, result.Id);
+        Assert.Equal(request.Id, result.Request.Id);
         hrClient.VerifyNoOtherCalls();
     }
 
