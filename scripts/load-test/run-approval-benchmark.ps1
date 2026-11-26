@@ -198,11 +198,8 @@ function Invoke-K6Workload {
         } else {
             [int]$arrival.defaultPreAllocatedVUs
         }
-        $maximum = if ($MaxVus -gt 0) { $MaxVus } elseif ($arrival.maxVUs) {
-            [int]$arrival.maxVUs
-        } else {
-            $preAllocated
-        }
+        # Mặc định cố định maxVUs bằng preAllocatedVUs để so sánh pool 50/100 rõ ràng.
+        $maximum = if ($MaxVus -gt 0) { $MaxVus } else { $preAllocated }
 
         if ($maximum -lt $preAllocated) {
             throw "MaxVus phải lớn hơn hoặc bằng PreAllocatedVus."
