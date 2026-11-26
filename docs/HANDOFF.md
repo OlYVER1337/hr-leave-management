@@ -10,9 +10,9 @@ Tài liệu dành cho người tiếp nhận source, dựng môi trường, ki�
 |---|---|
 | Repository | [OlYVER1337/hr-leave-management](https://github.com/OlYVER1337/hr-leave-management) |
 | Branch source đã tích hợp | **master** |
-| HEAD master tại thời điểm cập nhật | **d34ca9100f1db34261b7792dcc2058855bcd29aa** |
-| Branch cập nhật tài liệu | **Update-docs** |
-| Trạng thái tài liệu | Các thay đổi tài liệu đang ở Update-docs; chưa được tính là đã tích hợp vào master cho đến khi PR được merge. |
+| HEAD master tại thời điểm cập nhật | **01be3cfa7a03efcf6ad63d3a16b4d6eafb706444** |
+| Trạng thái tài liệu | Tài liệu bàn giao được cập nhật trực tiếp trên master. |
+| Sửa lỗi HR OpenAPI | [0a34e13](https://github.com/OlYVER1337/hr-leave-management/commit/0a34e131fb7550695492d42614a3d74e385beab0) và [01be3cf](https://github.com/OlYVER1337/hr-leave-management/commit/01be3cfa7a03efcf6ad63d3a16b4d6eafb706444). |
 | Merge Dynamic Authorization V1 | [PR #6](https://github.com/OlYVER1337/hr-leave-management/pull/6), merge commit **81b987043ce4663ad11800bb331ffdbc013bd1d2** |
 | Trạng thái production | Chưa có bằng chứng triển khai hoặc nghiệm thu production. |
 
@@ -131,7 +131,23 @@ Backend Dynamic RBAC thực thi permission và scope Self/Team/All. React hiện
 
 ## 5. Swagger và xác thực API
 
-Swagger/OpenAPI chỉ được map khi backend chạy ở Development. Dùng các địa chỉ Swagger ở Mục 3.
+Swagger/OpenAPI chỉ được map khi backend chạy ở Development. Khi chạy stack local thông thường, mở:
+
+- HR Swagger UI: [http://localhost:8081/swagger](http://localhost:8081/swagger)
+- Leave Swagger UI: [http://localhost:8082/swagger](http://localhost:8082/swagger)
+- HR OpenAPI JSON: [http://localhost:8081/openapi/v1.json](http://localhost:8081/openapi/v1.json)
+- Leave OpenAPI JSON: [http://localhost:8082/openapi/v1.json](http://localhost:8082/openapi/v1.json)
+
+Khi chạy stack benchmark cô lập `hrbench`, dùng cổng host thay thế: HR `18081`, Leave `18082`. Ví dụ:
+
+~~~powershell
+Start-Process http://localhost:18081/swagger
+Start-Process http://localhost:18082/swagger
+curl.exe -f http://localhost:18081/openapi/v1.json -o NUL
+curl.exe -f http://localhost:18082/openapi/v1.json -o NUL
+~~~
+
+HTTP 200 của trang `/swagger` chỉ xác nhận HTML UI được phục vụ. Cần kiểm tra riêng `/openapi/v1.json`; đây mới là tài liệu JSON mà Swagger UI tải để hiển thị endpoint/schema.
 
 Quy trình thử endpoint được bảo vệ:
 
@@ -184,21 +200,23 @@ docker run --rm -v "$($PWD.Path)\src\web:/app" -w /app --tmpfs /app/node_modules
 
 Lệnh lần lượt cài package theo lockfile, quét dependency, chạy Vitest một lần và build production. Không bỏ qua exit code của bước nào khi ghi nhận kết quả.
 
-### 6.3. Kết quả backend sau merge — 26/11/2026
+### 6.3. Kết quả backend và OpenAPI — 26/11/2026
 
-Kết quả chạy local do người triển khai cung cấp sau khi cập nhật `master` tới commit `b9fa469c51bb25214aa6a3bef7ac8358b699ede3`:
+Người triển khai đã chạy lại hai solution sau các thay đổi sửa schema OpenAPI của HR:
 
-| Suite | Lệnh | Passed | Failed | Skipped | Tổng |
+| Suite | Lệnh | Passed | Failed | Skipped | Thời gian test |
 |---|---|---:|---:|---:|---:|
-| HR Service | `dotnet test src\hr-service\HrService.slnx --no-restore` | 158 | 0 | 0 | **158/158** |
-| Leave Service | `dotnet test src\leave-service\LeaveService.slnx --no-restore` | 129 | 0 | 0 | **129/129** |
+| HR Service | `dotnet test src\hr-service\HrService.slnx --no-restore` | 158 | 0 | 0 | 7,3 giây |
+| Leave Service | `dotnet test src\leave-service\LeaveService.slnx --no-restore` | 129 | 0 | 0 | 19,0 giây |
+| **Tổng** | | **287** | **0** | **0** | |
 
-Cả hai solution build thành công trên .NET 10.0.13; HR test hoàn tất trong 7,2 giây, Leave test trong 17,7 giây. Tổng cộng **287 tests passed, 0 failed, 0 skipped**.
+Cả hai solution build thành công trên .NET 10.0.13. Thời gian build được báo cáo: HR 9,1 giây; Leave 26,1 giây. Tổng cộng **287 tests passed, 0 failed, 0 skipped**.
 
-**Lưu ý đường dẫn:** repository dùng thư mục `src/leave-service/` viết thường. Lượt chạy được báo cáo dùng `src\Leave-service\`; lệnh vẫn hoạt động trên Windows do filesystem không phân biệt hoa/thường. Tài liệu thống nhất cách viết thường để tương thích với Git/Linux.
+Source HR đã sửa hai tham số mặc định trong `LeavePolicyResponse`:
+- [0a34e13](https://github.com/OlYVER1337/hr-leave-management/commit/0a34e131fb7550695492d42614a3d74e385beab0): bỏ `= default` khỏi `DateOnly EffectiveFrom`.
+- [01be3cf](https://github.com/OlYVER1337/hr-leave-management/commit/01be3cfa7a03efcf6ad63d8fef753f8a67e2313): bỏ `= default` khỏi `DateTime CreatedAtUtc`.
 
-Đây là kết quả local do người triển khai báo cáo sau merge PR #17. Revision được ghi nhận theo checkout sau merge là `b9fa469c51bb25214aa6a3bef7ac8358b699ede3`; output terminal được gửi không in `git rev-parse HEAD`, vì vậy khi cần provenance tuyệt đối phải chạy `git rev-parse HEAD` tại chính thư mục đã chạy test. Không suy rộng kết quả này sang frontend hoặc Swagger runtime.
-
+**Ghi chú provenance:** kết quả test và runtime do người triển khai cung cấp từ PowerShell ngày 26/11/2026, sau khi áp dụng hai commit trên. Terminal output không in `git rev-parse HEAD`; khi cần gắn chính xác kết quả với revision, chạy lệnh đó tại checkout đã test và lưu kèm log/TRX.
 
 ### 6.4. Swagger smoke test và demo end-to-end
 
@@ -233,7 +251,11 @@ Hai service chỉ map Swagger/OpenAPI khi Development. Source mapping đã đư�
 
 Dùng tài khoản API mode đã cấu hình trong `.env`, đăng xuất/chuyển profile trình duyệt giữa các vai trò, và chọn ngày nghỉ chưa có đơn trùng. Không tạo dữ liệu trên production.
 
-**Trạng thái tại bản ghi này:** Swagger UI/OpenAPI được xác nhận ở cấp source (Development-only); chưa có output HTTP runtime từ máy nhận bàn giao. Kịch bản đăng nhập ba vai trò và duyệt đơn cần được thực hiện trực tiếp trên stack local trước khi đánh dấu hoàn tất.
+**Kết quả runtime mới nhất do người triển khai cung cấp:** trên stack `hrbench`, `curl.exe -v http://localhost:18081/openapi/v1.json -o NUL` trả **HTTP 200**. JSON được parse thành công và schema `components.schemas.LeavePolicyResponse` xác nhận:
+- `effectiveFrom`: `type=string`, `format=date`.
+- `createdAtUtc`: `type=string`, `format=date-time`.
+
+Điều này xác nhận HR OpenAPI JSON đã sinh thành công sau hai commit sửa DTO. Log mới nhất chưa kèm lệnh kiểm tra Swagger UI và Leave OpenAPI trên cổng `hrbench`; khi nghiệm thu đầy đủ profile này, chạy cả bốn URL UI/JSON ở đầu Mục 5. Kịch bản đăng nhập ba vai trò và duyệt đơn vẫn cần được thực hiện trực tiếp trên stack local.
 
 ## 7. Chạy Approval benchmark
 
