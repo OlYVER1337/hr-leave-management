@@ -199,7 +199,7 @@ Mỗi lượt chạy đều tự seed và verify capacity trước khi khởi ch
 - Pool 100/100 có thêm một lần gọi hàm `default` với `scenario.iterationInTest=15000`. Guard bỏ qua lần gọi này trước HTTP request. Vì vậy `k6_iterations=15001` và `out_of_plan_iterations=1`, nhưng `approval_http_attempts=completed_approvals=15000`. Không phát sinh approval thứ 15.001.
 - Pool 50/50 đã đáp ứng target mà không cần tăng VU. Trong hai lượt đo này, pool 100/100 không cải thiện throughput và có p95 cao hơn. Chưa có đủ cơ sở để kết luận nguyên nhân khác biệt về latency.
 - Kết quả là benchmark local với image IDs đã ghi nhận; không suy ra production capacity hoặc bottleneck. Chưa thu thập CPU/RAM/SQL waits đồng bộ để phân tích nút thắt.
-- Các kết quả này thay thế hai lượt so sánh trước đó trong phần đánh giá pool 50/100. Raw evidence cũ vẫn được giữ riêng để truy vết.
+- Cặp 13:15:04/13:22:21 là kết quả cuối cùng được chọn. Bảng tổng hợp đủ bốn lượt arrival-rate ngày 26/11, commit đo từng lượt và lý do loại lượt 11:18:07 (27 dropped iterations) nằm ở [Benchmark results, Mục 15.2](dynamic-authorization-benchmark-results.md). Raw evidence cũ vẫn được giữ riêng để truy vết.
 
 Raw/summary report:
 
