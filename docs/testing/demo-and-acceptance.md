@@ -1,6 +1,6 @@
 # Kịch bản demo, kết quả kiểm thử và checklist nghiệm thu
 
-> **Snapshot ngày 20/11/2026:** Dynamic Authorization V1 đã được merge vào `master` qua [PR #6](https://github.com/OlYVER1337/hr-leave-management/pull/6), merge commit `81b987043ce4663ad11800bb331ffdbc013bd1d2`. Kết quả regression local đã được báo cáo là HR 155/155, Leave 123/123 và Web 79 tests pass; các lượt này chưa ghi lại SHA chính xác. Ngày 20/11, seed scale data thành công (1.000 nhân viên/5.000 đơn) và Approval 100 VU hoàn thành 1.000/1.000 quyết định, 0 lỗi. Chi tiết và giới hạn bằng chứng ở Mục 7–8. Không có CI/CD theo quyết định dự án.
+> **Snapshot ngày 26/11/2026:** Source Dynamic Authorization V1 đã được merge vào `master` qua [PR #6](https://github.com/OlYVER1337/hr-leave-management/pull/6), merge commit `81b987043ce4663ad11800bb331ffdbc013bd1d2`. Approval benchmark arrival-rate mới nhất chạy trên SHA `d34ca9100f1db34261b7792dcc2058855bcd29aa`: hai pool 50/50 và 100/100 đều hoàn thành 15.000/15.000 approvals trong 300 giây, target 50/s, 0 dropped iteration và 0 approval error. Pool 100 có 1 out-of-plan iteration bị guard bỏ qua trước HTTP. Kết quả regression 155 HR, 123 Leave và 79 Web là bằng chứng local lịch sử chưa gắn SHA chính xác; cần chạy lại trên revision bàn giao nếu yêu cầu sign-off. Không có CI/CD theo quyết định dự án. Chi tiết ở Mục 7.5 và [Approval benchmark guide](approval-benchmark-guide.md).
 
 ## 1. Kết quả kiểm thử hồi quy và tích hợp (lịch sử — 03/11/2026)
 
@@ -228,7 +228,7 @@ khi có API tương ứng. HR không được tạo đơn nghỉ; xác nhận ro
 | Tính đồng thời | Đạt | SQL integration test cho tạo đơn cạnh tranh, trùng ngày và quyết định cạnh tranh |
 | Redis catalog cache | Đạt | Ba nhóm cache, key riêng, TTL mặc định 30 phút, invalidation, SQL fallback và authoritative reads |
 | Redis outage | Đạt | Ba catalog endpoint trả HTTP 200 khi Redis dừng; kết quả smoke được ghi ở mục 2 |
-| Load test 50/100 VU, 5 phút, Redis ON/OFF | Catalog đạt; workforce 100 VU chạy lại không lỗi, nguyên nhân lịch sử chưa rõ | Workforce: lượt đầu 100 VU có 21 HTTP 500 (0,31%); hai lượt chạy lại có 0 lỗi. Chưa chạy Redis OFF cho workload này; không có code fix được xác nhận |
+| Load test 50/100 VU, 5 phút, Redis ON/OFF | Kết quả theo từng workload được lưu riêng | Workforce: một lượt 100 VU lịch sử có 21 HTTP 500 khi Docker bị dừng giữa chừng; đây là lỗi gián đoạn môi trường đã xác nhận, không phải lỗi nghiệp vụ chưa rõ. Redis OFF cho workforce chưa đo. Approval arrival-rate 50/s × 300 giây ngày 26/11 đạt ở cả pool 50/50 và 100/100; xem Mục 7.5 |
 | Docker Compose, healthcheck, README | Đạt | Compose, Dockerfile, `.env.example`, volume và hướng dẫn chạy đã có |
 | Design System và giao diện | Đã được người dùng nghiệm thu | Người dùng xác nhận UI đạt ngày 03/11/2026; Design System, wireframe và UI test được lưu trong repository. Chưa thực hiện audit accessibility độc lập |
 | Bàn giao tài liệu | Đạt về tài liệu kỹ thuật | Có sơ đồ, ERD, sequence, Redis/performance, TRX, README và [hướng dẫn sử dụng/test/demo](../USER-GUIDE.md); còn kết quả workforce benchmark |
@@ -245,12 +245,11 @@ khi có API tương ứng. HR không được tạo đơn nghỉ; xác nhận ro
   là 5 phút; đã đổi default thành 30 phút và bổ sung test. Benchmark catalog cũ
   vẫn hợp lệ cho workload warm-cache, nhưng cần rebuild service để áp dụng
   default mới trong runtime.
-- `workforce.js` chỉ đọc dữ liệu. Trên 1.000 nhân viên/5.000 đơn, lượt 50 VU
-  trong 5 phút có 0 lỗi. Lượt 100 VU đầu tiên có 21 HTTP 500 (0,31%), p95
-  11,05 giây; hai lượt chạy lại 100 VU/5 phút có 0 lỗi (p95 lần lượt 17,23 và
-  13,47 giây). Lỗi lịch sử chưa tái hiện, nguyên nhân chưa xác định và không có
-  thay đổi code nào được xác nhận là bản sửa. Redis OFF cho workforce chưa được
-  đo. Chi tiết ở
+- `workforce.js` chỉ đọc dữ liệu. Trên dataset 1.000 nhân viên/5.000 đơn, các lượt
+  workforce được ghi nhận gồm 50 VU không lỗi và hai lượt 100 VU chạy lại không lỗi.
+  Một lượt 100 VU lịch sử có 21 HTTP 500 xảy ra khi Docker bị dừng giữa chừng trong
+  lúc benchmark; nguyên nhân môi trường đã được xác nhận, không cần truy nguyên lại.
+  Redis OFF cho workforce chưa được đo. Chi tiết số đo workforce lịch sử xem tại
   [workforce load summary](./evidence/workforce-load-summary.json).
 
 ## 5. Checklist nghiệm thu
@@ -281,7 +280,7 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
 | [x] | Regression frontend | 31 UI tests pass và production build thành công | Vitest/build lượt mới nhất, báo cáo mục 1 |
 | [x] | Load test catalog Redis ON/OFF | 50 và 100 VU, 5 phút mỗi lượt; báo cáo RPS/p50/p95/error và cấu hình máy | [Redis performance report](../performance/redis-performance.md) |
 | [x] | Load test workforce — Redis ON | 50/100 VU, 5 phút, dataset 1.000 nhân viên/5.000 đơn | 50 VU 0 lỗi; lượt đầu 100 VU 21 HTTP 500; hai lần chạy lại 100 VU 0 lỗi; [summary](./evidence/workforce-load-summary.json) |
-| [ ] | Truy nguyên lỗi workforce lịch sử | Xác định exception/endpoint gây 500 và kiểm chứng bản sửa; nếu lỗi tái diễn, giữ log đủ chi tiết để tái hiện | Hai lượt chạy lại không tái hiện; nguyên nhân chưa rõ. Redis OFF cho workforce cũng chưa đo |
+| [x] | Đóng sự cố workforce HTTP 500 lịch sử | Không mở lại sự cố cũ khi đã xác định Docker bị dừng giữa chừng trong lúc benchmark; chỉ điều tra lại nếu lỗi tái xuất hiện trong lượt chạy ổn định | Nguyên nhân gián đoạn môi trường đã được xác nhận. Redis OFF cho workforce là phép đo còn thiếu riêng, không phải điều kiện truy nguyên lỗi cũ |
 | [x] | Bottleneck | Đọc được CPU/container, SQL runtime và plan; không thêm index nếu chưa có bằng chứng | `evidence/diagnostics-*`, `evidence/sql-query-plan-summary.txt` |
 | [x] | Tài liệu thiết kế và bàn giao | ERD, kiến trúc, API/OpenAPI, Design System, wireframe, README, hướng dẫn sử dụng | [Docs index](../README.md), [architecture diagrams](../architecture/README.md), [user guide](../USER-GUIDE.md) |
 | [x] | Chạy demo an toàn | API mode thật; dùng dataset demo; không reset volume hoặc dùng secret production | Luồng API `hrbench` 03/11; checklist chuẩn bị demo phía trên |
@@ -297,7 +296,7 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
   chứa bí mật vào báo cáo, log hoặc Git.
 
 
-## 7. Trạng thái source và bằng chứng sau merge — 20/11/2026
+## 7. Trạng thái source và bằng chứng sau merge — tổng hợp đến 26/11/2026
 
 ### 7.1. Repository và Dynamic Authorization
 
@@ -365,6 +364,35 @@ Raw JSON `approval-100vu-after-seed.json` được chỉ định qua `REPORT_JSO
 - Annual demo policy có sai khác giữa backend DemoDataSeeder (12 ngày) và frontend built-in fallback (15 ngày).
 
 Thứ tự và tiêu chí hoàn thành được theo dõi ở [planning/BACKLOG.md](../planning/BACKLOG.md).
+
+### 7.5. Approval constant-arrival-rate — 26/11/2026
+
+Hai lượt benchmark mới dùng chung source SHA, image HR/Leave, seed, workload và target arrival rate; chỉ thay đổi VU pool. Chi tiết cấu hình, cách tính capacity và giải thích metric được lưu trong [Approval benchmark guide](approval-benchmark-guide.md).
+
+**Điều kiện chung:** source SHA `d34ca9100f1db34261b7792dcc2058855bcd29aa`; HR image `sha256:8eccc09571553866449c312854526453e167ee01f1009491318b22dda8de4d04`; Leave image `sha256:fbb2ed6121920bbabc9923fdd3396c300331ebab098b91403c4c2a35dcb30911`. Seed 5.000 nhân viên, 100.000 đơn, 50.000 Pending, chia 25 Manager (2.000 Pending/Manager). Mỗi lượt cần tối đa 600 Pending/Manager.
+
+| Metric | Pool 50/50 | Pool 100/100 |
+|---|---:|---:|
+| Target rate / duration | 50/s × 300s | 50/s × 300s |
+| Planned approvals | 15.000 | 15.000 |
+| HTTP attempts / approvals thành công | 15.000 / 15.000 | 15.000 / 15.000 |
+| Throughput | 50/s | 50/s |
+| Dropped iterations | 0 | 0 |
+| Approval errors / error rate | 0 / 0% | 0 / 0% |
+| Approval p50 | 12,88 ms | 13,43 ms |
+| Approval p95 | 16,21 ms | 20,50 ms |
+| Leave → HR calls | 30.000 | 30.000 |
+| Leave → HR average / p95 | 2,22 / 3,31 ms | 2,39 / 3,91 ms |
+| k6 iterations | 15.000 | 15.001 |
+| Out-of-plan iterations | 0 | 1 |
+
+**Diễn giải:** cả hai pool đều đáp ứng target 50/s trong 300 giây, không có dropped iteration hoặc approval error. Pool 50 đã đáp ứng workload; pool 100 không tăng throughput và có p95 cao hơn trong hai lượt đo này. Pool 100 có một lần gọi iteration với index 15.000; guard trong script bỏ qua trước HTTP, nên attempts và approvals vẫn đúng 15.000, không có approval thứ 15.001.
+
+Raw/summary prefix:
+- `approval-arrival-rate-50rps-50-vu-pool-20261126-131504`
+- `approval-arrival-rate-50rps-100-vu-pool-20261126-132221`
+
+Đây là benchmark local, không có CPU/RAM/SQL waits thu thập đồng bộ; không kết luận bottleneck hoặc production capacity từ số liệu này.
 
 ## 8. Quy trình tái xác minh sau merge
 
