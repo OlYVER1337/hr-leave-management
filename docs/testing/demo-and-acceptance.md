@@ -396,7 +396,7 @@ Raw/summary prefix:
 - `approval-arrival-rate-50rps-50-vu-pool-20261126-131504`
 - `approval-arrival-rate-50rps-100-vu-pool-20261126-132221`
 
-Đây là benchmark local, không có CPU/RAM/SQL waits thu thập đồng bộ; không kết luận bottleneck hoặc production capacity từ số liệu này.
+Bảng tổng hợp đầy đủ bốn lượt arrival-rate, commit đo từng lượt và lý do loại lượt 50 VU 11:18:07 vì 27 dropped iterations nằm ở [Benchmark results, Mục 15.2](dynamic-authorization-benchmark-results.md). Đây là benchmark local, không có CPU/RAM/SQL waits thu thập đồng bộ; không kết luận bottleneck hoặc production capacity từ số liệu này.
 
 ## 8. Quy trình tái xác minh sau merge
 
