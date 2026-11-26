@@ -16,6 +16,18 @@ Các khoảng trống và thứ tự hoàn thiện được theo dõi tại [Bac
 
 ## Mục lục
 
+- [Bắt đầu nhanh (API thật)](#bắt-đầu-nhanh-api-thật)
+- [1. Công nghệ sử dụng](#1-công-nghệ-sử-dụng)
+- [2. Kiến trúc và cấu trúc thư mục](#2-kiến-trúc-và-cấu-trúc-thư-mục)
+- [3. Yêu cầu môi trường](#3-yêu-cầu-môi-trường)
+- [4. Cấu hình lần đầu](#4-cấu-hình-lần-đầu)
+- [5. Chạy toàn bộ hệ thống bằng Docker Compose](#5-chạy-toàn-bộ-hệ-thống-bằng-docker-compose)
+- [6. Chế độ demo và chế độ API thật](#6-chế-độ-demo-và-chế-độ-api-thật)
+- [7. Địa chỉ truy cập và kiểm tra dịch vụ](#7-địa-chỉ-truy-cập-và-kiểm-tra-dịch-vụ)
+- [8. Chạy automated tests](#8-chạy-automated-tests)
+- [9. Lệnh Docker thường dùng](#9-lệnh-docker-thường-dùng)
+- [10. Xử lý lỗi thường gặp](#10-xử-lý-lỗi-thường-gặp)
+- [11. Lưu ý bảo mật](#11-lưu-ý-bảo-mật)
 
 ## Bắt đầu nhanh (API thật)
 
@@ -56,18 +68,6 @@ Dành cho lần chạy đầu trên máy local. Docker Compose mặc định bui
 > Chỉ bật seed tài khoản trên database local/test mới hoặc database bạn chủ động quản lý. Không dùng mật khẩu ví dụ ở môi trường thật. Nếu database đã có tài khoản HR, không cần tạo lại HR khởi tạo.
 
 ---
-
-- [1. Công nghệ sử dụng](#1-công-nghệ-sử-dụng)
-- [2. Kiến trúc và cấu trúc thư mục](#2-kiến-trúc-và-cấu-trúc-thư-mục)
-- [3. Yêu cầu môi trường](#3-yêu-cầu-môi-trường)
-- [4. Cấu hình lần đầu](#4-cấu-hình-lần-đầu)
-- [5. Chạy toàn bộ hệ thống bằng Docker Compose](#5-chạy-toàn-bộ-hệ-thống-bằng-docker-compose)
-- [6. Chế độ demo và chế độ API thật](#6-chế-độ-demo-và-chế-độ-api-thật)
-- [7. Địa chỉ truy cập và kiểm tra dịch vụ](#7-địa-chỉ-truy-cập-và-kiểm-tra-dịch-vụ)
-- [8. Chạy automated tests](#8-chạy-automated-tests)
-- [9. Lệnh Docker thường dùng](#9-lệnh-docker-thường-dùng)
-- [10. Xử lý lỗi thường gặp](#10-xử-lý-lỗi-thường-gặp)
-- [11. Lưu ý bảo mật](#11-lưu-ý-bảo-mật)
 
 ## 1. Công nghệ sử dụng
 
