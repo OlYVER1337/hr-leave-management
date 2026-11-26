@@ -137,7 +137,18 @@ Body mẫu cho POST/PUT:
 Response của API chi tiết có cấu trúc:
 
     {
-      "request": { "...": "LeaveRequestResponse" },
+      "id": "...",
+      "employeeId": "...",
+      "approverId": "...",
+      "departmentId": 1,
+      "leaveTypeId": 1,
+      "startDate": "2026-12-01",
+      "endDate": "2026-12-01",
+      "totalDays": 1,
+      "reason": "Việc gia đình",
+      "status": "Pending",
+      "createdAtUtc": "...",
+      "balances": [],
       "history": [
         {
           "id": "...",
@@ -151,7 +162,7 @@ Response của API chi tiết có cấu trúc:
       ]
     }
 
-Mảng `history` được sắp xếp theo `CreatedAtUtc`, sau đó `Id`; nếu chưa có sự kiện thì trả mảng rỗng. Backend xác thực quyền trên request theo Self/Team/All trước khi trả cả thông tin và lịch sử. Không có route `/history` riêng.
+`history` được bổ sung ở cấp gốc response `LeaveRequestResponse` của API chi tiết; các trường request hiện có giữ nguyên để tương thích client, còn API danh sách không serialize trường này. Mảng history được sắp xếp theo `CreatedAtUtc`, sau đó `Id`; nếu chưa có sự kiện thì trả mảng rỗng. Backend xác thực quyền trên request theo Self/Team/All trước khi trả cả thông tin và lịch sử. Không có route `/history` riêng.
 
 Ví dụ quyết định:
 
