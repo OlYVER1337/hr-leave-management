@@ -143,7 +143,9 @@ File Docker Stats được thu thập từ 11:44:24 đến 11:51:21 ngày 12/11/
 
 Đây là trung bình và cực đại của các **mẫu Docker Stats trong cả cửa sổ thu thập**, không phải phép đo peak CPU chính xác trong thời điểm xử lý approval. Scenario Approval chỉ kéo dài khoảng 1–2 giây, ngắn hơn khoảng lấy mẫu. Vì vậy không dùng bảng này để kết luận service không bị spike CPU trong workload hoặc xác định bottleneck.
 
-## 7. Kết luận và việc còn lại
+## 7. Kết luận và việc còn lại — snapshot lịch sử 12/11/2026
+
+> Phần này tổng hợp evidence có tại thời điểm 12/11/2026, trước các benchmark Approval bổ sung ngày 20–26/11. Các nhận xét cũ về Approval chỉ có burst/per-vu-iterations và thiếu raw JSON không còn mô tả trạng thái mới nhất. Kết quả arrival-rate mới nhất, bốn lượt hợp lệ/loại, raw evidence và commit đo được ghi riêng tại [Mục 15](#15-approval-constant-arrival-rate--kết-quả-xác-nhận-cuối-cùng-26112026).
 
 ### Kết luận có thể rút ra
 
