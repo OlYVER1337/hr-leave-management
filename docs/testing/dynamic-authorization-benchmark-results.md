@@ -547,7 +547,29 @@ Hai lượt chạy dùng cùng Git revision, HR/Leave image IDs, seed và worklo
 | Pending sau seed | 50.000 tổng cộng; 2.000 mỗi Manager |
 | Pending cần | 600 mỗi Manager |
 
-### 15.2. Kết quả
+### 15.2. Bảng đầy đủ các lượt constant-arrival-rate ngày 26/11
+
+Bảng dưới đây liệt kê toàn bộ bốn lượt Approval arrival-rate có raw JSON và summary JSON tương ứng trong evidence. **Commit đo** lấy từ trường `git_sha` trong summary của chính lượt chạy, không lấy commit tài liệu hoặc HEAD hiện tại của nhánh.
+
+| Thời điểm | Pool | Attempts / thành công | Dropped iterations | Out-of-plan | HTTP errors | Commit đo (Git SHA) | Phân loại |
+|---|---:|---:|---:|---:|---:|---|---|
+| 11:18:07 | 50/50 | 14.974 / 14.974 | **27** | 0 | 0 | `8d7bb4772fe279ab60e1c49fcf2749e3a5526cd0` | **Loại khỏi kết quả đạt chuẩn**: dropped khác 0, không đạt threshold `count==0`; chỉ hoàn thành 14.974/15.000 approvals dự kiến. |
+| 11:33:47 | 100/100 | 15.000 / 15.000 | 0 | 1 | 0 | `031dc613fb5fec6a4719c3b79f6ed8d23274010e` | Đạt workload riêng lẻ. Một iteration ngoài kế hoạch bị guard bỏ qua trước HTTP; không có approval vượt kế hoạch. Không ghép thành cặp A/B cuối vì Git SHA khác lượt 50 VU cùng đợt. |
+| 13:15:04 | 50/50 | 15.000 / 15.000 | 0 | 0 | 0 | `d34ca9100f1db34261b7792dcc2058855bcd29aa` | **Hợp lệ — cặp so sánh cuối**. |
+| 13:22:21 | 100/100 | 15.000 / 15.000 | 0 | 1 | 0 | `d34ca9100f1db34261b7792dcc2058855bcd29aa` | **Hợp lệ — cặp so sánh cuối**. Iteration ngoài kế hoạch bị guard bỏ qua trước HTTP. |
+
+Lượt **11:18:07** bị loại không phải vì HTTP error (có 0 lỗi), mà vì không giữ được arrival schedule: raw JSON ghi `dropped_iterations.count=27`, threshold `dropped_iterations: count==0` không đạt, và chỉ có 14.974 approval HTTP attempts/thành công. Không được làm tròn hoặc ghi lượt này thành 15.000/15.000.
+
+Lượt **11:33:47** không bị loại vì dropped iteration; raw JSON ghi 15.000 attempts, 15.000 thành công và 0 dropped. Tuy nhiên Git SHA của nó khác SHA ở lượt 50 VU 11:18:07, nên không dùng hai lượt đầu làm cặp so sánh cùng revision. Hai lượt 13:15:04 và 13:22:21 là cặp được chọn cuối cùng vì dùng cùng Git SHA và image IDs.
+
+Raw/summary filenames theo cùng timestamp:
+
+- `approval-arrival-rate-50rps-50-vu-pool-20261126-111807-{raw,summary}.json`
+- `approval-arrival-rate-50rps-100-vu-pool-20261126-113347-{raw,summary}.json`
+- `approval-arrival-rate-50rps-50-vu-pool-20261126-131504-{raw,summary}.json`
+- `approval-arrival-rate-50rps-100-vu-pool-20261126-132221-{raw,summary}.json`
+
+### 15.3. Kết quả cặp benchmark cuối
 
 | Chỉ số | Pool 50/50 | Pool 100/100 |
 |---|---:|---:|
@@ -570,7 +592,7 @@ Hai lượt chạy dùng cùng Git revision, HR/Leave image IDs, seed và worklo
 
 `approval_requests.rate` trong raw JSON được k6 tính trên toàn bộ `testRunDurationMs`, gồm cả thời gian setup/teardown: pool 50 chạy 323,048 giây nên raw rate là 46,4328/s; pool 100 chạy 322,435 giây nên raw rate là 46,5210/s. Đây khác với rate chuẩn hóa theo cửa sổ workload 300 giây (15.000 / 300 = 50/s). Vì vậy 50/s là target/throughput chuẩn hóa theo scenario, không phải counter rate của toàn bộ tiến trình k6.
 
-### 15.3. Diễn giải
+### 15.4. Diễn giải
 
 - Cả hai pool đều đạt đủ 15.000 approvals trong 300 giây, giữ target 50 approvals/s, không có dropped iteration hoặc approval error.
 - Pool 100/100 có thêm một lần gọi scenario với index 15000. Guard bỏ qua lần gọi đó trước HTTP call; không có approval thứ 15.001. Vì vậy k6 có 15.001 iterations nhưng chỉ gửi 15.000 approval HTTP requests.
