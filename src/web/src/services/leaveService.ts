@@ -141,8 +141,7 @@ interface LeaveRequestRecord {
   createdAtUtc: string;
 }
 
-interface LeaveRequestDetailRecord {
-  request: LeaveRequestRecord;
+interface LeaveRequestDetailRecord extends LeaveRequestRecord {
   history: LeaveRequestHistory[];
 }
 
@@ -470,7 +469,7 @@ export async function getLeaveRequestDetails(
     const { data } = await leaveApi.get<LeaveRequestDetailRecord>(
       `/api/v1/leave-requests/${encodeURIComponent(requestId)}`,
     );
-    const [request] = await mapApiRequests([data.request], user);
+    const [request] = await mapApiRequests([data], user);
     return { request, history: data.history ?? [] };
   } catch (error) {
     throw new Error(getApiErrorMessage(error));
