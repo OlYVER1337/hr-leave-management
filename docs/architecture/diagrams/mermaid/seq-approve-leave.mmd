@@ -67,4 +67,4 @@ sequenceDiagram
   LV->>LDB: SAVE CHANGES + COMMIT
   LV-->>W: 200 + request/balance mới
 
-  Note over LV,LDB: ApproverId được ghi lúc tạo và cập nhật bằng Manager đã xác minh khi quyết định Team; không dùng trường này làm authority.
+  Note right of LV: ApproverId là snapshot, không phải nguồn phân quyền. Team scope luôn kiểm tra ManagerId hiện tại khi quyết định.
