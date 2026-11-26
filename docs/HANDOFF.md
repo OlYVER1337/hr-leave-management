@@ -240,7 +240,8 @@ Không lấy DURATION=5m của executor per-vu-iterations làm bằng chứng so
 |---|---:|---:|
 | Approval HTTP attempts | 15.000 | 15.000 |
 | Approval thành công | 15.000 | 15.000 |
-| Throughput | 50/s | 50/s |
+| Approval rate chuẩn hóa theo cửa sổ workload 300s (15.000 / 300) | 50/s | 50/s |
+| Raw k6 `approval_requests.rate` (toàn `testRunDuration`) | 46,43/s | 46,52/s |
 | Dropped iterations | 0 | 0 |
 | Approval errors | 0 | 0 |
 | Error rate | 0% | 0% |
@@ -251,6 +252,9 @@ Không lấy DURATION=5m của executor per-vu-iterations làm bằng chứng so
 | Leave → HR p95 | 3,31 ms | 3,91 ms |
 | k6 iterations | 15.000 | 15.001 |
 | Out-of-plan iterations | 0 | 1 |
+
+
+`approval_requests.rate` trong raw JSON được k6 tính trên toàn bộ `testRunDurationMs`, gồm cả thời gian setup/teardown: pool 50 chạy 323,048 giây nên raw rate là 46,4328/s; pool 100 chạy 322,435 giây nên raw rate là 46,5210/s. Đây khác với rate chuẩn hóa theo cửa sổ workload 300 giây (15.000 / 300 = 50/s). Vì vậy 50/s là target/throughput chuẩn hóa theo scenario, không phải counter rate của toàn bộ tiến trình k6.
 
 **Kết luận trong phạm vi phép đo:** cả hai pool hoàn thành đủ 15.000 approval, giữ target 50/s, không dropped iteration và không có approval error. Pool 50 VU đã đáp ứng workload; tăng lên 100 VU không cải thiện throughput và có p95 cao hơn trong hai lượt đo này.
 
