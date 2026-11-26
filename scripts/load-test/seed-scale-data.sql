@@ -7,14 +7,12 @@ DECLARE @EmployeeCount int = TRY_CONVERT(int, '$(EmployeeCount)');
 DECLARE @RequestsPerEmployee int = TRY_CONVERT(int, '$(RequestsPerEmployee)');
 DECLARE @ManagerCount int = TRY_CONVERT(int, '$(ManagerCount)');
 DECLARE @PendingPercent int = TRY_CONVERT(int, '$(PendingPercent)');
-DECLARE @PolicyDaysPerEmployee decimal(6,1) = TRY_CONVERT(decimal(6,1), '$(PolicyDaysPerEmployee)');
 
 PRINT CONCAT(
     'Seed configuration: EmployeeCount=', @EmployeeCount,
     '; RequestsPerEmployee=', @RequestsPerEmployee,
     '; ManagerCount=', @ManagerCount,
-    '; PendingPercent=', @PendingPercent,
-    '; PolicyDaysPerEmployee=', @PolicyDaysPerEmployee, '.'
+    '; PendingPercent=', @PendingPercent, '.'
 );
 
 IF @EmployeeCount IS NULL OR @EmployeeCount NOT BETWEEN 1000 AND 5000
@@ -25,12 +23,8 @@ IF @ManagerCount IS NULL OR @ManagerCount NOT BETWEEN 1 AND 200
     THROW 51005, 'ManagerCount must be between 1 and 200.', 1;
 IF @PendingPercent IS NULL OR @PendingPercent NOT IN (25, 50)
     THROW 51008, 'PendingPercent must be 25 (standard seed) or 50 (approval sustained seed).', 1;
-IF @PolicyDaysPerEmployee IS NULL OR @PolicyDaysPerEmployee <= 0
-    THROW 51013, 'PolicyDaysPerEmployee must be a positive number.', 1;
 IF @PendingPercent = 50 AND @RequestsPerEmployee <> 20
     THROW 51010, 'PendingPercent=50 requires RequestsPerEmployee=20 to preserve the per-employee balance quota.', 1;
-IF @PendingPercent = 50 AND @PolicyDaysPerEmployee < 12.0
-    THROW 51014, 'PendingPercent=50 requires at least 12 policy days per employee.', 1;
 
 CREATE TABLE #LoadTestEmployees
 (
@@ -370,9 +364,9 @@ IF EXISTS
     HAVING SUM
     (
         CASE WHEN Status IN (N'Pending', N'Approved') THEN TotalDays ELSE 0 END
-    ) > @PolicyDaysPerEmployee
+    ) > 12.0
 )
-    THROW 51011, 'Generated load-test Used + Pending days exceed PolicyDaysPerEmployee.', 1;
+    THROW 51011, 'Generated load-test Used + Pending days exceed the seeded PolicyDays quota.', 1;
 
 UPDATE request
 SET request.ApproverId = employee.ManagerId
@@ -424,7 +418,7 @@ SELECT
     employee.EmployeeId,
     @LeaveTypeId,
     @Year,
-    @PolicyDaysPerEmployee,
+    12.0,
     COALESCE(SUM(CASE WHEN request.Status = N'Approved' THEN request.TotalDays ELSE 0 END), 0),
     COALESCE(SUM(CASE WHEN request.Status = N'Pending' THEN request.TotalDays ELSE 0 END), 0)
 FROM #LoadTestEmployees AS employee
