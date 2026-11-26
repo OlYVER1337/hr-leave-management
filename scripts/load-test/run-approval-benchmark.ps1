@@ -176,10 +176,8 @@ function Invoke-K6Workload {
     $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 
     if ($WorkloadKind -eq "ConstantVus") {
-        $vusToRun = if ($Vus -gt 0) { $Vus } else { [int]$workload.constantVus.defaultVus }
-        $maxPerVu = [int]$workload.constantVus.maxApprovalsPerVu
+        $vusToRun = if ($Vus -gt 0) { $Vus } else { [int]$workload.constantVus.defaultVus } 
         $reportPrefix = "approval-constant-vus-$vusToRun-$timestamp"
-
         $runArgs = @(
             "--profile", "loadtest", "run", "--rm",
             "-e", "VUS=$vusToRun",
