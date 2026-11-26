@@ -148,3 +148,52 @@ Tham khảo:
 - [k6 constant-arrival-rate executor](https://grafana.com/docs/k6/latest/using-k6/scenarios/executors/constant-arrival-rate/)
 - [k6 dropped iterations](https://grafana.com/docs/k6/latest/using-k6/scenarios/concepts/dropped-iterations/)
 - [k6 arrival-rate VU allocation](https://grafana.com/docs/k6/latest/using-k6/scenarios/concepts/arrival-rate-vu-allocation/)
+
+## 8. Kết quả constant-arrival-rate thực tế — 26/11/2026
+
+### 8.1. Điều kiện benchmark
+
+Hai lượt chạy dùng cùng workload và cùng image HR/Leave:
+
+| Thuộc tính | Giá trị |
+|---|---|
+| Git SHA lượt 50 VU | `8d7bb4772fe279ab60e1c49fcf2749e3a5526cd0` |
+| Git SHA lượt 100 VU | `031dc613fb5fec6a4719c3b79f6ed8d23274010e` |
+| HR image | `sha256:8eccc09571553866449c312854526453e167ee01f1009491318b22dda8de4d04` |
+| Leave image | `sha256:fbb2ed6121920bbabc9923fdd3396c300331ebab098b91403c4c2a35dcb30911` |
+| Target rate / duration | 50 iteration/s × 300 giây |
+| Planned approvals | 15.000 |
+| Seed | 5.000 nhân viên, 100.000 đơn, 50% Pending |
+| Manager | 25 |
+| Pending sau verifier | 50.000 tổng cộng; 2.000 mỗi Manager |
+
+### 8.2. Kết quả so sánh
+
+| Chỉ số | Pool 50/50 | Pool 100/100 |
+|---|---:|---:|
+| Approval attempts | 14.974 | 15.000 |
+| Approval thành công | 14.974 | 15.000 |
+| Throughput | 49,913/s | 50,000/s |
+| Dropped iterations | 27 | 0 |
+| Dropped rate | 0,18% | 0% |
+| Approval errors | 0 | 0 |
+| HTTP failed rate | 0% | 0% |
+| Approval p50 | 11,97 ms | 12,08 ms |
+| Approval p95 | 19,73 ms | 15,84 ms |
+| Leave → HR calls | 29.948 | 30.000 |
+| Leave → HR average | 2,484 ms | 2,194 ms |
+| Leave → HR p95 | 3,34 ms | 3,43 ms |
+
+### 8.3. Diễn giải và giới hạn
+
+- Pool 50/50 không giữ đủ target rate: có 27 dropped iterations (0,18%), vì vậy lượt này **không đạt threshold** `dropped_iterations: count==0`. Không có approval HTTP error.
+- Pool 100/100 hoàn tất đúng 15.000 approval với 0 dropped iteration và 0 approval error; đạt target 50 approval/s trong môi trường benchmark này.
+- Ở lượt pool 100/100, k6 gọi hàm `default` thêm một lần với `scenario.iterationInTest=15000`. Guard của script bỏ qua lần gọi ngoài phạm vi, không gửi HTTP request và không tái sử dụng Pending ID. Vì vậy `k6_iterations=15001` và `out_of_plan_iterations=1`, trong khi `approval_http_attempts=completed_approvals=15000`. Đây không phải approval thừa.
+- Đây là kết quả local với image ID nêu trên; không suy ra production capacity hoặc kết luận bottleneck của hệ thống. Chưa có CPU/RAM/SQL waits được thu đồng bộ để xác định nút thắt.
+- Không cần chạy lại pool 100/100 chỉ để xử lý warning ngoài kế hoạch: warning đã được xử lý an toàn và không làm phát sinh request thứ 15.001.
+
+Raw/summary report được tạo trong thư mục evidence ở máy benchmark với các prefix:
+- `approval-arrival-rate-50rps-50-vu-pool-20261126-111807`
+- `approval-arrival-rate-50rps-100-vu-pool-20261126-113347`
+
+Các file report chỉ được đưa vào Git khi người vận hành add/commit chúng từ máy benchmark; bảng trên ghi lại các số liệu đã được cung cấp từ summary/raw output.
