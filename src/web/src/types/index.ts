@@ -43,8 +43,19 @@ export interface LeaveRequest {
   reason: string;
   status: LeaveStatus;
   approverName: string;
+  approverId?: string | null;
   createdAt: string;
   decisionNote?: string;
+}
+
+export interface LeaveRequestHistory {
+  id: string;
+  actorId: string;
+  action: string;
+  fromStatus: string | null;
+  toStatus: string;
+  note: string | null;
+  createdAtUtc: string;
 }
 
 export interface LeaveBalance {
