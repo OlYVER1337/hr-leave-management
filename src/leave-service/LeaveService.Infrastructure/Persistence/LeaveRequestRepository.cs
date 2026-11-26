@@ -247,22 +247,24 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
         return (request, balances);
     }
 
-    public async Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)?> GetVisibleByIdAsync(
+    public async Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances, IReadOnlyList<LeaveRequestHistory> History)?> GetVisibleByIdAsync(
         Guid employeeId,
         Guid requestId,
         LeaveAccess access,
         IReadOnlyCollection<Guid> teamEmployeeIds,
         CancellationToken cancellationToken = default)
     {
+        // Chỉ nạp history sau khi request đã được lọc theo visibility Self/Team/All.
         var request = await QueryVisibleById(employeeId, requestId, access, teamEmployeeIds)
+            .Include(item => item.Histories)
             .SingleOrDefaultAsync(cancellationToken);
         if (request is null)
         {
             return null;
         }
 
-        // The visible request may belong to a Team member or any employee under All.
-        // Load balances for the request owner, not for the caller.
+        // Request có thể thuộc nhân viên trong Team hoặc bất kỳ nhân viên nào dưới All.
+        // Balance luôn lấy theo chủ sở hữu request, không lấy theo người đang gọi API.
         var balances = await context.LeaveBalances
             .AsNoTracking()
             .Where(item => item.EmployeeId == request.EmployeeId &&
@@ -271,32 +273,12 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
                            item.Year <= request.EndDate.Year)
             .ToArrayAsync(cancellationToken);
 
-        return (request, balances);
-    }
-
-    public async Task<IReadOnlyList<LeaveRequestHistory>?> GetVisibleHistoryAsync(
-        Guid employeeId,
-        Guid requestId,
-        LeaveAccess access,
-        IReadOnlyCollection<Guid> teamEmployeeIds,
-        CancellationToken cancellationToken = default)
-    {
-        // Nullable projection distinguishes a visible request with no history from
-        // a missing/out-of-scope request without loading leave balances.
-        var visibleRequestId = await QueryVisibleById(employeeId, requestId, access, teamEmployeeIds)
-            .Select(item => (Guid?)item.Id)
-            .SingleOrDefaultAsync(cancellationToken);
-        if (!visibleRequestId.HasValue)
-        {
-            return null;
-        }
-
-        return await context.LeaveRequestHistories
-            .AsNoTracking()
-            .Where(item => item.LeaveRequestId == visibleRequestId.Value)
+        var history = request.Histories
             .OrderBy(item => item.CreatedAtUtc)
             .ThenBy(item => item.Id)
-            .ToArrayAsync(cancellationToken);
+            .ToArray();
+
+        return (request, balances, history);
     }
 
     private IQueryable<LeaveRequest> QueryVisibleById(
