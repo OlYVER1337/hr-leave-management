@@ -138,7 +138,9 @@ describe('LeaveRequestsPage', () => {
 
   it('shows a history loading error without hiding request details', async () => {
     const user = userEvent.setup();
-    mocks.getLeaveRequestHistory.mockRejectedValue(new Error('Không có quyền xem lịch sử.'));
+    mocks.getLeaveRequestHistory
+      .mockRejectedValueOnce(new Error('Không có quyền xem lịch sử.'))
+      .mockResolvedValueOnce([]);
 
     render(
       <MemoryRouter>
@@ -151,7 +153,14 @@ describe('LeaveRequestsPage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Không có quyền xem lịch sử.');
     expect(screen.getByText('Việc gia đình cần giải quyết.')).toBeInTheDocument();
+
+    // Timeline vẫn mở sau lỗi nên nút có nhiệm vụ đóng panel; người dùng có thể mở lại để retry.
+    await user.click(screen.getByRole('button', { name: 'Ẩn lịch sử' }));
     expect(screen.getByRole('button', { name: 'Xem lịch sử' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Xem lịch sử' }));
+    expect(await screen.findByText('Chưa có bản ghi lịch sử cho đơn này.')).toBeInTheDocument();
+    expect(mocks.getLeaveRequestHistory).toHaveBeenCalledTimes(2);
   });
 
   it('marks report export unavailable instead of offering a non-working action', async () => {
