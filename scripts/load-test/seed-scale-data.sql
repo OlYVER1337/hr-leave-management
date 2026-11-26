@@ -1,7 +1,3 @@
-:setvar EmployeeCount "1000"
-:setvar RequestsPerEmployee "5"
-:setvar ManagerCount "25"
-
 SET NOCOUNT ON;
 -- Bắt buộc: bảng UserRoles có unique index có điều kiện (filtered), cần QUOTED_IDENTIFIER ON.
 SET ANSI_NULLS ON;
@@ -10,13 +6,25 @@ SET QUOTED_IDENTIFIER ON;
 DECLARE @EmployeeCount int = TRY_CONVERT(int, '$(EmployeeCount)');
 DECLARE @RequestsPerEmployee int = TRY_CONVERT(int, '$(RequestsPerEmployee)');
 DECLARE @ManagerCount int = TRY_CONVERT(int, '$(ManagerCount)');
+DECLARE @PendingPercent int = TRY_CONVERT(int, '$(PendingPercent)');
 
-IF @EmployeeCount NOT BETWEEN 1000 AND 5000
+PRINT CONCAT(
+    'Seed configuration: EmployeeCount=', @EmployeeCount,
+    '; RequestsPerEmployee=', @RequestsPerEmployee,
+    '; ManagerCount=', @ManagerCount,
+    '; PendingPercent=', @PendingPercent, '.'
+);
+
+IF @EmployeeCount IS NULL OR @EmployeeCount NOT BETWEEN 1000 AND 5000
     THROW 51000, 'EmployeeCount must be between 1000 and 5000.', 1;
-IF @RequestsPerEmployee NOT BETWEEN 1 AND 20
+IF @RequestsPerEmployee IS NULL OR @RequestsPerEmployee NOT BETWEEN 1 AND 20
     THROW 51001, 'RequestsPerEmployee must be between 1 and 20.', 1;
-IF @ManagerCount NOT BETWEEN 1 AND 200
+IF @ManagerCount IS NULL OR @ManagerCount NOT BETWEEN 1 AND 200
     THROW 51005, 'ManagerCount must be between 1 and 200.', 1;
+IF @PendingPercent IS NULL OR @PendingPercent NOT IN (25, 50)
+    THROW 51008, 'PendingPercent must be 25 (standard seed) or 50 (approval sustained seed).', 1;
+IF @PendingPercent = 50 AND @RequestsPerEmployee <> 20
+    THROW 51010, 'PendingPercent=50 requires RequestsPerEmployee=20 to preserve the per-employee balance quota.', 1;
 
 CREATE TABLE #LoadTestEmployees
 (
@@ -51,12 +59,17 @@ CREATE TABLE #LoadTestManagers
     Number int NOT NULL
 );
 
-;WITH ManagerNumbers AS
+;WITH NumberSource AS
 (
-    SELECT TOP (@ManagerCount)
-        CONVERT(int, ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) AS Number
+    SELECT CONVERT(int, ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) AS Number
     FROM sys.all_objects AS firstSource
     CROSS JOIN sys.all_objects AS secondSource
+),
+ManagerNumbers AS
+(
+    SELECT Number
+    FROM NumberSource
+    WHERE Number <= @ManagerCount
 )
 INSERT INTO dbo.Employees
 (
@@ -107,12 +120,17 @@ FROM dbo.Employees
 WHERE Email LIKE N'loadtest.user.%@example.invalid'
 ORDER BY Code;
 
-;WITH Numbers AS
+;WITH NumberSource AS
 (
-    SELECT TOP (@EmployeeCount)
-        CONVERT(int, ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) AS Number
+    SELECT CONVERT(int, ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) AS Number
     FROM sys.all_objects AS firstSource
     CROSS JOIN sys.all_objects AS secondSource
+),
+Numbers AS
+(
+    SELECT Number
+    FROM NumberSource
+    WHERE Number <= @EmployeeCount
 )
 INSERT INTO dbo.Employees
 (
@@ -161,7 +179,8 @@ USE Leave_DB;
 DECLARE @LeaveTypeId int;
 DECLARE @RequestCount int = @EmployeeCount * @RequestsPerEmployee;
 DECLARE @Year int = YEAR(SYSUTCDATETIME());
-DECLARE @YearStart date = DATEFROMPARTS(YEAR(SYSUTCDATETIME()), 1, 1);
+DECLARE @YearStart date = DATEFROMPARTS(@Year, 1, 1);
+DECLARE @YearEnd date = DATEADD(day, -1, DATEFROMPARTS(@Year + 1, 1, 1));
 
 SELECT @LeaveTypeId = Id
 FROM HR_DB.dbo.LeaveTypes
@@ -195,6 +214,70 @@ DELETE balance
 FROM dbo.LeaveBalances AS balance
 INNER JOIN #LoadTestEmployees AS employee ON employee.EmployeeId = balance.EmployeeId;
 
+-- Materialize calendar trước khi lọc để SQL Server không đẩy DATEADD
+-- lên toàn bộ Cartesian row source của sys.all_objects và đánh giá ngày ngoài năm.
+CREATE TABLE #CalendarDays
+(
+    CalendarDate date NOT NULL PRIMARY KEY
+);
+
+;WITH CalendarDays AS
+(
+    SELECT @YearStart AS CalendarDate
+    UNION ALL
+    SELECT DATEADD(day, 1, CalendarDate)
+    FROM CalendarDays
+    WHERE CalendarDate < @YearEnd
+)
+INSERT INTO #CalendarDays (CalendarDate)
+SELECT CalendarDate
+FROM CalendarDays
+OPTION (MAXRECURSION 366);
+
+CREATE TABLE #BusinessDays
+(
+    BusinessDayNumber int NOT NULL PRIMARY KEY,
+    CalendarDate date NOT NULL UNIQUE
+);
+
+;WITH RankedBusinessDays AS
+(
+    -- Ngày làm việc: thứ Hai đến thứ Sáu, loại các ngày lễ đã cấu hình HR.
+    SELECT
+        CalendarDate,
+        CONVERT(int, ROW_NUMBER() OVER (ORDER BY CalendarDate)) AS BusinessDayNumber
+    FROM #CalendarDays AS calendar
+    WHERE DATEDIFF(day, CONVERT(date, '19000101'), calendar.CalendarDate) % 7 BETWEEN 0 AND 4
+      AND NOT EXISTS
+      (
+          SELECT 1
+          FROM HR_DB.dbo.Holidays AS holiday
+          WHERE holiday.HolidayDate = calendar.CalendarDate
+      )
+)
+INSERT INTO #BusinessDays (BusinessDayNumber, CalendarDate)
+SELECT BusinessDayNumber, CalendarDate
+FROM RankedBusinessDays;
+
+CREATE TABLE #ScheduleDates
+(
+    RequestSlot int NOT NULL PRIMARY KEY,
+    CalendarDate date NOT NULL UNIQUE
+);
+
+;WITH RankedScheduleDates AS
+(
+    -- Chọn một ngày sau mỗi 5 ngày làm việc để các request không chồng lấn.
+    SELECT
+        CalendarDate,
+        CONVERT(int, ROW_NUMBER() OVER (ORDER BY BusinessDayNumber)) AS RequestSlot
+    FROM #BusinessDays
+    WHERE (BusinessDayNumber - 1) % 5 = 0
+)
+INSERT INTO #ScheduleDates (RequestSlot, CalendarDate)
+SELECT RequestSlot, CalendarDate
+FROM RankedScheduleDates;
+
 ;WITH EmployeeNumbers AS
 (
     SELECT
@@ -203,12 +286,17 @@ INNER JOIN #LoadTestEmployees AS employee ON employee.EmployeeId = balance.Emplo
         TRY_CONVERT(int, SUBSTRING(Code, 3, 7)) AS EmployeeNumber
     FROM #LoadTestEmployees
 ),
-RequestNumbers AS
+RequestNumberSource AS
 (
-    SELECT TOP (@RequestCount)
-        CONVERT(int, ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) AS Number
+    SELECT CONVERT(int, ROW_NUMBER() OVER (ORDER BY (SELECT NULL))) AS Number
     FROM sys.all_objects AS firstSource
     CROSS JOIN sys.all_objects AS secondSource
+),
+RequestNumbers AS
+(
+    SELECT Number
+    FROM RequestNumberSource
+    WHERE Number <= @RequestCount
 )
 INSERT INTO #LoadTestRequests
 (
@@ -220,13 +308,24 @@ SELECT
     employee.EmployeeId,
     NULL,
     @DepartmentId,
-    DATEADD(day, (numbers.Number - 1) % 300, @YearStart),
-    DATEADD(day, (numbers.Number - 1) % 300 + (numbers.Number % 3), @YearStart),
-    CONVERT(decimal(6,1), numbers.Number % 3 + 1),
-    CASE numbers.Number % 4
-        WHEN 0 THEN N'Pending'
-        WHEN 1 THEN N'Approved'
-        WHEN 2 THEN N'Rejected'
+    schedule.CalendarDate,
+    schedule.CalendarDate,
+    CONVERT(decimal(6,1), 1.0),
+    CASE
+        -- Seed tiêu chuẩn giữ phân phối 25% Pending như trước.
+        WHEN @PendingPercent = 25 THEN
+            CASE numbers.Number % 4
+                WHEN 0 THEN N'Pending'
+                WHEN 1 THEN N'Approved'
+                WHEN 2 THEN N'Rejected'
+                ELSE N'Cancelled'
+            END
+        -- Seed sustained: mỗi nhân viên có 20 request:
+        -- 10 Pending, 2 Approved, 4 Rejected, 4 Cancelled.
+        -- Used + Pending = 2 + 10 = 12 ngày, không vượt PolicyDays=12.
+        WHEN ((numbers.Number - 1) % @RequestsPerEmployee) % 10 < 5 THEN N'Pending'
+        WHEN ((numbers.Number - 1) % @RequestsPerEmployee) % 10 = 5 THEN N'Approved'
+        WHEN ((numbers.Number - 1) % @RequestsPerEmployee) % 10 IN (6, 7) THEN N'Rejected'
         ELSE N'Cancelled'
     END,
     DATEADD(minute, -numbers.Number, SYSUTCDATETIME()),
@@ -234,7 +333,40 @@ SELECT
 FROM RequestNumbers AS numbers
 INNER JOIN EmployeeNumbers AS employee
     ON employee.EmployeeNumber =
-        ((numbers.Number - 1) / @RequestsPerEmployee) % @EmployeeCount + 1;
+        ((numbers.Number - 1) / @RequestsPerEmployee) % @EmployeeCount + 1
+INNER JOIN #ScheduleDates AS schedule
+    ON schedule.RequestSlot = ((numbers.Number - 1) % @RequestsPerEmployee) + 1;
+
+IF (SELECT COUNT(*) FROM #LoadTestRequests) <> @RequestCount
+    THROW 51012, 'Could not allocate enough unique non-holiday business dates for the load-test requests.', 1;
+
+IF EXISTS
+(
+    SELECT 1
+    FROM
+    (
+        SELECT
+            EmployeeId,
+            StartDate,
+            LAG(EndDate) OVER
+                (PARTITION BY EmployeeId ORDER BY StartDate, RequestNumber) AS PreviousEndDate
+        FROM #LoadTestRequests
+    ) AS orderedRequests
+    WHERE orderedRequests.PreviousEndDate >= orderedRequests.StartDate
+)
+    THROW 51009, 'Generated load-test requests overlap for the same employee.', 1;
+
+IF EXISTS
+(
+    SELECT EmployeeId
+    FROM #LoadTestRequests
+    GROUP BY EmployeeId
+    HAVING SUM
+    (
+        CASE WHEN Status IN (N'Pending', N'Approved') THEN TotalDays ELSE 0 END
+    ) > 12.0
+)
+    THROW 51011, 'Generated load-test Used + Pending days exceed the seeded PolicyDays quota.', 1;
 
 UPDATE request
 SET request.ApproverId = employee.ManagerId

@@ -1,0 +1,37 @@
+{
+  "evidence_type": "operator-provided-summary-not-raw-k6-export",
+  "workload": "manager-approval-and-hr-lookup-sustained",
+  "executor": "constant-vus",
+  "run_date": "2026-11-25",
+  "vus": 50,
+  "duration": "5m",
+  "duration_seconds": 300,
+  "think_time_seconds": 1,
+  "manager_count": 25,
+  "seed": {
+    "employees": 4000,
+    "requests_per_employee": 20,
+    "total_requests": 80000,
+    "pending_percent": 50,
+    "pending_requests": 40000,
+    "pending_per_manager": 1600
+  },
+  "max_approvals_per_vu": 400,
+  "approval_id_capacity": 20000,
+  "approval_attempts": 14688,
+  "completed_approvals": 14688,
+  "approval_rps": 48.96,
+  "p50_ms": 19.7,
+  "p95_ms": 32.0955,
+  "approval_errors": 0,
+  "error_rate": 0,
+  "git_sha": "not-recorded",
+  "hr_image_id": "not-recorded",
+  "leave_image_id": "not-recorded",
+  "raw_k6_export_committed": false,
+  "notes": [
+    "Tóm tắt số liệu đã được người chạy benchmark xác nhận.",
+    "SHA checkout và immutable image IDs không được ghi lại cùng lần chạy.",
+    "File approval-constant-vus-50-5m-rerun.json hiện có trong repository là một lần chạy khác, không phải raw evidence của summary này."
+  ]
+}

@@ -63,28 +63,25 @@ Chạy các lệnh sau từ thư mục gốc repository trong PowerShell:
 docker compose -p hrbench -f docker-compose.yml -f docker-compose.loadtest.yml up -d --build
 docker compose -p hrbench -f docker-compose.yml -f docker-compose.loadtest.yml ps
 docker compose -p hrbench -f docker-compose.yml -f docker-compose.loadtest.yml cp .\scripts\load-test\seed-scale-data.sql sqlserver:/tmp/seed-scale-data.sql
-docker compose -p hrbench -f docker-compose.yml -f docker-compose.loadtest.yml exec -T sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P $env:SA_PASSWORD -C -d master -i /tmp/seed-scale-data.sql
+docker compose -p hrbench -f docker-compose.yml -f docker-compose.loadtest.yml exec -T sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P $env:SA_PASSWORD -C -b -d master -v EmployeeCount=1000 RequestsPerEmployee=5 ManagerCount=25 PendingPercent=25 -i /tmp/seed-scale-data.sql
 ```
 
-Mặc định script tạo dữ liệu 1.000 nhân viên và 5.000 đơn nghỉ, phân bổ vào các
-trạng thái chờ duyệt/đã duyệt/từ chối/đã hủy, đồng thời tạo số dư nghỉ phép,
-phân bổ theo năm và lịch sử tương ứng. Có thể chỉnh hai giá trị `:setvar` ở đầu
-file `scripts/load-test/seed-scale-data.sql` để chọn từ 1.000 đến 5.000 nhân viên
-và từ 1 đến 20 đơn mỗi nhân viên. Chạy lại script trên cùng tập nhân viên sẽ chỉ
-làm mới các đơn và số dư phục vụ kiểm thử của tài khoản
-`loadtest.user.*@example.invalid`.
+Seed tạo dữ liệu theo ba biến SQLCMD được truyền tường minh bằng `sqlcmd -v`:
+`EmployeeCount` (1.000–5.000), `RequestsPerEmployee` (1–20) và `ManagerCount`
+(1–200). File SQL không khai báo `:setvar` mặc định; cách này tránh việc giá trị
+mặc định trong file ghi đè tham số người chạy truyền từ command line. Script tạo
+các trạng thái Pending/Approved/Rejected/Cancelled, balance, year allocation và
+history. Chạy lại script trên cùng tập nhân viên sẽ làm mới các đơn và số dư
+phục vụ kiểm thử của tài khoản `loadtest.user.*@example.invalid`.
 
 ### Seed 1.000 nhân viên: quy trình đầy đủ
 
 Script seed **không tự chạy** khi chỉ chạy `docker compose ... up`. Sau khi stack
-`hrbench` đã khởi động và database/service ở trạng thái sẵn sàng, cần thực hiện
-đúng hai bước: copy file SQL vào container SQL Server, sau đó chạy `sqlcmd`.
+`hrbench` đã khởi động và database/service ở trạng thái sẵn sàng, cần copy file
+SQL rồi gọi `sqlcmd` với tham số tường minh. Cấu hình baseline:
 
-Mặc định trong `scripts/load-test/seed-scale-data.sql`:
-
-```sql
-:setvar EmployeeCount "1000"
-:setvar RequestsPerEmployee "5"
+```powershell
+-v EmployeeCount=1000 RequestsPerEmployee=5 ManagerCount=25
 ```
 
 Kết quả mong đợi là **1.000 load-test employees** và **5.000 leave requests**.
@@ -196,7 +193,7 @@ trạng thái Pending:
 docker compose @compose run --rm -e VUS=50 -e ITERATIONS_PER_VU=10 -e DURATION=5m k6 run /scripts/approval.js
 
 docker compose @compose cp .\scripts\load-test\seed-scale-data.sql sqlserver:/tmp/seed-scale-data.sql
-docker compose @compose exec -T sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P $env:SA_PASSWORD -C -d master -i /tmp/seed-scale-data.sql
+docker compose @compose exec -T sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P $env:SA_PASSWORD -C -b -d master -v EmployeeCount=1000 RequestsPerEmployee=5 ManagerCount=25 PendingPercent=25 -i /tmp/seed-scale-data.sql
 
 docker compose @compose run --rm -e VUS=100 -e ITERATIONS_PER_VU=10 -e DURATION=5m k6 run /scripts/approval.js
 ```
@@ -276,3 +273,199 @@ Các bảng Catalog Redis ON/OFF ở mục 4 vẫn là benchmark riêng cho ba c
 
 Chi tiết từng lượt và phân tích p95 nằm trong [Dynamic Authorization benchmark report](../testing/dynamic-authorization-benchmark-results.md). Nếu cần đánh giá cache ảnh hưởng tới Workforce, phải chạy một cặp ON/OFF từ cùng Git SHA, cùng image, dataset, page size, VU, duration và resource limits.
 
+
+## 7. Approval sustained load với k6 constant-vus
+
+Kịch bản sustained được tách khỏi `approval.js` để giữ nguyên khả năng tái lập benchmark burst lịch sử. Script mới là `scripts/load-test/approval-sustained.js`, dùng executor `constant-vus`: số VU được giữ liên tục trong suốt `DURATION`, mỗi vòng approve một request ID duy nhất rồi nghỉ theo `THINK_TIME_SECONDS`.
+
+### 7.1. Cấu hình baseline
+
+| Tham số | Giá trị | Ý nghĩa |
+|---|---:|---|
+| VUS | 50 | 50 Manager VU hoạt động liên tục |
+| DURATION | 5m | Thời lượng scenario |
+| LOADTEST_MANAGER_COUNT | 25 | 25 Manager load-test, hai VU/Manager |
+| Seed EmployeeCount | 4.000 | Nhân viên load-test |
+| Seed RequestsPerEmployee | 20 | 20 request/nhân viên |
+| Seed ManagerCount | 25 | Phân bổ đều nhân viên cho Manager |
+| Seed PendingPercent | 50% | Tạo 10 Pending, 2 Approved, 4 Rejected, 4 Cancelled trên mỗi nhân viên |
+| MAX_APPROVALS_PER_VU | 400 | Số ID Pending duy nhất dự phòng cho mỗi VU |
+| THINK_TIME_SECONDS | 1 | Nghỉ sau mỗi quyết định để giới hạn tốc độ tiêu thụ dữ liệu |
+| Inbox page size | 100 | Đọc đủ các trang Pending có Reason bắt đầu bằng `LOADTEST:` |
+
+Với seed sustained, mỗi nhân viên có 20 đơn một ngày, được xếp trên các ngày làm việc đã loại cuối tuần và ngày lễ từ HR holiday calendar; lịch chọn một ngày sau mỗi 5 ngày làm việc nên không chồng lấn. Mỗi nhân viên có 10 Pending, 2 Approved, 4 Rejected và 4 Cancelled; tổng Used + Pending là 12 ngày, không vượt quota fixture 12 ngày. 4.000 nhân viên chia đều cho 25 Manager (160 nhân viên/Manager), tạo 1.600 Pending/Manager, tổng 40.000 Pending. Với 50 VU, mỗi Manager cấp 800 ID (2 VU × 400); với 100 VU, mỗi Manager cấp 1.600 ID (4 VU × 400). Kịch bản không duyệt lặp lại ID; thiếu dữ liệu hoặc hết ID đã cấp thì test fail. Seed SQL cũng tự kiểm tra không có request overlap theo nhân viên và Used + Pending không vượt 12 ngày.
+
+Capacity dữ liệu là 40.000 Pending, bằng giới hạn tối đa 100 VU × 400 ID/VU. Đây là số ID có sẵn, không phải số lượng chắc chắn sẽ hoàn tất; số approval thực tế trong 5 phút phụ thuộc latency của hệ thống. Báo cáo phải dùng số đo k6 thực tế.
+
+### 7.2. Chuẩn bị
+
+Chạy trên stack benchmark cô lập `hrbench`, không dùng database nghiệp vụ. Trước tiên đồng bộ branch có script sustained và ghi SHA:
+
+```powershell
+git fetch origin
+git switch benchmark/approval-constant-vus
+git pull --ff-only
+$env:GIT_SHA = (git rev-parse HEAD).Trim()
+```
+
+Khai báo Compose arguments:
+
+```powershell
+$compose = @(
+  "-p", "hrbench",
+  "-f", "docker-compose.yml",
+  "-f", "docker-compose.loadtest.yml",
+  "--profile", "loadtest"
+)
+```
+
+Đảm bảo stack `hrbench` đã chạy healthy và credentials benchmark trong `.env` đã được nạp. Seed 4.000 nhân viên và 80.000 đơn:
+
+```powershell
+docker compose @compose cp .\scripts\load-test\seed-scale-data.sql sqlserver:/tmp/seed-scale-data.sql
+
+docker compose @compose exec -T sqlserver `
+  /opt/mssql-tools18/bin/sqlcmd `
+  -S localhost -U sa -P $env:SA_PASSWORD -C -b -d master `
+  -v EmployeeCount=4000 RequestsPerEmployee=20 ManagerCount=25 PendingPercent=50 `
+  -i /tmp/seed-scale-data.sql
+```
+
+### 7.3. Xác minh seed trước khi chạy
+
+Copy và thực thi script kiểm tra:
+
+```powershell
+docker compose @compose cp .\scripts\load-test\verify-approval-seed.sql sqlserver:/tmp/verify-approval-seed.sql
+
+docker compose @compose exec -T sqlserver `
+  /opt/mssql-tools18/bin/sqlcmd `
+  -S localhost -U sa -P $env:SA_PASSWORD -C -b -d master `
+  -v ManagerCount=25 ExpectedPendingPerManager=1600 `
+  -i /tmp/verify-approval-seed.sql
+```
+
+Chỉ chạy k6 khi đủ 25 Manager và mỗi Manager có ít nhất 1.600 đơn Pending `LOADTEST:` (đủ cho cấu hình tối đa 100 VU × 400 ID/VU). Script k6 tự đăng nhập, đọc inbox qua pagination và kiểm tra đủ ID cho số VU được giao trước khi scenario bắt đầu.
+
+### 7.4. Ghi nhận image ID và chạy 50 VU / 5 phút
+
+```powershell
+$env:HR_IMAGE_ID = (docker inspect --format '{{.Image}}' hrbench-hr-service-1).Trim()
+$env:LEAVE_IMAGE_ID = (docker inspect --format '{{.Image}}' hrbench-leave-service-1).Trim()
+
+$env:REPORT_JSON = "/reports/approval-constant-vus-50-5m.json"
+
+docker compose @compose run --rm `
+  -e VUS=50 `
+  -e DURATION=5m `
+  -e LOADTEST_MANAGER_COUNT=25 `
+  -e MAX_APPROVALS_PER_VU=400 `
+  -e THINK_TIME_SECONDS=1 `
+  -e SEED_EMPLOYEE_COUNT=4000 `
+  -e REQUESTS_PER_EMPLOYEE=20 `
+  -e SEED_PENDING_PERCENT=50 `
+  -e GIT_SHA=$env:GIT_SHA `
+  -e HR_IMAGE_ID=$env:HR_IMAGE_ID `
+  -e LEAVE_IMAGE_ID=$env:LEAVE_IMAGE_ID `
+  -e REPORT_JSON=$env:REPORT_JSON `
+  k6 run /scripts/approval-sustained.js
+```
+
+Không chạy workload benchmark khác đồng thời. Theo dõi tài nguyên trong lúc chạy bằng `docker stats` ở một terminal riêng. Script xuất summary gồm attempts/completed/errors, RPS, p50/p95 và HR-call metrics. Ở mỗi lượt xác nhận, truyền thêm `-e SEED_PENDING_PERCENT=50`; raw k6 summary ghi vào đường dẫn `REPORT_JSON` riêng. Phải reseed và verify lại trước mỗi lượt vì các request đã approve không còn Pending.
+
+### 7.5. Kết quả thử nghiệm sơ bộ — 25/11/2026 (đã supersede)
+
+Lượt chạy trước khi sửa fixture đã dùng 4.000 nhân viên × 20 đơn nhưng giữ tỷ lệ 25% Pending: 800 Pending/Manager, tổng 20.000. Nó hoàn thành 50 VU / 5 phút và raw JSON được parse thành công, nhưng seed lúc đó tạo lịch nghỉ chồng lấn giữa các đơn của cùng nhân viên. Vì vậy các số dưới đây chỉ lưu làm lịch sử kỹ thuật, **không được dùng làm baseline nghiệm thu hoặc so sánh capacity**. Cần chạy lại 50 và 100 VU với seed `PendingPercent=50`, lịch tuần không overlap và quota guard đã cập nhật.
+
+| Chỉ số | Kết quả |
+|---|---:|
+| Approval attempts / completed | **14.659 / 14.659** |
+| Approval errors | **0** |
+| Throughput trong 300 giây scenario | **48,86 approvals/s** |
+| p50 / p90 / p95 | **21,92 / 31,98 / 36,30 ms** |
+| Average / maximum approval latency | 23,73 / 299,86 ms |
+| HTTP requests toàn bộ test | 14.884 |
+| HTTP failed rate | **0%** |
+| Leave → HR calls | 29.318 |
+| Leave → HR call trung bình / p95 / max | 2,98 / 6,01 / 56,41 ms |
+| Tổng thời gian Leave → HR | 87.447,38 ms |
+
+Khi tính throughput, dùng `14.659 / 300 = 48,86 approvals/s`, trong đó 300 giây là thời lượng scenario. Raw metric `approval_requests.rate` của k6 là 47,71/s vì metric rate sử dụng toàn bộ khoảng thời gian thu thập (khoảng 307,24 giây, bao gồm setup và graceful stop). Báo cáo này dùng throughput theo thời lượng tải để phản ánh đúng workload constant-vus.
+
+Lượt chạy đầu tiên cùng cấu hình ghi nhận 14.411 approvals, p95 48,79 ms và không có lỗi, nhưng k6 cảnh báo 100.033 unique time series do tag URL chứa request ID. Script sau đó chuẩn hóa tag `name` thành route template và tính lại RPS theo thời lượng scenario. Lượt xác nhận không còn cảnh báo cardinality. Tuy nhiên, cả hai lượt dùng fixture trước khi phát hiện lịch nghỉ chồng lấn, nên chỉ lưu làm lịch sử; không dùng làm baseline nghiệm thu. Chênh lệch latency giữa hai lượt cũng không phải bằng chứng rằng thay đổi tag làm tăng hiệu năng API.
+
+**Revision và môi trường của lượt xác nhận:**
+
+- Git SHA: `c4497f70b1e39b3954b576a2a8ff081f7f948336`
+- HR image: `sha256:8eccc09571553866449c312854526453e167ee01f1009491318b22dda8de4d04`
+- Leave image: `sha256:fbb2ed6121920bbabc9923fdd3396c300331ebab098b91403c4c2a35dcb30911`
+- Seed: 4.000 Employees × 20 Requests = 80.000 requests; 25 Manager × 800 Pending = 20.000 Pending.
+
+Raw k6 JSON của lượt sơ bộ đã được parse thành công tại:
+
+`docs/testing/evidence/dynamic-authorization/approval-constant-vus-50-5m-rerun.json`
+
+Artifact này chỉ là bằng chứng lịch sử cho fixture trước khi phát hiện overlap. Không lấy số liệu trên để tuyên bố hoàn thành yêu cầu performance. Chưa có bản ghi `docker stats` đồng bộ cho lượt này; không suy luận CPU/RAM từ dữ liệu không tồn tại.
+
+### 7.6. Seed hợp lệ và ma trận Approval sustained 50/100 VU
+
+Seed chuẩn 1.000 × 5 dùng `PendingPercent=25` để giữ fixture cũ. Seed dành cho Approval sustained dùng 4.000 × 20 và `PendingPercent=50`; mỗi nhân viên có 10 Pending + 2 Approved, mỗi đơn một ngày. Ngày được chọn từ HR business calendar, bỏ thứ Bảy, Chủ nhật và ngày lễ đã cấu hình, với một đơn sau mỗi 5 ngày làm việc. Seed fail nếu có overlap, không đủ ngày hợp lệ hoặc Used + Pending vượt 12 ngày.
+
+Đối với cả 50 và 100 VU, giữ `MAX_APPROVALS_PER_VU=400`, `THINK_TIME_SECONDS=1`, duration 5m. Sau khi seed, verifier phải báo đủ 25 Manager × 1.600 Pending. Chạy từng mức trên một database seed mới; sau mỗi lượt phải reseed và verify lại.
+
+Chạy 50 VU:
+
+```powershell
+docker compose @compose cp .\scripts\load-test\seed-scale-data.sql sqlserver:/tmp/seed-scale-data.sql
+docker compose @compose exec -T sqlserver `
+  /opt/mssql-tools18/bin/sqlcmd `
+  -S localhost -U sa -P $env:SA_PASSWORD -C -b -d master `
+  -v EmployeeCount=4000 RequestsPerEmployee=20 ManagerCount=25 PendingPercent=50 `
+  -i /tmp/seed-scale-data.sql
+
+docker compose @compose cp .\scripts\load-test\verify-approval-seed.sql sqlserver:/tmp/verify-approval-seed.sql
+docker compose @compose exec -T sqlserver `
+  /opt/mssql-tools18/bin/sqlcmd `
+  -S localhost -U sa -P $env:SA_PASSWORD -C -b -d master `
+  -v ManagerCount=25 ExpectedPendingPerManager=1600 `
+  -i /tmp/verify-approval-seed.sql
+
+$env:GIT_SHA = (git rev-parse HEAD).Trim()
+$env:HR_IMAGE_ID = (docker inspect --format '{{.Image}}' hrbench-hr-service-1).Trim()
+$env:LEAVE_IMAGE_ID = (docker inspect --format '{{.Image}}' hrbench-leave-service-1).Trim()
+$env:REPORT_JSON = "/reports/approval-constant-vus-50-5m-valid-seed.json"
+
+docker compose @compose run --rm `
+  -e VUS=50 -e DURATION=5m `
+  -e LOADTEST_MANAGER_COUNT=25 `
+  -e MAX_APPROVALS_PER_VU=400 `
+  -e THINK_TIME_SECONDS=1 `
+  -e SEED_EMPLOYEE_COUNT=4000 `
+  -e REQUESTS_PER_EMPLOYEE=20 `
+  -e SEED_PENDING_PERCENT=50 `
+  -e GIT_SHA=$env:GIT_SHA `
+  -e HR_IMAGE_ID=$env:HR_IMAGE_ID `
+  -e LEAVE_IMAGE_ID=$env:LEAVE_IMAGE_ID `
+  -e REPORT_JSON=$env:REPORT_JSON `
+  k6 run /scripts/approval-sustained.js
+```
+
+Trước lượt 100 VU, reseed và verify bằng đúng các lệnh trên (không dùng lại trạng thái đã duyệt), đổi `VUS=100` và `REPORT_JSON=/reports/approval-constant-vus-100-5m-valid-seed.json`. Nếu muốn giữ nguyên cùng revision, phải checkout/pull cùng branch và cập nhật `GIT_SHA`; không rebuild HR/Leave nếu binary không thay đổi.
+
+### 7.7. Sau lượt chạy và tái lập
+
+Xác minh raw report tồn tại và JSON đọc được:
+
+```powershell
+$reportPath = ".\docs\testing\evidence\dynamic-authorization\approval-constant-vus-50-5m-rerun.json"
+Test-Path $reportPath
+$report = Get-Content $reportPath -Raw | ConvertFrom-Json
+$report.metrics.approval_requests.values
+$report.metrics.approval_request_duration_ms.values
+$report.metrics.approval_http_errors.values
+$report.metrics.http_req_failed.values
+$report.metrics.approval_leave_to_hr_call_duration_ms.values
+git status --short
+```
+
+Đây là sustained constant-VU workload; không so trực tiếp RPS với benchmark per-vu-iterations burst vì executor và think time khác nhau. Reseed trước mỗi lượt lặp lại vì các request đã được approve sẽ không còn Pending.

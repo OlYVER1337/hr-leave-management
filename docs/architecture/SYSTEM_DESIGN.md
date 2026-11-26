@@ -108,7 +108,7 @@ Request có range tối đa 366 ngày; reason bắt buộc, tối đa 1.000 ký 
 - Leave lấy policy hiện hành từ HR theo từng năm allocation, sau đó trong transaction `SERIALIZABLE` refresh `PolicyDays`, giảm Pending, giữ nguyên Used, set Cancelled và append history.
 - HR policy lookup lỗi thì fail closed; không đổi trạng thái/balance/history.
 
-RowVersion, unique balance key, Serializable transaction và retry cho deadlock/concurrency bảo vệ balance/status. `ApproverId` chỉ là snapshot lúc tạo.
+RowVersion, unique balance key, Serializable transaction và retry cho deadlock/concurrency bảo vệ balance/status. `ApproverId` được khởi tạo từ ManagerId khi tạo đơn; với quyết định Team, Leave ghi lại ManagerId hiện tại đã được HR xác minh trong transaction chuyển trạng thái. Trường này phục vụ lưu dấu approver, không phải nguồn xác định quyền Team.
 
 ### Balance hiện tại
 
@@ -160,3 +160,26 @@ Root Compose hiện phục vụ local/demo/benchmark; không phải production h
 - API reference: ../API_REFERENCE.md
 - Future backlog: ../planning/BACKLOG.md
 - Validation/benchmark: ../testing/dynamic-authorization-validation.md
+
+## 12. Đối chiếu implementation trên nhánh benchmark/approval-constant-vus — 25/11/2026
+
+Phần này đối chiếu các luồng trong tài liệu và Mermaid với source hiện tại trên head PR #13 (`61f22ad0fb264241744f56e4fb1a2c969d3d3046`). Các file Mermaid trong `diagrams/mermaid/` là source sơ đồ; EF Core DbContext, entity configuration và migrations mới là nguồn quyết định schema.
+
+| Luồng / thành phần | Implementation được đối chiếu | Quy tắc thực tế cần giữ trong sơ đồ |
+|---|---|---|
+| JWT và permission | `HrService.Application/Services/AuthorizationService.cs`, `HrService.Infrastructure/Authentication/JwtTokenGenerator.cs`, `HrService.Api/Authorization/PermissionAuthorization.cs`, `LeaveService.Api/Authorization/LeavePermissionAuthorization.cs` | HR tính lại effective grants khi login/refresh; JWT có `authz_v=1` và `perm`; role claim cũ chỉ phục vụ tương thích/UI; hai service kiểm tra JWT cục bộ. |
+| HR schema | `HrService.Infrastructure/Persistence/HrDbContext.cs` và HR migrations | Dynamic RBAC gồm Roles, Permissions, UserRoles, RolePermissions, PermissionScopeRules, RolePermissionScopes và AuthzAuditLog; LeavePolicies có `EffectiveFrom`. |
+| Leave schema | `LeaveService.Infrastructure/Persistence/LeaveDbContext.cs`, `LeaveBalance.cs`, `LeaveRequestYearAllocation.cs` | `PolicyDays`, `Used`, `Pending`, `RowVersion` được lưu; `Entitled` và `Available` là giá trị `[NotMapped]`; allocation giữ `PolicyVersionId` và `PolicyDaysAtCreation` làm snapshot lịch sử. |
+| Tạo đơn | `LeaveService.Application/Services/LeaveRequestService.cs` và `LeaveRequestRepository.cs` | Policy snapshot được chọn theo ngày tạo đơn trong UTC+07, không chọn theo ngày nghỉ trong tương lai; ngày nghỉ được tính theo business days sau khi loại holidays. |
+| Team decision | `LeaveRequestService.DecideAsync` và `LeaveRequestRepository.TransitionOnceAsync` | Với Team scope, HR xác minh nhân viên active và ManagerId hiện tại; không tin `ApproverId` snapshot. `All` scope không cần Team lookup. Chặn tự duyệt. |
+| Balance / approve / reject / cancel | `LeaveBalanceService.cs`, `LeaveRequestRepository.UpdateBalancesAsync`, `TransitionOnceAsync`, `CancelOnceAsync` | Đọc authoritative HR policy trước transaction; thay đổi request, `PolicyDays`, Used/Pending và history trong transaction `SERIALIZABLE`. Approve chuyển Pending sang Used; Reject/Cancel chỉ giải phóng Pending. |
+| Policy timeline | `HrService.Application/Services/LeaveCatalogService.cs`, `LeavePolicyTimeline.cs`, `LeavePolicyVersionDeletionService.cs` | Version đã effective không thể edit/delete; edit chỉ dành cho version tương lai và không đổi year/type/effective date; delete kiểm tra cả ngày hiệu lực lẫn allocation reference từ Leave. |
+
+### Các điểm đã xác nhận
+
+- `LeaveBalances` có unique key logic `(EmployeeId, LeaveTypeId, Year)`; `PolicyDays`, `Used`, `Pending` đều có check constraint không âm; `RowVersion` hỗ trợ concurrency.
+- `Entitled = max(PolicyDays, Used + Pending)` và `Available = Entitled - Used - Pending`; giảm policy không làm giảm usage/pending đã ghi nhận hoặc tạo Available âm.
+- `GET /api/v1/leave-balances/mine` đồng bộ catalog authoritative trước khi trả số dư; đồng bộ chỉ tạo/cập nhật `PolicyDays`, không ghi đè Used/Pending. Loại nghỉ thiếu policy hiệu lực được bỏ qua và trả thông tin qua header `X-Leave-Policy-Missing`.
+- Việc approve/reject/cancel lấy policy hiện hành theo ngày nghiệp vụ tại thời điểm xử lý để cập nhật `PolicyDays`, nhưng không ghi đè `PolicyVersionId` / `PolicyDaysAtCreation` snapshot của allocation đã tạo.
+- HR kiểm tra `LeavePolicyVersionId` qua Leave API trước khi xóa. Nếu Leave không khả dụng hoặc báo còn reference, HR fail closed và không xóa.
+- Chưa có bulk balance reconciliation worker và chưa có API đọc history; tài liệu không mô tả hai tính năng này như chức năng đã triển khai.

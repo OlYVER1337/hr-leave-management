@@ -49,12 +49,12 @@ Leave test suite hiện có coverage cho balance self-sync và policy refresh: c
 
 ## 3. Seed dữ liệu tải
 
-Seed tạo/cập nhật bộ dữ liệu 1.000 nhân viên load-test và 5.000 đơn nghỉ, trong đó 1.250 Pending (25%). Nó chỉ xóa đơn và số dư thuộc nhóm nhân viên mã `LT*` / lý do `LOADTEST:*` đã được chuẩn bị cho benchmark.
+Seed tiêu chuẩn tạo/cập nhật 1.000 nhân viên load-test và 5.000 đơn nghỉ, trong đó 1.250 Pending (25%). Truyền rõ `EmployeeCount`, `RequestsPerEmployee`, `ManagerCount` và `PendingPercent=25` qua `sqlcmd -v`; không dựa vào mặc định trong file SQL. Mỗi request seed chỉ nghỉ một ngày; cùng một nhân viên được xếp các request cách nhau 7 ngày, và seed tự kiểm tra overlap cũng như Used + Pending không vượt quota fixture 12 ngày. Script chỉ xóa đơn và số dư thuộc nhóm nhân viên load-test đã chuẩn bị cho benchmark.
 
 ```powershell
 docker compose @compose cp .\scripts\load-test\seed-scale-data.sql sqlserver:/tmp/seed-scale-data.sql
 
-docker compose @compose exec -T sqlserver /bin/bash -c '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -d master -i /tmp/seed-scale-data.sql'
+docker compose @compose exec -T sqlserver /bin/bash -c '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -b -d master -v EmployeeCount=1000 RequestsPerEmployee=5 ManagerCount=25 PendingPercent=25 -i /tmp/seed-scale-data.sql'
 ```
 
 Lệnh SQL lấy mật khẩu từ biến môi trường trong container SQL Server; không cần nhập hoặc in mật khẩu trong terminal.
@@ -113,7 +113,7 @@ Seed, sau đó chạy 50 VU:
 ```powershell
 docker compose @compose cp .\scripts\load-test\seed-scale-data.sql sqlserver:/tmp/seed-scale-data.sql
 
-docker compose @compose exec -T sqlserver /bin/bash -c '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -d master -i /tmp/seed-scale-data.sql'
+docker compose @compose exec -T sqlserver /bin/bash -c '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -b -d master -v EmployeeCount=1000 RequestsPerEmployee=5 ManagerCount=25 PendingPercent=25 -i /tmp/seed-scale-data.sql'
 
 docker compose @compose --profile loadtest run --rm `
   -e VUS=50 `
@@ -128,7 +128,7 @@ Seed lại lần nữa rồi chạy 100 VU:
 ```powershell
 docker compose @compose cp .\scripts\load-test\seed-scale-data.sql sqlserver:/tmp/seed-scale-data.sql
 
-docker compose @compose exec -T sqlserver /bin/bash -c '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -d master -i /tmp/seed-scale-data.sql'
+docker compose @compose exec -T sqlserver /bin/bash -c '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -b -d master -v EmployeeCount=1000 RequestsPerEmployee=5 ManagerCount=25 PendingPercent=25 -i /tmp/seed-scale-data.sql'
 
 docker compose @compose --profile loadtest run --rm `
   -e VUS=100 `
@@ -410,7 +410,7 @@ Trên PowerShell tại repository, lệnh đã thực thi thành công:
 ```powershell
 docker cp .\scripts\load-test\seed-scale-data.sql hrbench-sqlserver-1:/tmp/seed-scale-data.sql
 
-docker exec hrbench-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -b -C -S localhost -U sa -P "$env:SA_PASSWORD" -d master -v EmployeeCount="1000" RequestsPerEmployee="5" ManagerCount="25" -i /tmp/seed-scale-data.sql
+docker exec hrbench-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -b -C -S localhost -U sa -P "$env:SA_PASSWORD" -d master -v EmployeeCount="1000" RequestsPerEmployee="5" ManagerCount="25" PendingPercent="25" -i /tmp/seed-scale-data.sql
 
 if ($LASTEXITCODE -ne 0) {
     throw "Seed script thất bại"
@@ -461,3 +461,96 @@ Scenario hoàn tất khoảng 1,4 giây; tổng lệnh k6 khoảng 3,7 giây. Do
 - Không dùng benchmark local này để cam kết production capacity.
 
 Lưu ý: các kết quả HR 155/155, Leave 123/123 và Web 79 tests đã được ghi nhận trong phiên kiểm thử dự án; SHA của checkout ở các lượt đó chưa được lưu. Muốn chứng minh hồi quy trên merge commit chính xác, chạy lại các lệnh ở Mục 2 và lệnh Web ở tài liệu demo-and-acceptance.md, rồi lưu SHA cùng log/TRX.
+
+## 11. Approval sustained constant-vus — 25/11/2026
+
+### 11.1. Cấu hình môi trường
+
+Stack chạy tách biệt bằng Compose project `hrbench`, dùng hai file `docker-compose.yml` và `docker-compose.loadtest.yml`, profile `loadtest`. Các cổng host: HR `18081`, Leave `18082`, SQL Server `11433`, Redis `16379`. K6 chạy trong image `grafana/k6:latest`; script được mount read-only tại `/scripts`, thư mục `docs/testing/evidence/dynamic-authorization/` được mount tại `/reports`. `LoadTest__EnableHrCallMetrics=true` được bật cho Leave Service.
+
+Workload sử dụng `scripts/load-test/approval-sustained.js`, executor `constant-vus`, gọi `PATCH /api/v1/leave-requests/{id}/decision` với quyết định approve. Think time là 1 giây. RPS báo cáo được chuẩn hóa theo 300 giây workload, không theo tổng thời gian lệnh k6.
+
+### 11.2. Seed và kiểm tra capacity
+
+| Tham số | 50 VU | 150 VU |
+|---|---:|---:|
+| `SEED_EMPLOYEE_COUNT` | 4.000 | 5.000 |
+| `REQUESTS_PER_EMPLOYEE` | 20 | 20 |
+| Tổng requests | 80.000 | 100.000 |
+| `SEED_PENDING_PERCENT` | 50 | 50 |
+| Pending requests | 40.000 | 50.000 |
+| `LOADTEST_MANAGER_COUNT` | 25 | 25 |
+| Pending / Manager | 1.600 | 2.000 |
+| `MAX_APPROVALS_PER_VU` | 400 | 333 |
+
+Seed bằng `scripts/load-test/seed-scale-data.sql`. Đối với lượt 150 VU, verifier `scripts/load-test/verify-approval-seed.sql` được chạy với `ManagerCount=25` và `ExpectedPendingPerManager=2000`; toàn bộ 25 Manager đủ số Pending. Tham số `MAX_APPROVALS_PER_VU=333` tạo capacity 49.950 request ID, phù hợp với số Pending đã seed.
+
+### 11.3. Lệnh chạy đã dùng cho 150 VU
+
+PowerShell tại thư mục repository:
+
+```powershell
+$compose = @(
+  "-p", "hrbench",
+  "-f", "docker-compose.yml",
+  "-f", "docker-compose.loadtest.yml",
+  "--profile", "loadtest"
+)
+
+docker compose @compose run --rm `
+  -e VUS=150 `
+  -e DURATION=5m `
+  -e LOADTEST_MANAGER_COUNT=25 `
+  -e MAX_APPROVALS_PER_VU=333 `
+  -e THINK_TIME_SECONDS=1 `
+  -e SEED_EMPLOYEE_COUNT=5000 `
+  -e REQUESTS_PER_EMPLOYEE=20 `
+  -e SEED_PENDING_PERCENT=50 `
+  -e GIT_SHA=$env:GIT_SHA `
+  -e HR_IMAGE_ID=$env:HR_IMAGE_ID `
+  -e LEAVE_IMAGE_ID=$env:LEAVE_IMAGE_ID `
+  -e REPORT_JSON=$env:REPORT_JSON `
+  k6 run /scripts/approval-sustained.js
+```
+
+Giá trị metadata được in ra ở lượt này: `GIT_SHA=c4497f70b1e39b3954b576a2a8ff081f7f948336`, `HR_IMAGE_ID=not-provided`, `LEAVE_IMAGE_ID=not-provided`. Raw report path qua `REPORT_JSON` chưa được xác minh có file tương ứng trên branch.
+
+### 11.4. Kết quả đã ghi nhận
+
+| Chỉ số | 50 VU | 150 VU |
+|---|---:|---:|
+| Attempts / completions | 14.688 / 14.688 | 43.622 / 43.622 |
+| Throughput (trên 300 giây) | 48,96 approvals/s | 145,41 approvals/s |
+| P50 | 19,70 ms | 26,01 ms |
+| P95 | 32,0955 ms | 46,40 ms |
+| Errors | 0 | 0 |
+| Error rate | 0% | 0% |
+| Leave → HR calls | Không có trong summary | 87.244 |
+| Leave → HR avg / p95 | Không có trong summary | 3,5656 / 7,97 ms |
+
+Với lượt 150 VU, `test_run_duration_ms` khoảng 373.376 ms tính cả setup/graceful stop. Scenario workload chạy 5 phút; k6 kết thúc với 43.622 iterations complete và 0 interrupted. Không lấy 373 giây làm mẫu số throughput.
+
+### 11.5. Giới hạn và điều kiện merge
+
+- Summary 50 VU không kèm raw JSON hoặc SHA checkout chính xác. File `approval-constant-vus-50-5m-rerun.json` đang có trong repository là lượt khác (14.659 completions), không thay thế summary 14.688 completions.
+- Lượt 150 VU có SHA `c4497f7...`, không trùng PR head `61f22ad...` được GitHub báo tại thời điểm cập nhật; image IDs không được thu thập. Không mô tả đây là benchmark đúng binary của PR head.
+- Hai file summary JSON mới được lưu trong evidence folder để giữ các chỉ số người chạy cung cấp. Chúng không chứa raw observations k6.
+- Chưa lưu Docker CPU/RAM, SQL waits hoặc query durations đồng bộ với workload; không xác định bottleneck từ lần đo này.
+- Đây là kết quả local, không suy ra production capacity. Phạm vi benchmark đã dừng ở 150 VU × 5 phút; không chạy cao hơn hoặc soak test.
+
+### 11.6. Cửa kiểm tra chức năng và build trước khi merge
+
+Chạy sau khi pull commit tài liệu mới nhất của nhánh PR:
+
+```powershell
+dotnet test src\hr-service\HrService.slnx
+if ($LASTEXITCODE -ne 0) { throw "HR Service tests failed" }
+
+dotnet test src\leave-service\LeaveService.slnx
+if ($LASTEXITCODE -ne 0) { throw "Leave Service tests failed" }
+
+docker run --rm -v "${PWD}\src\web:/app" -w /app --tmpfs /app/node_modules:exec node:20-alpine sh -lc "npm ci && npm audit && npm test -- --run && npm run build"
+if ($LASTEXITCODE -ne 0) { throw "Web audit, tests or build failed" }
+```
+
+Không ghi nhận các bài kiểm tra trên là PASS cho commit tài liệu mới cho tới khi có output từ máy chạy local. Chỉ merge PR sau khi cả HR, Leave, Web audit/test/build đều thành công và thay đổi được rà soát.
