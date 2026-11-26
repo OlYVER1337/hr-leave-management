@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using LeaveService.Domain.Entities;
 
 namespace LeaveService.Application.Dtos;
@@ -20,11 +21,6 @@ public sealed record LeaveRequestHistoryResponse(
     string ToStatus,
     string? Note,
     DateTime CreatedAtUtc);
-
-// API chi tiết trả request và audit history trong cùng một response.
-public sealed record LeaveRequestDetailResponse(
-    LeaveRequestResponse Request,
-    IReadOnlyList<LeaveRequestHistoryResponse> History);
 
 public sealed record LeaveRequestSummaryResponse(int Pending, int? Approved, int? Total);
 
@@ -51,7 +47,9 @@ public sealed record LeaveRequestResponse(
     string Reason,
     LeaveRequestStatus Status,
     DateTime CreatedAtUtc,
-    IReadOnlyList<LeaveBalanceResponse> Balances);
+    IReadOnlyList<LeaveBalanceResponse> Balances,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<LeaveRequestHistoryResponse>? History = null);
 
 public sealed record HrEmployeeSnapshot(
     Guid Id,
