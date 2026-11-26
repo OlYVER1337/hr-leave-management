@@ -113,7 +113,8 @@ describe('LeaveRequestsPage', () => {
 
     expect(await screen.findByText('Tạo đơn')).toBeInTheDocument();
     expect(screen.getByText('Người thực hiện: Nguyễn An (nhân viên)')).toBeInTheDocument();
-    expect(screen.getByText('Khởi tạo → Chờ duyệt')).toBeInTheDocument();
+    const statusLine = screen.getByText((_content, element) => element?.classList.contains('leave-history-status') === true);
+    expect(statusLine).toHaveTextContent('Khởi tạo → Chờ duyệt');
     expect(screen.getByText('Ghi chú: Đã gửi yêu cầu')).toBeInTheDocument();
     expect(mocks.getLeaveRequestHistory).toHaveBeenCalledTimes(1);
     expect(mocks.getLeaveRequestHistory).toHaveBeenCalledWith('request-1');
