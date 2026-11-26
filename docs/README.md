@@ -35,7 +35,7 @@ Mục lục này tách **yêu cầu ban đầu**, **mô tả hệ thống đã t
 ## 5. Hướng dẫn chạy và bàn giao hệ thống
 
 - [README dự án](../README.md): cấu hình môi trường, Docker Compose, tài khoản khởi tạo và lệnh test.
-- [Handover checklist](HANDOFF.md): trạng thái source, test, benchmark, tài liệu và việc còn lại trước sign-off.
+- [Tài liệu bàn giao và checklist sign-off](HANDOFF.md): hướng dẫn setup, tài khoản/vai trò, Swagger, test, benchmark, đối chiếu 10 đầu ra đề tài và kịch bản nghiệm thu.
 
 ## Quy ước cập nhật
 
