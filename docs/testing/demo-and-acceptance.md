@@ -398,14 +398,6 @@ Raw/summary prefix:
 
 Bảng tổng hợp đầy đủ bốn lượt arrival-rate, commit đo từng lượt và lý do loại lượt 50 VU 11:18:07 vì 27 dropped iterations nằm ở [Benchmark results, Mục 15.2](dynamic-authorization-benchmark-results.md). Đây là benchmark local, không có CPU/RAM/SQL waits thu thập đồng bộ; không kết luận bottleneck hoặc production capacity từ số liệu này.
 
-### 7.7. Swagger và demo sau merge — trạng thái kiểm tra
-
-- **Source check:** HR và Leave đều map Swagger UI tại `/swagger` và OpenAPI JSON tại `/openapi/v1.json` trong nhánh `Development`. HR login endpoint là `POST /api/v1/auth/login`.
-- **Runtime check:** chưa có output HTTP từ stack local sau merge; cần xác nhận cả hai Swagger UI và OpenAPI JSON trả HTTP 200 trên máy chạy.
-- **End-to-end demo:** chưa ghi nhận phiên chạy sau merge với ba tài khoản API mode. Kịch bản cần thực hiện: HR xác nhận nhân viên/Manager và chính sách → Employee tạo đơn một ngày hợp lệ → Manager duyệt → Employee kiểm tra trạng thái Approved và số dư Pending/Used/Available.
-
-Không đánh dấu Swagger hoặc demo là nghiệm thu xong chỉ dựa trên việc route đã có trong source code.
-
 ### 7.6. Backend tests sau merge — 26/11/2026
 
 | Suite | Passed | Failed | Skipped | Result |
@@ -416,6 +408,15 @@ Không đánh dấu Swagger hoặc demo là nghiệm thu xong chỉ dựa trên 
 Tổng 287/287 test passed, 0 failed, 0 skipped. Người triển khai báo cáo hai lệnh chạy với `--no-restore` sau khi cập nhật source tới master commit `b9fa469c51bb25214aa6a3bef7ac8358b699ede3`; build cả hai solution thành công. Đây là output local được ghi nhận ngày 26/11/2026, không phải test chạy lại trong PR và không bao gồm frontend tests hoặc Swagger smoke test.
 
 Tên thư mục trong repository là `src/leave-service/` (viết thường); lệnh báo cáo dùng chữ `Leave-service` viết hoa nhưng vẫn chạy trên Windows.
+
+### 7.7. Swagger và demo sau merge — trạng thái kiểm tra
+
+- **Source check:** HR và Leave đều map Swagger UI tại `/swagger` và OpenAPI JSON tại `/openapi/v1.json` trong nhánh `Development`. HR login endpoint là `POST /api/v1/auth/login`.
+- **Runtime check:** chưa có output HTTP từ stack local sau merge; cần xác nhận cả hai Swagger UI và OpenAPI JSON trả HTTP 200 trên máy chạy.
+- **End-to-end demo:** chưa ghi nhận phiên chạy sau merge với ba tài khoản API mode. Kịch bản cần thực hiện: HR xác nhận nhân viên/Manager và chính sách → Employee tạo đơn một ngày hợp lệ → Manager duyệt → Employee kiểm tra trạng thái Approved và số dư Pending/Used/Available.
+
+Không đánh dấu Swagger hoặc demo là nghiệm thu xong chỉ dựa trên việc route đã có trong source code.
+
 
 ## 8. Quy trình tái xác minh sau merge
 
