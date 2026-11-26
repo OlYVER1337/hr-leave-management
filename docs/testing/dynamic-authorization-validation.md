@@ -154,8 +154,10 @@ docker compose @compose --profile loadtest run --rm `
 
 - Chạy trên stack `hrbench` cô lập, không trỏ test tới production.
 - Benchmark Approval thay đổi trạng thái đơn LOADTEST; seed lại trước từng lần chạy để các lượt bắt đầu từ cùng trạng thái Pending.
-- Approval hiện là burst concurrency với iteration cố định, không phải sustained load 5 phút. Muốn kiểm tra tải duy trì cần tạo scenario riêng dùng executor theo thời gian và chuẩn bị dữ liệu Pending đủ lớn/được làm mới an toàn.
-- Không kết luận benchmark đạt chỉ từ HTTP success; đối chiếu cả HR-call count, HR latency, request p95 và error rate.
+- **Cập nhật đến 26/11/2026:** Approval đã có workload `constant-arrival-rate` 50 iteration/s trong 300 giây; cặp cuối 50/100 VU đều hoàn tất 15.000 approvals, 0 dropped iteration và 0 approval error. Chi tiết và các lượt bị loại nằm ở [benchmark results, Mục 15](dynamic-authorization-benchmark-results.md).
+- Các mô tả Approval burst/per-vu-iterations ở những mục lịch sử bên dưới chỉ áp dụng cho benchmark cũ tại thời điểm ghi nhận; không dùng chúng để kết luận rằng hiện chưa có bài đo 5 phút.
+- Chưa thực hiện soak test dài hơn 300 giây. Chưa thu CPU/RAM/SQL waits đồng bộ để xác định bottleneck; không suy ra production capacity từ benchmark local.
+- Không kết luận benchmark đạt chỉ từ HTTP success; đối chiếu dropped iterations, HR-call count, HR latency, request p95 và error rate.
 - Không commit file `.env`, token, mật khẩu, hoặc log có dữ liệu nhạy cảm.
 
 
