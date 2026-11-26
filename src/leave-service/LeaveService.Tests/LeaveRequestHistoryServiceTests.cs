@@ -60,7 +60,7 @@ public sealed class LeaveRequestHistoryServiceTests
 
         var result = await service.GetVisibleByIdAsync(employeeId, "Bearer employee", request.Id, access);
 
-        Assert.Equal(request.Id, result.Request.Id);
+        Assert.Equal(request.Id, result.Id);
         Assert.Equal(new[] { firstId, secondId }, result.History.Select(item => item.Id));
         var created = result.History[0];
         Assert.Equal(employeeId, created.ActorId);
@@ -112,7 +112,7 @@ public sealed class LeaveRequestHistoryServiceTests
 
         var result = await service.GetVisibleByIdAsync(managerId, "Bearer manager", request.Id, access);
 
-        Assert.Equal(request.Id, result.Request.Id);
+        Assert.Equal(request.Id, result.Id);
         Assert.Equal("Approved", Assert.Single(result.History).ToStatus);
         hrClient.Verify(item => item.GetTeamEmployeeIdsAsync(
             managerId, "Bearer manager", It.IsAny<CancellationToken>()), Times.Once);
@@ -145,7 +145,7 @@ public sealed class LeaveRequestHistoryServiceTests
 
         var result = await service.GetVisibleByIdAsync(actorId, "Bearer hr", request.Id, access);
 
-        Assert.Equal(request.Id, result.Request.Id);
+        Assert.Equal(request.Id, result.Id);
         Assert.Empty(result.History);
         hrClient.VerifyNoOtherCalls();
     }
