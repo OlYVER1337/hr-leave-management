@@ -20,7 +20,6 @@ function requirePositiveInteger(value, name) {
 requirePositiveInteger(seed.employeeCount, 'seed.employeeCount');
 requirePositiveInteger(seed.requestsPerEmployee, 'seed.requestsPerEmployee');
 requirePositiveInteger(seed.managerCount, 'seed.managerCount');
-requirePositiveInteger(seed.policyDaysPerEmployee, 'seed.policyDaysPerEmployee');
 requirePositiveInteger(workload.durationSeconds, 'workload.durationSeconds');
 
 if (seed.employeeCount < 1000 || seed.employeeCount > 5000) {
@@ -37,9 +36,6 @@ if (![25, 50].includes(seed.pendingPercent)) {
 }
 if (seed.pendingPercent === 50 && seed.requestsPerEmployee !== 20) {
   throw new Error('pendingPercent=50 requires requestsPerEmployee=20.');
-}
-if (seed.pendingPercent === 50 && seed.policyDaysPerEmployee < 12) {
-  throw new Error('pendingPercent=50 requires at least 12 policy days per employee.');
 }
 if (workload.durationSeconds < 60) {
   throw new Error('workload.durationSeconds must be at least 60 seconds.');
@@ -268,7 +264,6 @@ export function writeApprovalSummary(data, run) {
     seeded_pending_percent: seed.pendingPercent,
     seeded_pending_requests:
       seed.employeeCount * seed.requestsPerEmployee * seed.pendingPercent / 100,
-    policy_days_per_employee: seed.policyDaysPerEmployee,
     expected_pending_per_manager: run.expectedPendingPerManager,
     approval_attempts: attempts,
     completed_approvals: data.metrics.approval_successes?.values?.count || 0,
