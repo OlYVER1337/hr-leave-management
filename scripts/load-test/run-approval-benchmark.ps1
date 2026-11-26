@@ -88,7 +88,8 @@ function Get-ExpectedPendingByManager {
 function Get-ImageId {
     param([string]$ServiceName)
 
-    $containerId = & docker compose @script:composeBaseArgs ps -q $ServiceName
+    $composeArgs = @($script:composeBaseArgs) + @('ps', '-q', $ServiceName)
+    $containerId = & docker compose @composeArgs
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace(($containerId | Out-String).Trim())) {
         return "not-provided"
     }
