@@ -140,7 +140,7 @@ public sealed class LeaveRequestService(
             totalCount);
     }
 
-    public async Task<LeaveRequestResponse> GetVisibleByIdAsync(
+    public async Task<LeaveRequestDetailResponse> GetVisibleByIdAsync(
         Guid employeeId,
         string authorization,
         Guid requestId,
@@ -166,45 +166,11 @@ public sealed class LeaveRequestService(
 
         if (!result.HasValue)
         {
-            // Do not reveal whether a request outside the caller's scope exists.
+            // Không tiết lộ đơn không tồn tại hay đơn nằm ngoài phạm vi của người gọi.
             throw new LeaveNotFoundException($"Leave request with id '{requestId}' was not found.");
         }
 
-        return ToResponse(result.Value.Request, result.Value.Balances);
-    }
-
-    public async Task<IReadOnlyList<LeaveRequestHistoryResponse>> GetHistoryAsync(
-        Guid employeeId,
-        string authorization,
-        Guid requestId,
-        LeaveAccess access,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(access);
-        if (!access.CanRead)
-        {
-            throw new LeaveForbiddenException("The caller does not have leaves.read permission.");
-        }
-
-        // Resolve Team membership from HR at request time, matching GET /{id} visibility.
-        var teamEmployeeIds = access.CanReadTeam && !access.CanReadAll
-            ? await hrClient.GetTeamEmployeeIdsAsync(employeeId, authorization, cancellationToken)
-            : Array.Empty<Guid>();
-
-        var histories = await repository.GetVisibleHistoryAsync(
-            employeeId,
-            requestId,
-            access,
-            teamEmployeeIds,
-            cancellationToken);
-
-        if (histories is null)
-        {
-            // Keep missing and out-of-scope requests indistinguishable.
-            throw new LeaveNotFoundException($"Leave request with id '{requestId}' was not found.");
-        }
-
-        return histories.Select(item => new LeaveRequestHistoryResponse(
+        var history = result.Value.History.Select(item => new LeaveRequestHistoryResponse(
             item.Id,
             item.ActorId,
             item.Action,
@@ -212,6 +178,10 @@ public sealed class LeaveRequestService(
             item.ToStatus.ToString(),
             item.Note,
             item.CreatedAtUtc)).ToArray();
+
+        return new LeaveRequestDetailResponse(
+            ToResponse(result.Value.Request, result.Value.Balances),
+            history);
     }
 
     public async Task<IReadOnlyList<LeaveRequestResponse>> GetPendingAsync(
