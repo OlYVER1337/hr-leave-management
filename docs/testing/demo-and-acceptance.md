@@ -351,7 +351,7 @@ Approval benchmark 100 VU, 10 iterations/VU:
 
 Scenario hoàn tất khoảng 1,4 giây; tổng thời gian chạy k6 khoảng 3,7 giây. `DURATION=5m` chỉ là maxDuration của executor `per-vu-iterations`, không phải sustained load 5 phút. Đây mới là một lượt 100 VU; cần repeat để đánh giá biến động P95.
 
-Raw JSON `approval-100vu-after-seed.json` được chỉ định qua `REPORT_JSON`, nhưng chưa được xác minh đã commit lên GitHub. Kiểm tra file local trước khi ghi nhận raw evidence. SHA/image IDs của lần benchmark cũng chưa được ghi lại.
+Đối với **lượt riêng ngày 20/11** dùng executor `per-vu-iterations`, raw JSON `approval-100vu-after-seed.json` từng được chỉ định qua `REPORT_JSON` nhưng không được xác minh đã commit; lượt đó cũng không lưu SHA/image IDs. Đây không phải raw evidence của các lượt arrival-rate ngày 26/11: bốn raw/summary của các lượt sau đã được lưu riêng trong `docs/testing/evidence/dynamic-authorization/` và có commit/image metadata.
 
 ### 7.4. Các gap còn mở
 
