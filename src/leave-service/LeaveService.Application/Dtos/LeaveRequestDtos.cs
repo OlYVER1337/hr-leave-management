@@ -21,6 +21,11 @@ public sealed record LeaveRequestHistoryResponse(
     string? Note,
     DateTime CreatedAtUtc);
 
+// API chi tiết trả request và audit history trong cùng một response.
+public sealed record LeaveRequestDetailResponse(
+    LeaveRequestResponse Request,
+    IReadOnlyList<LeaveRequestHistoryResponse> History);
+
 public sealed record LeaveRequestSummaryResponse(int Pending, int? Approved, int? Total);
 
 public sealed record CancelLeaveRequest(string? Note);
