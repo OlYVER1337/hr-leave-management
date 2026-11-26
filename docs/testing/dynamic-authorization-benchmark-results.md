@@ -155,13 +155,12 @@ File Docker Stats được thu thập từ 11:44:24 đến 11:51:21 ngày 12/11/
 4. Approval repeat có p95 thấp hơn Workforce rất nhiều, nhưng nó là workload burst rất ngắn; không đại diện cho tải liên tục.
 5. Số liệu hiện tại chưa đủ để xác định bottleneck hoặc kết luận năng lực production.
 
-### Việc cần hoàn thiện nếu dùng làm bằng chứng nghiệm thu
+### Việc còn thiếu đối với baseline lịch sử 12/11
 
-- Ghi SHA chính xác trên máy chạy benchmark bằng `git rev-parse HEAD`.
-- Lưu/commit các JSON k6 được tạo bởi `REPORT_JSON` trong `docs/testing/evidence/dynamic-authorization/`. Các file JSON thô chưa được xác nhận có trong branch remote khi tài liệu này được cập nhật; tài liệu này hiện ghi lại summary đã được cung cấp.
-- Lặp lại Approval tối thiểu 3–5 lần cho mỗi mức VU nếu cần kết luận ổn định.
-- Nếu muốn đánh giá Approval sustained load, cần tạo scenario riêng dùng executor theo thời gian (ví dụ `constant-vus` hoặc `ramping-vus`) và xử lý dữ liệu Pending đủ lớn/được seed luân phiên. Không chỉ đổi `DURATION` trong scenario `per-vu-iterations`.
-- Thu thập metrics CPU, memory, SQL waits/query duration và response size đồng bộ với khoảng chạy workload.
+- Các raw JSON, SHA và image IDs của **các lượt lịch sử ở Mục 1–14** có thể thiếu hoặc không gắn với cùng revision; các hạn chế đó vẫn áp dụng cho đúng những lượt cũ, không áp dụng cho cặp arrival-rate ngày 26/11 tại Mục 15.
+- Cặp arrival-rate ngày 26/11 đã có raw/summary JSON, commit đo `d34ca9100f1db34261b7792dcc2058855bcd29aa` và immutable image IDs. Bảng đủ bốn lượt, trong đó lượt 11:18:07 bị loại vì 27 dropped iterations, nằm tại Mục 15.2.
+- Chưa thu thập metrics CPU, memory, SQL waits/query duration và response size đồng bộ với khoảng chạy workload. Vì vậy chưa kết luận bottleneck hoặc production capacity.
+- Lặp lại 3–5 lần chỉ cần thiết nếu muốn có phân tích biến động/thống kê ổn định; không phải điều kiện để xác nhận hai lượt benchmark đã có evidence.
 
 ## 8. Bằng chứng và nguồn số liệu
 
