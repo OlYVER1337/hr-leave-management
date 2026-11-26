@@ -679,7 +679,9 @@ public async Task CreateAsync_UsesPolicyEffectiveOnCreationDate()
             employeeId, "Bearer employee", request.Id, access);
 
         Assert.Equal(request.Id, result.Id);
-        var history = Assert.Single(result.History);
+        var historyItems = result.History
+            ?? throw new InvalidOperationException("API chi tiết phải trả danh sách lịch sử.");
+        var history = Assert.Single(historyItems);
         Assert.Equal("Created", history.Action);
         Assert.Equal(employeeId, history.ActorId);
         hrClient.VerifyNoOtherCalls();
