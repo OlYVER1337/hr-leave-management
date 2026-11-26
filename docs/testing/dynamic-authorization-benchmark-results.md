@@ -568,10 +568,10 @@ Lượt **11:33:47** không bị loại vì dropped iteration; raw JSON ghi 15.0
 
 Raw/summary filenames theo cùng timestamp:
 
-- `approval-arrival-rate-50rps-50-vu-pool-20261126-111807-{raw,summary}.json`
-- `approval-arrival-rate-50rps-100-vu-pool-20261126-113347-{raw,summary}.json`
-- `approval-arrival-rate-50rps-50-vu-pool-20261126-131504-{raw,summary}.json`
-- `approval-arrival-rate-50rps-100-vu-pool-20261126-132221-{raw,summary}.json`
+- 11:18:07 — [raw JSON](evidence/dynamic-authorization/approval-arrival-rate-50rps-50-vu-pool-20261126-111807-raw.json) · [summary JSON](evidence/dynamic-authorization/approval-arrival-rate-50rps-50-vu-pool-20261126-111807-summary.json)
+- 11:33:47 — [raw JSON](evidence/dynamic-authorization/approval-arrival-rate-50rps-100-vu-pool-20261126-113347-raw.json) · [summary JSON](evidence/dynamic-authorization/approval-arrival-rate-50rps-100-vu-pool-20261126-113347-summary.json)
+- 13:15:04 — [raw JSON](evidence/dynamic-authorization/approval-arrival-rate-50rps-50-vu-pool-20261126-131504-raw.json) · [summary JSON](evidence/dynamic-authorization/approval-arrival-rate-50rps-50-vu-pool-20261126-131504-summary.json)
+- 13:22:21 — [raw JSON](evidence/dynamic-authorization/approval-arrival-rate-50rps-100-vu-pool-20261126-132221-raw.json) · [summary JSON](evidence/dynamic-authorization/approval-arrival-rate-50rps-100-vu-pool-20261126-132221-summary.json)
 
 ### 15.3. Kết quả cặp benchmark cuối
 
