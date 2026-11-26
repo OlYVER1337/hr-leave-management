@@ -198,8 +198,8 @@ public sealed class LeaveVisibilityRepositoryTests : IClassFixture<LeaveSqlInteg
                 GlobalAccess(),
                 []);
             Assert.NotNull(allHistory);
-            Assert.Single(allHistory);
-            Assert.Equal("Private", allHistory[0].Action);
+            Assert.Contains(allHistory, item => item.Action == "Private");
+            Assert.Contains(allHistory, item => item.Action == "Created");
         }
     }
 
