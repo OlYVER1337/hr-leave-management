@@ -224,7 +224,6 @@ export function LeaveRequestsPage({ all = false }: { all?: boolean }) {
             className="button button-secondary"
             type="button"
             onClick={() => void toggleRequestHistory()}
-            disabled={historyLoading}
             aria-expanded={historyOpen}
             aria-controls="leave-request-history"
           >
