@@ -92,6 +92,33 @@ public sealed class LeaveRequestHistoryServiceTests
             managerId, "Bearer manager", It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    // All scope đọc lịch sử toàn cục trực tiếp, không cần tra cứu Team từ HR.
+    [Fact]
+    public async Task GetHistoryAsync_ForAllScopeDoesNotCallHr()
+    {
+        var actorId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var access = new LeaveAccess([
+            new LeavePermissionGrant("leaves.read", ["All"])
+        ]);
+        var repository = new Mock<ILeaveRequestRepository>();
+        repository.Setup(item => item.GetVisibleHistoryAsync(
+                actorId,
+                requestId,
+                access,
+                It.Is<IReadOnlyCollection<Guid>>(ids => ids.Count == 0),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<LeaveRequestHistory>());
+
+        var hrClient = new Mock<ILeaveHrClient>();
+        var service = new LeaveRequestService(repository.Object, hrClient.Object, TimeProvider.System);
+
+        var result = await service.GetHistoryAsync(actorId, "Bearer hr", requestId, access);
+
+        Assert.Empty(result);
+        hrClient.VerifyNoOtherCalls();
+    }
+
     // Không tìm thấy hoặc không thuộc visibility đều trả NotFound để tránh lộ sự tồn tại của đơn.
     [Fact]
     public async Task GetHistoryAsync_WhenRequestIsOutsideScopeThrowsNotFound()
