@@ -27,14 +27,15 @@ Mục lục này tách **yêu cầu ban đầu**, **mô tả hệ thống đã t
 
 - [Kịch bản demo, kết quả test và acceptance](testing/demo-and-acceptance.md): bằng chứng test, chẩn đoán, demo và các hạng mục cần nghiệm thu lại.
 - [Xác minh Dynamic RBAC và chạy benchmark](testing/dynamic-authorization-validation.md): stack hrbench, SQL/Redis integration tests, seed dữ liệu và k6 commands.
-- [Kết quả benchmark Dynamic RBAC/HR lookup](testing/dynamic-authorization-benchmark-results.md): Workforce paged-v2 mới nhất và các phép đo lịch sử được tách riêng.
+- [Approval benchmark guide](testing/approval-benchmark-guide.md): cấu hình dùng chung, seed/verifier, chạy constant-vus và constant-arrival-rate, cách đọc raw/summary evidence.
+- [Kết quả benchmark Dynamic RBAC/HR lookup](testing/dynamic-authorization-benchmark-results.md): Workforce paged-v2 và các phép đo Approval lịch sử/arrival-rate, tách riêng theo workload.
 - [Báo cáo Redis](performance/redis-performance.md): cache-aside, TTL, invalidation, fallback và benchmark Catalog Redis ON/OFF.
 - [Bằng chứng thô](testing/evidence/): TRX, k6 JSON, log build và số liệu quan sát.
 
-## 5. Hướng dẫn chạy hệ thống
+## 5. Hướng dẫn chạy và bàn giao hệ thống
 
 - [README dự án](../README.md): cấu hình môi trường, Docker Compose, tài khoản khởi tạo và lệnh test.
-- [Handover checklist](HANDOFF.md): trạng thái bàn giao sau merge PR #6, bằng chứng đã có và việc còn lại trước sign-off.
+- [Handover checklist](HANDOFF.md): trạng thái source, test, benchmark, tài liệu và việc còn lại trước sign-off.
 
 ## Quy ước cập nhật
 
