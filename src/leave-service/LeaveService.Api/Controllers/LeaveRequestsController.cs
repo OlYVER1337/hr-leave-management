@@ -82,7 +82,7 @@ public sealed class LeaveRequestsController(LeaveRequestService leaveRequestServ
 
     [HttpGet("{id:guid}")]
     [Authorize(Policy = LeavePermissionPolicies.LeavesRead)]
-    public async Task<ActionResult<LeaveRequestDetailResponse>> GetById(
+    public async Task<ActionResult<LeaveRequestResponse>> GetById(
         Guid id,
         CancellationToken cancellationToken)
     {
