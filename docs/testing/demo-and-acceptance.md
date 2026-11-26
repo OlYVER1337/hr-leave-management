@@ -228,10 +228,10 @@ khi có API tương ứng. HR không được tạo đơn nghỉ; xác nhận ro
 | Tính đồng thời | Đạt | SQL integration test cho tạo đơn cạnh tranh, trùng ngày và quyết định cạnh tranh |
 | Redis catalog cache | Đạt | Ba nhóm cache, key riêng, TTL mặc định 30 phút, invalidation, SQL fallback và authoritative reads |
 | Redis outage | Đạt | Ba catalog endpoint trả HTTP 200 khi Redis dừng; kết quả smoke được ghi ở mục 2 |
-| Load test 50/100 VU, 5 phút, Redis ON/OFF | Kết quả theo từng workload được lưu riêng | Workforce: một lượt 100 VU lịch sử có 21 HTTP 500 khi Docker bị dừng giữa chừng; đây là lỗi gián đoạn môi trường đã xác nhận, không phải lỗi nghiệp vụ chưa rõ. Redis OFF cho workforce chưa đo. Approval arrival-rate 50/s × 300 giây ngày 26/11 đạt ở cả pool 50/50 và 100/100; xem Mục 7.5 |
+| Load test workforce/catalog và Approval | Kết quả theo từng workload được lưu riêng | Workforce: một lượt 100 VU lịch sử có 21 HTTP 500 khi Docker bị dừng giữa chừng; đây là lỗi gián đoạn môi trường đã xác nhận, không phải lỗi nghiệp vụ chưa rõ. Redis OFF cho workforce chưa đo. Approval arrival-rate 50/s × 300 giây ngày 26/11 đạt ở cả pool 50/50 và 100/100; xem Mục 7.5 |
 | Docker Compose, healthcheck, README | Đạt | Compose, Dockerfile, `.env.example`, volume và hướng dẫn chạy đã có |
 | Design System và giao diện | Đã được người dùng nghiệm thu | Người dùng xác nhận UI đạt ngày 03/11/2026; Design System, wireframe và UI test được lưu trong repository. Chưa thực hiện audit accessibility độc lập |
-| Bàn giao tài liệu | Đạt về tài liệu kỹ thuật | Có sơ đồ, ERD, sequence, Redis/performance, TRX, README và [hướng dẫn sử dụng/test/demo](../USER-GUIDE.md); còn kết quả workforce benchmark |
+| Bàn giao tài liệu | Đã có bộ tài liệu và evidence chính | Có sơ đồ, ERD, API reference, Design System, user guide, Redis report, TRX lịch sử và Approval arrival-rate evidence ngày 26/11; regression test cần chạy lại nếu cần sign-off theo SHA mới |
 
 ### Điểm cần lưu ý
 
