@@ -15,7 +15,7 @@ const workload = config.workload.constantVus;
 const vus = Number(__ENV.VUS || workload.defaultVus);
 const maxApprovalsPerVu = workload.maxApprovalsPerVu;
 const thinkTimeSeconds = workload.thinkTimeSeconds;
-const duration = workload.durationSeconds + 's';
+const duration = config.workload.durationSeconds + 's';
 const managerCount = seed.managerCount;
 
 if (!Number.isSafeInteger(vus) || vus < 1) {
