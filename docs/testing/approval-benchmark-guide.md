@@ -58,13 +58,13 @@ Không chạy trên production. Stack `hrbench` dùng port riêng: HR 18081, Lea
 Script tự seed, kiểm tra Pending theo từng Manager rồi mới khởi chạy k6:
 
 ```powershell
-.scriptsload-testun-approval-benchmark.ps1 -Mode RunConstantVus -Vus 50
+.\scripts\load-test\run-approval-benchmark.ps1 -Mode RunConstantVus -Vus 50
 ```
 
 So sánh mức 100 VU:
 
 ```powershell
-.scriptsload-testun-approval-benchmark.ps1 -Mode RunConstantVus -Vus 100
+.\scripts\load-test\run-approval-benchmark.ps1 -Mode RunConstantVus -Vus 100
 ```
 
 Với `maxApprovalsPerVu=400`, 100 VU cần tối đa 40.000 ID Pending. Do script phân VU round-robin cho 25 Manager, mỗi Manager cần tối đa 1.600 ID. Seed mặc định có tối thiểu 2.000 Pending mỗi Manager.
@@ -83,9 +83,9 @@ Pending ID tối đa mỗi Manager = ceil(15.000 / 25) = 600
 So sánh cùng rate 50 iteration/giây với hai VU pool:
 
 ```powershell
-.scriptsload-testun-approval-benchmark.ps1 -Mode RunConstantArrivalRate -PreAllocatedVus 50 -MaxVus 50
+.\scripts\load-test\run-approval-benchmark.ps1 -Mode RunConstantArrivalRate -PreAllocatedVus 50 -MaxVus 50
 
-.scriptsload-testun-approval-benchmark.ps1 -Mode RunConstantArrivalRate -PreAllocatedVus 100 -MaxVus 100
+.\scripts\load-test\run-approval-benchmark.ps1 -Mode RunConstantArrivalRate -PreAllocatedVus 100 -MaxVus 100
 ```
 
 Mỗi lệnh sẽ seed lại cùng dataset từ JSON, xác minh đủ Pending cho từng Manager rồi chạy workload. Chạy tuần tự, không chạy song song.
@@ -99,11 +99,11 @@ Executor `constant-arrival-rate` đã tự điều tiết thời điểm bắt �
 Có thể seed hoặc verify mà không chạy benchmark:
 
 ```powershell
-.scriptsload-testun-approval-benchmark.ps1 -Mode Seed
+.\scripts\load-test\run-approval-benchmark.ps1 -Mode Seed
 
-.scriptsload-testun-approval-benchmark.ps1 -Mode VerifyConstantVus -Vus 100
+.\scripts\load-test\run-approval-benchmark.ps1 -Mode VerifyConstantVus -Vus 100
 
-.scriptsscriptsload-testun-approval-benchmark.ps1 -Mode VerifyConstantArrivalRate -PreAllocatedVus 50 -MaxVus 50
+.\scripts\load-test\run-approval-benchmark.ps1 -Mode VerifyConstantArrivalRate -PreAllocatedVus 50 -MaxVus 50
 ```
 
 Verifier nhận `ExpectedPendingPerManager` đã được tính từ chính JSON:
