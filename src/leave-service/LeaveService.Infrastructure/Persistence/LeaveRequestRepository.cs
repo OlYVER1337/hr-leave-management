@@ -247,7 +247,7 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
         return (request, balances);
     }
 
-    public async Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances, IReadOnlyList<LeaveRequestHistory> History)?> GetVisibleByIdAsync(
+    public async Task<(LeaveRequest Request, IReadOnlyList<LeaveBalance> Balances)?> GetVisibleByIdAsync(
         Guid employeeId,
         Guid requestId,
         LeaveAccess access,
@@ -273,12 +273,7 @@ public sealed class LeaveRequestRepository(LeaveDbContext context) : ILeaveReque
                            item.Year <= request.EndDate.Year)
             .ToArrayAsync(cancellationToken);
 
-        var history = request.Histories
-            .OrderBy(item => item.CreatedAtUtc)
-            .ThenBy(item => item.Id)
-            .ToArray();
-
-        return (request, balances, history);
+        return (request, balances);
     }
 
     private IQueryable<LeaveRequest> QueryVisibleById(
