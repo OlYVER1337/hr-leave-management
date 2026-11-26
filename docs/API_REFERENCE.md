@@ -124,7 +124,7 @@ Body mẫu cho POST/PUT:
 |---|---|---|
 | GET /api/v1/leave-requests?page=1&pageSize=20 | leaves.read:Self/Team/All | List phân trang, search, status, leaveTypeId |
 | GET /api/v1/leave-requests/calendar?from=YYYY-MM-DD&to=YYYY-MM-DD | leaves.read:Self/Team/All | Calendar; cần đủ from/to, tối đa 62 ngày |
-| GET /api/v1/leave-requests/{id} | leaves.read:Self/Team/All | Request trong scope; ngoài scope trả 404 |
+| GET /api/v1/leave-requests/{id} | leaves.read:Self/Team/All | Chi tiết đơn kèm `history`; request ngoài scope trả 404 |
 | GET /api/v1/leave-requests/mine?page=1&pageSize=20 | leaves.read:Self/All | Chỉ request của caller |
 | POST /api/v1/leave-requests | leaves.create:Self | Tạo request cho caller |
 | GET /api/v1/leave-requests/pending-approval?page=1&pageSize=20 | leaves.decide:Team/All | Inbox; Team lấy từ reporting line hiện tại ở HR |
@@ -133,6 +133,25 @@ Body mẫu cho POST/PUT:
 | POST /api/v1/leave-requests/{id}/cancel | leaves.cancel:Self | Chủ đơn hủy khi Pending |
 | GET /api/v1/leave-balances/mine?year=2026 | leaves.read:Self/All | Đồng bộ PolicyDays hiện hành từ HR rồi trả balance của caller |
 | POST /api/v1/leave-balances/mine/synchronize?year=2026 | leaves.read:Self/All | Khởi tạo/đồng bộ balance của caller; vẫn chỉ tác động dữ liệu của chính caller |
+
+Response của API chi tiết có cấu trúc:
+
+    {
+      "request": { "...": "LeaveRequestResponse" },
+      "history": [
+        {
+          "id": "...",
+          "actorId": "...",
+          "action": "Created",
+          "fromStatus": null,
+          "toStatus": "Pending",
+          "note": null,
+          "createdAtUtc": "..."
+        }
+      ]
+    }
+
+Mảng `history` được sắp xếp theo `CreatedAtUtc`, sau đó `Id`; nếu chưa có sự kiện thì trả mảng rỗng. Backend xác thực quyền trên request theo Self/Team/All trước khi trả cả thông tin và lịch sử. Không có route `/history` riêng.
 
 Ví dụ quyết định:
 
@@ -166,7 +185,7 @@ Trạng thái LeaveRequestStatus: 0 Pending, 1 Approved, 2 Rejected, 3 Cancelled
 
 Balance row được tạo khi nhân viên gọi POST `/api/v1/leave-balances/mine/synchronize`, GET `/api/v1/leave-balances/mine` hoặc tạo request thuộc leave type trừ quota. GET và POST đều đồng bộ PolicyDays từ HR authoritative trước khi trả số dư; CreateAsync, decision và cancel refresh quota trong transaction cập nhật balance.
 
-History ghi Created/Approved/Rejected/Cancelled nhưng hiện chưa có GET API riêng để đọc history.
+History ghi Created/Approved/Rejected/Cancelled và được trả kèm `request` trong response `GET /api/v1/leave-requests/{id}`; danh sách request không tải kèm history.
 
 ## 4. Lỗi HTTP
 
@@ -185,7 +204,6 @@ Application errors dùng Problem Details (application/problem+json). Client nên
 
 ## 5. Chức năng chưa có
 
-- GET Leave Request History.
 - Export/report backend riêng; KPI hiện tổng hợp từ các API hiện có.
 - Notification API/backend delivery.
 - Role/Permission catalog CRUD và React UI quản trị grants; hiện chỉ có baseline seeds và UserRole assignment APIs.
