@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "seed": {
+    "employeeCount": 5000,
+    "requestsPerEmployee": 20,
+    "managerCount": 25,
+    "pendingPercent": 50
+  },
+  "workload": {
+    "durationSeconds": 300,
+    "constantVus": {
+      "defaultVus": 50,
+      "maxApprovalsPerVu": 400,
+      "thinkTimeSeconds": 1
+    },
+    "constantArrivalRate": {
+      "ratePerSecond": 50,
+      "defaultPreAllocatedVus": 50,
+      "timeUnit": "1s"
+    }
+  }
+}

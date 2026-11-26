@@ -554,3 +554,41 @@ if ($LASTEXITCODE -ne 0) { throw "Web audit, tests or build failed" }
 ```
 
 Không ghi nhận các bài kiểm tra trên là PASS cho commit tài liệu mới cho tới khi có output từ máy chạy local. Chỉ merge PR sau khi cả HR, Leave, Web audit/test/build đều thành công và thay đổi được rà soát.
+
+
+## 12. Approval benchmark — cấu hình dùng chung và constant-arrival-rate
+
+Từ nhánh `feature/approval-arrival-rate-config`, quy trình Approval mới dùng một nguồn cấu hình tại `scripts/load-test/approval-benchmark.config.json`.
+
+- `run-approval-benchmark.ps1` đọc JSON và truyền cùng seed values vào `seed-scale-data.sql` và `verify-approval-seed.sql`.
+- Hai k6 script đọc cùng JSON thông qua `approval-benchmark-common.js`; không phải truyền lặp lại các biến `SEED_*`.
+- Mỗi lần `Run*` tự seed lại, xác minh Pending theo từng Manager rồi mới chạy k6.
+- `constant-vus` được giữ nguyên để đo concurrency.
+- `constant-arrival-rate` chạy target 50 iteration/giây trong 300 giây (15.000 iteration dự kiến); ID Pending được chia duy nhất theo Manager và theo scenario iteration. Không gọi `sleep()` trong workload này.
+- Workload arrival-rate có threshold `dropped_iterations: count==0` và `approval_http_errors: count==0`; summary lưu target rate, số approval thực tế, dropped iterations, `out_of_plan_iterations`, latency/error/HR metrics.
+- Iteration có index nằm ngoài `0..plannedIterations-1` được bỏ qua trước HTTP call; không tái sử dụng Pending ID và được đếm riêng trong `out_of_plan_iterations`.
+
+Với cấu hình mặc định: 5.000 nhân viên × 20 đơn, 50% Pending, 25 Manager, có 50.000 Pending (ít nhất 2.000 mỗi Manager). Target arrival mặc định cần 15.000 Pending ID (600 mỗi Manager). Hai lần so sánh VU pool 50 và 100 đã chạy tuần tự; mỗi lượt tự seed lại cùng dữ liệu.
+
+### Kết quả xác minh constant-arrival-rate — 26/11/2026
+
+| Chỉ số | Pool 50/50 | Pool 100/100 |
+|---|---:|---:|
+| Approval attempts / thành công | 14.974 / 14.974 | 15.000 / 15.000 |
+| Throughput | 49,913/s | 50/s |
+| Dropped iterations | 27 | 0 |
+| Dropped rate | 0,18% | 0% |
+| Approval errors | 0 | 0 |
+| Approval p95 | 19,73 ms | 15,84 ms |
+| Leave → HR average | 2,484 ms | 2,194 ms |
+| Leave → HR p95 | 3,34 ms | 3,43 ms |
+
+Pool 50/50 không đạt threshold dropped_iterations bằng 0, dù không có HTTP error. Pool 100/100 đạt 15.000 approval trong 300 giây, 0 dropped iteration và 0 approval error. Ở lượt 100/100, k6 có thêm một lần gọi hàm `default` ngoài số iteration được lập kế hoạch; guard bỏ qua lần gọi đó, summary ghi `out_of_plan_iterations=1`, và chỉ có đúng 15.000 HTTP approval attempts. `k6_iterations=15001` vì vậy không được diễn giải thành 15.001 approval.
+
+Cả hai lượt dùng cùng HR/Leave image IDs:
+- HR: `sha256:8eccc09571553866449c312854526453e167ee01f1009491318b22dda8de4d04`
+- Leave: `sha256:fbb2ed6121920bbabc9923fdd3396c300331ebab098b91403c4c2a35dcb30911`
+
+Git SHA lượt 50/50: `8d7bb4772fe279ab60e1c49fcf2749e3a5526cd0`; lượt 100/100 cuối cùng: `031dc613fb5fec6a4719c3b79f6ed8d23274010e`. Đây là benchmark local; chưa có CPU/RAM/SQL waits thu đồng bộ, nên không dùng để kết luận production capacity hoặc bottleneck.
+
+Hướng dẫn, report prefix và chi tiết điều kiện chạy: [Approval benchmark guide](approval-benchmark-guide.md).
