@@ -175,7 +175,8 @@ Mỗi lượt chạy đều tự seed và verify capacity trước khi khởi ch
 |---|---:|---:|
 | Approval attempts | 15.000 | 15.000 |
 | Approval thành công | 15.000 | 15.000 |
-| Throughput | 50/s | 50/s |
+| Approval rate chuẩn hóa theo cửa sổ workload 300s (15.000 / 300) | 50/s | 50/s |
+| Raw k6 `approval_requests.rate` (toàn `testRunDuration`) | 46,43/s | 46,52/s |
 | Dropped iterations | 0 | 0 |
 | Dropped rate | 0% | 0% |
 | Approval errors | 0 | 0 |
@@ -187,6 +188,9 @@ Mỗi lượt chạy đều tự seed và verify capacity trước khi khởi ch
 | Leave → HR p95 | 3,31 ms | 3,91 ms |
 | k6 iterations | 15.000 | 15.001 |
 | Out-of-plan iterations | 0 | 1 |
+
+
+`approval_requests.rate` trong raw JSON được k6 tính trên toàn bộ `testRunDurationMs`, gồm cả thời gian setup/teardown: pool 50 chạy 323,048 giây nên raw rate là 46,4328/s; pool 100 chạy 322,435 giây nên raw rate là 46,5210/s. Đây khác với rate chuẩn hóa theo cửa sổ workload 300 giây (15.000 / 300 = 50/s). Vì vậy 50/s là target/throughput chuẩn hóa theo scenario, không phải counter rate của toàn bộ tiến trình k6.
 
 ### 8.3. Diễn giải và giới hạn
 
