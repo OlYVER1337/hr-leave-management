@@ -228,24 +228,24 @@ Outbox, asynchronous read model, backfill/reconciliation giữa hai service khô
 - Không tin cậy role/scope do client gửi trong query hoặc body.
 
 
-## As-built boundary và phần chưa triển khai (20/11/2026)
+## As-built boundary và phần chưa triển khai (27/11/2026)
 
-### Đã có trong backend
-- HR migration AddDynamicAuthorizationSchema và các bảng Roles, Permissions, UserRoles, RolePermissions, PermissionScopeRules, RolePermissionScopes, AuthzAuditLog.
-- AuthorizationSeeder seed baseline Employee, Manager, HR, Auditor và permission/scope; backfill UserRoles từ Employee.Role theo hướng idempotent.
-- Login/refresh tính quyền lại và phát authz_v=1 cùng perm JSON.
-- HR write APIs, employee list/detail/lookup, UserRole assignment API và Leave API đã có permission/scope policies.
-- UserRole grant/revoke dùng transaction; có kiểm tra actor hiện thời, chặn tự cấp quyền và privilege escalation, bảo vệ admin cuối cùng, đồng thời ghi audit.
+### Đã có
+- HR_DB có bảy bảng Dynamic Authorization: `Roles`, `Permissions`, `UserRoles`, `RolePermissions`, `PermissionScopeRules`, `RolePermissionScopes`, `AuthzAuditLog`.
+- AuthorizationSeeder seed baseline Employee, Manager, HR, Auditor và permission/scope; backfill `UserRoles` từ `Employee.Role` theo hướng idempotent, không tự khôi phục assignment đã revoke/hết hạn.
+- Login/refresh tính lại quyền và phát `authz_v=1` cùng claim `perm`.
+- HR/Leave API và React menu, route guard, action đã dùng Permission + Scope; backend là lớp enforcement cuối cùng.
+- Backend có API xem/gán/thu hồi UserRole assignment; grant/revoke dùng transaction, kiểm tra quyền hiện tại của actor, chống self-grant và privilege escalation, bảo vệ quản trị viên cuối cùng, đồng thời ghi audit.
+- Trên nhánh `feature/consolidate-employees-team-api`, danh sách nhân viên và direct reports được hợp nhất qua `GET /api/v1/employees` với `directReportsOnly=true`; route cũ `GET /api/v1/me/team` đã bị loại khỏi controller/runtime/OpenAPI. Nhánh đã được build lên HR Bench và Manager direct-report request đã được xác nhận HTTP 200 với `managerId` khớp JWT `sub`.
 
 ### Giới hạn hiện tại
-- API quản trị hiện chỉ xem danh mục Role đang active và gán/xem/thu hồi UserRole assignment. Chưa có API tạo Role tùy ý, activate/deactivate Role/Permission hoặc sửa RolePermissions/RolePermissionScopes.
-- Danh mục Role/Permission baseline được quản lý qua code seeder/migration, chưa phải catalog management UI.
-- React vẫn dùng legacy Role cho navigation và route guard. Frontend chưa đọc/áp dụng từng permission/scope để ẩn/hiện action. Backend vẫn là enforcement cuối cùng.
-- Employee.Role và Role claim legacy chưa bị loại bỏ; chỉ duy trì compatibility/UI/backfill, không dùng để authorize các endpoint đã migrate.
-- Department scope có trong schema nhưng chưa được seed/cấp cho baseline và không có repository filter thực thi.
-- Access JWT đã phát không bị thu hồi tức thời khi gán/thu hồi Role hoặc deactivate; permission mới áp dụng sau login/refresh, token cũ còn hiệu lực đến expiry.
+- Chưa có API/UI CRUD catalog để tạo Role tùy ý, activate/deactivate Role/Permission hoặc chỉnh `RolePermissions`/`RolePermissionScopes`.
+- Chưa có React UI quản trị UserRole assignment; hiện chỉ có backend GET/POST/DELETE assignment APIs.
+- `Employee.Role` và JWT Role claim legacy vẫn được giữ. Chúng phục vụ nhãn hiển thị/tương thích, lọc/thống kê, DTO quản lý nhân viên, một số kiểm tra nghiệp vụ legacy và backfill; không phải nguồn authorization. `Employee.Role` không tự đồng bộ với UserRole assignment động.
+- Department scope có trong schema nhưng chưa có bộ lọc dữ liệu được triển khai.
+- Access JWT đã phát không bị thu hồi tức thời khi gán/thu hồi Role hoặc deactivate; token cũ còn hiệu lực đến expiry. Login/refresh tiếp theo mới tính quyền hiện tại.
 
-Không nên mô tả V1 là hệ thống có thể tạo Role/Permission tùy ý end-to-end cho tới khi catalog CRUD và permission-driven frontend được triển khai.
+Chưa mô tả V1 là hệ thống CRUD Role/Permission tùy ý end-to-end cho tới khi catalog management được triển khai.
 
 
 ### Trạng thái source sau merge
