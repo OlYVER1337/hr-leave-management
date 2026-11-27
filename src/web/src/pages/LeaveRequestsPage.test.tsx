@@ -69,6 +69,25 @@ describe('LeaveRequestsPage', () => {
     mocks.getLeaveRequestDetails.mockResolvedValue({ request, history: [] });
   });
 
+  it('sends the selected page size to the leave requests API', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <LeaveRequestsPage />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole('button', { name: 'Xem chi tiết request-1' });
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Số đơn mỗi trang' }), '25');
+
+    await waitFor(() => {
+      expect(getLeaveRequestsPage).toHaveBeenLastCalledWith(
+        employee,
+        expect.objectContaining({ page: 1, pageSize: 25 }),
+      );
+    });
+  });
+
   it('opens request details in an accessible dialog and closes with Escape', async () => {
     const user = userEvent.setup();
     render(
