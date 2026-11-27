@@ -1,4 +1,4 @@
-# Backlog và thứ tự hoàn thiện — cập nhật 26/11/2026
+# Backlog và thứ tự hoàn thiện — cập nhật 27/11/2026
 
 Dynamic Authorization V1 đã được merge vào `master` qua PR #6, merge commit `81b987043ce4663ad11800bb331ffdbc013bd1d2`. Backlog này chỉ ghi các gap còn tồn tại sau khi rà soát trạng thái đã merge; đây là kế hoạch, không phải mô tả tính năng đã triển khai.
 
