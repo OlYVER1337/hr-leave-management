@@ -44,7 +44,7 @@ JWT chứa authz_v=1 và perm dạng JSON, ví dụ:
       { "p": "leaves.decide", "s": ["Team"] }
     ]
 
-Login và refresh đều tính lại quyền từ HR_DB trước khi phát token. HR và Leave xác thực JWT cục bộ bằng cùng issuer/audience/signing key; request thông thường không introspect JWT qua HR. Role claim và Employee.Role vẫn tồn tại cho tương thích frontend/backfill, nhưng backend authorization của các controller đã chuyển đổi dựa trên Permission + Scope.
+Login và refresh đều tính lại quyền từ HR_DB trước khi phát token. HR và Leave xác thực JWT cục bộ bằng cùng issuer/audience/signing key; request thông thường không introspect JWT qua HR. Role claim và `Employee.Role` vẫn tồn tại cho tương thích dữ liệu, nhãn hiển thị, lọc/thống kê nhân viên và một số nghiệp vụ legacy; chúng không phải nguồn xác định effective permission. Backend authorization của các endpoint đã chuyển đổi dựa trên Permission + Scope.
 
 Các scope đang được thực thi trong API là Self, Team và All. Department tồn tại trong schema/rule constraint nhưng chưa được dùng làm bộ lọc dữ liệu. Role/Permission baseline được seed (Employee, Manager, HR, Auditor); API hiện tại quản lý UserRole assignment, chưa có CRUD tạo Role/Permission catalog hoặc chỉnh Role grants.
 
