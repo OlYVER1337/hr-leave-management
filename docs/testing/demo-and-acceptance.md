@@ -327,7 +327,7 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
 
 Web chạy trong Node 20 container. `npm ci` thành công; `npm audit` báo **0 vulnerabilities**; `npm test -- --run` đạt 107/107; `npm run build` chạy `tsc --noEmit` và Vite production build đều thành công (Vite 5,07 giây). Hai backend solution build thành công; HR test 7,8 giây và Leave test 18,5 giây.
 
-TRX HR/Leave được tạo trong thư mục TEMP trên máy chạy test: `%TEMP%\\hr-regression-edd71414809d155261498836763ab44000e712e5\\hr` và `...\\leave`. Các file TRX chưa được commit vào repository. Báo cáo này dựa trên terminal output do người triển khai cung cấp; không có CI/CD chạy tự động theo quyết định dự án.
+TRX HR/Leave được tạo trong thư mục TEMP trên máy chạy test: `%TEMP%\hr-regression-edd71414809d155261498836763ab44000e712e5\hr` và `...\leave`. Các file TRX chưa được commit vào repository. Báo cáo này dựa trên terminal output do người triển khai cung cấp; không có CI/CD chạy tự động theo quyết định dự án.
 
 Các kết quả lịch sử trên revision `30720e...` và PR #21 head đã được thay thế làm regression baseline mới nhất bởi lượt chạy chung SHA này. Approval benchmark 26/11 vẫn giữ SHA riêng, không liên quan tới revision regression hiện tại.
 
