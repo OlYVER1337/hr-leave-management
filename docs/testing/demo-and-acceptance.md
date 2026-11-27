@@ -296,7 +296,7 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
   chứa bí mật vào báo cáo, log hoặc Git.
 
 
-## 7. Trạng thái source và bằng chứng sau merge — tổng hợp đến 26/11/2026
+## 7. Trạng thái source và bằng chứng — tổng hợp đến 27/11/2026
 
 ### 7.1. Repository và Dynamic Authorization
 
