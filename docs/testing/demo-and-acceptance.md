@@ -309,6 +309,8 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
 - Permission-driven React UI đã merge vào `master` qua PR #18; menu, route và action đọc `authz_v=1` + `perm`, backend vẫn là enforcement cuối.
 - `Employee.Role` và Role claim legacy vẫn tồn tại cho tương thích/hiển thị, lọc/thống kê và một số nghiệp vụ legacy; không phải nguồn xác định quyền hiệu lực.
 - Nhánh `feature/consolidate-employees-team-api` hợp nhất `/my-team` vào `GET /api/v1/employees?directReportsOnly=true`; endpoint `GET /api/v1/me/team` cũ đã được gỡ khỏi controller/runtime/OpenAPI. Manager API đã được nghiệm thu HTTP 200 với `managerId` khớp JWT `sub`; tài khoản HR với scope All vẫn đang chờ xác nhận.
+- Trong `scripts/load-test/workforce.js`, route `manager_team` được thay **chỉ trong `paginationContractRoutes`** từ `GET /api/v1/me/team` sang `GET /api/v1/employees?directReportsOnly=true`. Đây là request preflight cố ý bỏ `page/pageSize` để xác minh API từ chối request không phân trang bằng HTTP 400.
+- Mảng `routes` thực sự chạy trong VU workload không đổi giữa `master` và feature branch. Vì vậy route mix của phần tải đo và các custom metrics của measured workload không đổi; evidence Workforce lịch sử vẫn có giá trị đối với workload đã đo. Tuy nhiên, đây **không phải** benchmark latency/throughput riêng cho endpoint Employees/directReports mới. Nếu cần đánh giá hiệu năng endpoint này, phải thêm request phân trang vào measured workload và lưu một lượt evidence mới. Khi đọc raw k6 built-in metrics, cần lưu ý request preflight/setup vẫn thuộc vòng đời test.
 
 ### 7.2. Regression test evidence
 
