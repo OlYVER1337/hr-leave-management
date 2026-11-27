@@ -1,6 +1,6 @@
 # Tài liệu bàn giao hệ thống HR Leave Management
 
-*Cập nhật: 26/11/2026*
+*Cập nhật: 27/11/2026*
 
 Tài liệu dành cho người tiếp nhận source, dựng môi trường, kiểm thử, demo và kiểm tra giới hạn trước khi nghiệm thu. Nội dung tách biệt **tính năng đã có**, **bằng chứng đã chạy** và **việc chưa được xác minh**.
 
