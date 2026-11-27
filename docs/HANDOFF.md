@@ -28,7 +28,7 @@ Tài liệu dành cho người tiếp nhận source, dựng môi trường, ki�
 
 Backend regression: HR **162/162 passed**, Leave **129/129 passed**, đều 0 failed/0 skipped; hai suite được chạy trên revision `30720e176106cc3357ff028ddc9a6ebdce95a93b` với SQL Server/Redis của stack `hrbench`. Đây là revision trước PR #20/#21; hai PR sau chỉ thay đổi Web, không thay đổi backend.
 
-Frontend: Web **107/107 passed** (20/20 test files), `npm ci`, `npm audit`, TypeScript `tsc --noEmit` và Vite production build thành công trên nhánh PR #21, head `8f69c5420119817faa0371f1675c96f7f5253d52`. PR #20/#21 đều đã merge; master hiện tại là `de15fd4169ea8db3cc702f95f7922ca4ab9a1e8c`. Chưa có xác nhận HR Bench Web đã được build lại từ master sau PR #21; cũng chưa lưu ảnh Network cuối cùng cho cả bốn màn hình. TRX/log riêng của các lượt regression mới chưa được lưu trong repository.
+Frontend: Web **107/107 passed** (20/20 test files), `npm ci`, `npm audit`, TypeScript `tsc --noEmit` và Vite production build thành công trên nhánh PR #21, head `8f69c5420119817faa0371f1675c96f7f5253d52`. PR #20/#21 đều đã merge; master hiện tại là `de15fd4169ea8db3cc702f95f7922ca4ab9a1e8c`. Người dùng đã xác nhận nghiệm thu thủ công cả bốn màn hình phân trang trên runtime: Employees, Manager Team, Leave Requests và Approvals đều gửi đúng `page/pageSize` theo lựa chọn UI. Ảnh/log Network chưa được lưu trong repository. TRX/log riêng của các lượt regression mới chưa được lưu trong repository.
 
 ## 2. Dựng hệ thống local lần đầu
 
@@ -275,7 +275,7 @@ Frontend dùng server-side pagination cho các màn hình Danh sách nhân viên
 
 PR #20 sửa riêng Manager Team; PR #21 áp dụng mặc định thống nhất cho các danh sách còn lại và cập nhật test. Web regression sau thay đổi đạt **107/107 tests**, 20/20 test files; TypeScript và Vite production build thành công. Kết quả local được chạy trên head PR #21 `8f69c5420119817faa0371f1675c96f7f5253d52`, trước merge commit `de15fd4169ea8db3cc702f95f7922ca4ab9a1e8c`.
 
-Khi nghiệm thu lại trên HR Bench, mở DevTools → Network, xóa log cũ rồi lần lượt chọn 10, 25 và 50 ở từng màn hình. Xác nhận request mới nhất mang `pageSize` bằng đúng lựa chọn, `page` tăng đúng khi chuyển trang và response/header tổng số vẫn khớp. Ảnh/log Network chưa được lưu thành artifact trong repository; không coi kết quả build container đơn thuần là bằng chứng Network cuối cùng.
+Nghiệm thu runtime trên HR Bench đã được người dùng xác nhận hoàn tất cho cả bốn màn hình: Employees, Manager Team, Leave Requests và Approvals. Request gửi đúng `pageSize` theo lựa chọn UI và phân trang hoạt động đúng. Ảnh/log Network chưa được lưu thành artifact trong repository; kết quả nghiệm thu được ghi nhận theo xác nhận trực tiếp của người dùng.
 ## 7. Chạy Approval benchmark
 
 Chỉ chạy trên stack cô lập hrbench. Không benchmark đồng thời với demo hoặc workload khác trên cùng database.
