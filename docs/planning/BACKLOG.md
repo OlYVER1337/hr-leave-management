@@ -1,4 +1,4 @@
-# Backlog và thứ tự hoàn thiện — cập nhật 26/11/2026
+# Backlog và thứ tự hoàn thiện — cập nhật 27/11/2026
 
 Dynamic Authorization V1 đã được merge vào `master` qua PR #6, merge commit `81b987043ce4663ad11800bb331ffdbc013bd1d2`. Backlog này chỉ ghi các gap còn tồn tại sau khi rà soát trạng thái đã merge; đây là kế hoạch, không phải mô tả tính năng đã triển khai.
 
@@ -18,7 +18,7 @@ Dynamic Authorization V1 đã được merge vào `master` qua PR #6, merge comm
 
 | Ưu tiên | Hạng mục | Trạng thái hiện tại | Tiêu chí hoàn thành |
 |---|---|---|---|
-| P2 | **Permission-driven React UI** | Đã triển khai trên nhánh `feature/permission-driven-react-ui`: parse `authz_v=1` + `perm`; restore/refresh đồng bộ grant; menu, route và các thao tác Employees/Departments/Policies/Leave dùng permission/scope. Đã thêm test cho multi-role, scope, thiếu quyền và scope đọc/duyệt. Chưa chạy regression/build trên checkout local và chưa merge `master`. | Chạy `npm ci`, `npm test -- --run` và production build; xử lý hết lỗi; nghiệm thu UI bằng tài khoản có multi-role và role thiếu permission; sau đó merge PR. Backend tiếp tục là enforcement cuối. |
+| P2 | **Permission-driven React UI** | **Đã merge PR #18** (merge commit `d69156aa8990e2d92d21ad0dac1f9e0a7e1d2c5e`). React parse `authz_v=1` + `perm`; restore/refresh đồng bộ grant; menu, route và action Employees/Departments/Policies/Leave dùng permission/scope. Regression frontend được người dùng xác nhận 103/103 tests; TypeScript check và Vite production build thành công trên nhánh tích hợp API hiện tại. | Đã hoàn thành. Backend tiếp tục là enforcement cuối; Role assignment UI và catalog CRUD là hạng mục riêng. |
 | P2 | **Role assignment UI** | Backend GET/POST/DELETE UserRole APIs có; chưa có UI | HR admin xem/gán/gia hạn/thu hồi Role; hiển thị expiry/audit; giữ backend guard chống self-grant/escalation. |
 | P3 | **Role/Permission catalog management** | Chỉ seed baseline; chưa có CRUD catalog | Chỉ triển khai sau khi chốt lifecycle/versioning; tạo/sửa/disable Role, Permission, Scope rules và Role grants có audit, validation scope, bảo vệ last admin. |
 | P3 | **Department scope** | Có trong schema nhưng chưa thực thi | Định nghĩa Department dựa trên quan hệ hiện tại hay snapshot; triển khai SQL filter cho từng resource trước khi cấp scope này. |
@@ -31,6 +31,7 @@ Dynamic Authorization V1 đã được merge vào `master` qua PR #6, merge comm
 | P2 | **Annual quota source alignment** | DemoDataSeeder tạo ANNUAL 12; frontend built-in fallback metadata khai báo 15 | Chốt giá trị policy đã duyệt; một nguồn HR policy/SQL là authoritative; bỏ hard-coded quota thừa trong frontend; test Demo/API mode và balance. |
 | P2 | **Leave calendar scope consistency** | Leave Service resolve Team bằng current reporting line; cần nghiệm thu UI behavior sau reassignment | Xác nhận wording và bảo đảm calendar/list/inbox cùng business rule; test đổi Manager sau ngày tạo request. |
 | P2 | **Pagination/search contract** | Employees, Leave requests và Pending inbox dùng server pagination 1–100 | Giữ page/pageSize required; filter/search/count chạy phía SQL; test boundary, stable ordering, query plan, payload; tránh client filter trên một tập dữ liệu đã bị giới hạn. |
+| P2 | **Consolidate Employees và direct reports API** | Đã triển khai trên `feature/consolidate-employees-team-api`: `/my-team` gọi `GET /api/v1/employees?directReportsOnly=true`; endpoint cũ `GET /api/v1/me/team` đã gỡ khỏi controller/OpenAPI. HR 162/162 tests, Leave 129/129 tests, Web 103/103 tests và production build đạt theo kết quả local người dùng cung cấp. HR Bench đã build HR Service/Web; Manager request trả HTTP 200 và `managerId` trả về trùng JWT `sub`. Thay đổi chưa merge vào `master`; kiểm tra HR scope All còn pending. | Nghiệm thu HR `employees.read:All` trên `GET /api/v1/employees`, xác nhận danh sách và phân trang toàn tổ chức; sau đó review và merge PR. |
 | P2 | **Export và notifications** | UI control disabled; chưa có API/backend delivery | Chỉ bật UI khi có endpoint, authorization, audit và delivery/retry strategy. |
 
 ## 4. Benchmark và operational evidence
@@ -51,7 +52,7 @@ Dynamic Authorization V1 đã được merge vào `master` qua PR #6, merge comm
 3. Approval arrival-rate đã có raw/summary, commit SHA và immutable image IDs. Phần còn thiếu metadata là Workforce paged-v2: ghi PAGE_SIZE, seed version, exact SHA, image IDs và timestamps; thu resource metrics đồng bộ nếu cần profiling.
 4. Kiểm tra thêm business timezone tại boundary 31/12–01/01 khi có thể mô phỏng thời điểm phù hợp.
 5. Cân nhắc bulk balance reconciliation, readiness và HR client resilience theo nhu cầu; API chi tiết kèm history đã hoàn tất và merge ở PR #15.
-6. Xác nhận regression/build và nghiệm thu Permission-driven UI trên feature branch; sau đó mới merge. Role assignment UI vẫn là hạng mục riêng.
+6. Permission-driven React UI đã merge qua PR #18. Hoàn tất nghiệm thu nhánh hợp nhất Employees/direct reports bằng tài khoản HR (scope All), sau đó tạo PR vào `master`. Role assignment UI vẫn là hạng mục riêng.
 7. Role/Permission catalog CRUD, Department scope và các phần mở rộng.
 
 Không triển khai outbox, event bus hoặc distributed read model chỉ để xử lý một gap chưa đo. Trước mắt HR HTTP API vẫn là nguồn chính thức; chỉ nâng kiến trúc khi có yêu cầu hoặc bằng chứng benchmark.

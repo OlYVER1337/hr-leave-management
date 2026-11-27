@@ -55,7 +55,7 @@ public sealed class ApiIntegrationTests
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         employeeRepository.Verify(
             repository => repository.ListVisiblePageAsync(
-                It.IsAny<Guid>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(),
+                It.IsAny<Guid>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(),
                 It.IsAny<string?>(), It.IsAny<HrService.Domain.Entities.Role?>(),
                 It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<string>(),
                 It.IsAny<bool>(), It.IsAny<int>(), It.IsAny<int>(),
@@ -63,31 +63,68 @@ public sealed class ApiIntegrationTests
             Times.Never);
     }
 
-    // Danh sách direct reports cũng phải xác thực tham số phân trang như API danh sách nhân viên.
+    // directReportsOnly dùng chung validation phân trang với danh sách nhân viên.
     [Theory]
-    [InlineData("")]
-    [InlineData("?page=1")]
-    [InlineData("?pageSize=10")]
-    [InlineData("?page=0&pageSize=10")]
-    [InlineData("?page=1&pageSize=101")]
-    public async Task ManagerTeamList_RequiresValidPageAndPageSize(string query)
+    [InlineData("?directReportsOnly=true")]
+    [InlineData("?directReportsOnly=true&page=1")]
+    [InlineData("?directReportsOnly=true&pageSize=10")]
+    [InlineData("?directReportsOnly=true&page=0&pageSize=10")]
+    [InlineData("?directReportsOnly=true&page=1&pageSize=101")]
+    public async Task EmployeeList_DirectReportsOnly_RequiresValidPageAndPageSize(string query)
     {
         var employeeRepository = new Mock<IEmployeeRepository>();
         using var host = await CreateHostAsync(employeeRepository);
         using var client = host.GetTestClient();
-        AddPermissionHeaders(
-            client,
-            Guid.NewGuid(),
-            """[{"p":"employees.read","s":["Team"]}]""");
-
-        var response = await client.GetAsync($"/api/v1/me/team{query}");
-
+        AddPermissionHeaders(client, Guid.NewGuid(), """[{"p":"employees.read","s":["Team"]}]""");
+        var response = await client.GetAsync($"/api/v1/employees{query}");
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        employeeRepository.Verify(
-            repository => repository.ListDirectReportsPageAsync(
-                It.IsAny<Guid>(), It.IsAny<string?>(), It.IsAny<int>(),
-                It.IsAny<int>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        employeeRepository.Verify(repository => repository.ListVisiblePageAsync(
+            It.IsAny<Guid>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(),
+            It.IsAny<string?>(), It.IsAny<HrService.Domain.Entities.Role?>(), It.IsAny<bool?>(),
+            It.IsAny<int?>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int>(), It.IsAny<int>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    // directReportsOnly chỉ được dùng khi JWT thực sự cấp employees.read:Team.
+    [Theory]
+    [InlineData("""[{"p":"employees.read","s":["Self"]}]""")]
+    [InlineData("""[{"p":"employees.read","s":["All"]}]""")]
+    public async Task EmployeeList_DirectReportsOnly_RequiresTeamScope(string permissions)
+    {
+        var employeeRepository = new Mock<IEmployeeRepository>();
+        using var host = await CreateHostAsync(employeeRepository);
+        using var client = host.GetTestClient();
+        AddPermissionHeaders(client, Guid.NewGuid(), permissions);
+        var response = await client.GetAsync("/api/v1/employees?directReportsOnly=true&page=1&pageSize=10");
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        employeeRepository.Verify(repository => repository.ListVisiblePageAsync(
+            It.IsAny<Guid>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(),
+            It.IsAny<string?>(), It.IsAny<HrService.Domain.Entities.Role?>(), It.IsAny<bool?>(),
+            It.IsAny<int?>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int>(), It.IsAny<int>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    // Manager có Team scope dùng endpoint employees chung nhưng chỉ nhận direct reports.
+    [Fact]
+    public async Task EmployeeList_DirectReportsOnly_UsesVisiblePagedQueryWithTeamScope()
+    {
+        var actorId = Guid.NewGuid();
+        var repository = new Mock<IEmployeeRepository>();
+        repository.Setup(item => item.ListVisiblePageAsync(
+            actorId, true, true, false, true, It.IsAny<string?>(),
+            It.IsAny<HrService.Domain.Entities.Role?>(), It.IsAny<bool?>(), It.IsAny<int?>(),
+            "fullName", false, 1, 10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Array.Empty<HrService.Application.Abstractions.EmployeeReadModel>(), 0));
+        using var host = await CreateHostAsync(repository);
+        using var client = host.GetTestClient();
+        AddPermissionHeaders(client, actorId, """[{"p":"employees.read","s":["Self","Team"]}]""");
+        var response = await client.GetAsync("/api/v1/employees?directReportsOnly=true&page=1&pageSize=10");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("0", response.Headers.GetValues("X-Total-Count").Single());
+        repository.Verify(item => item.ListVisiblePageAsync(
+            actorId, true, true, false, true, It.IsAny<string?>(),
+            It.IsAny<HrService.Domain.Entities.Role?>(), It.IsAny<bool?>(), It.IsAny<int?>(),
+            "fullName", false, 1, 10, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     // Xác nhận route lookup team cũ đã bị gỡ, tránh khôi phục API không còn caller.
@@ -108,10 +145,23 @@ public sealed class ApiIntegrationTests
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         employeeRepository.Verify(
-            repository => repository.ListDirectReportsPageAsync(
-                It.IsAny<Guid>(), It.IsAny<string?>(), It.IsAny<int>(),
-                It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            repository => repository.ListVisiblePageAsync(
+                It.IsAny<Guid>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(),
+                It.IsAny<string?>(), It.IsAny<HrService.Domain.Entities.Role?>(), It.IsAny<bool?>(),
+                It.IsAny<int?>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<int>(), It.IsAny<int>(),
+                It.IsAny<CancellationToken>()),
             Times.Never);
+    }
+
+    // Route đội nhóm cũ được gỡ; direct reports dùng GET /employees?directReportsOnly=true.
+    [Fact]
+    public async Task CurrentEmployeeTeamRoute_IsRemoved()
+    {
+        using var host = await CreateHostAsync();
+        using var client = host.GetTestClient();
+        AddPermissionHeaders(client, Guid.NewGuid(), """[{"p":"employees.read","s":["Team"]}]""");
+        var response = await client.GetAsync("/api/v1/me/team?page=1&pageSize=10");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     // Role HR cũ không tự cấp quyền; request phải có permission claim hợp lệ.
@@ -135,7 +185,7 @@ public sealed class ApiIntegrationTests
         var employeeRepository = new Mock<IEmployeeRepository>();
         employeeRepository
             .Setup(repository => repository.ListVisiblePageAsync(
-                actorId, false, false, true,
+                actorId, false, false, true, false,
                 It.IsAny<string?>(), It.IsAny<HrService.Domain.Entities.Role?>(),
                 It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<string>(),
                 It.IsAny<bool>(), 1, 10, It.IsAny<CancellationToken>()))
@@ -150,7 +200,7 @@ public sealed class ApiIntegrationTests
         Assert.Equal("[]", await response.Content.ReadAsStringAsync());
         employeeRepository.Verify(
             repository => repository.ListVisiblePageAsync(
-                actorId, false, false, true,
+                actorId, false, false, true, false,
                 It.IsAny<string?>(), It.IsAny<HrService.Domain.Entities.Role?>(),
                 It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<string>(),
                 It.IsAny<bool>(), 1, 10, It.IsAny<CancellationToken>()),
@@ -181,7 +231,7 @@ public sealed class ApiIntegrationTests
         var employeeRepository = new Mock<IEmployeeRepository>();
         employeeRepository
             .Setup(repository => repository.ListVisiblePageAsync(
-                actorId, true, true, false,
+                actorId, true, true, false, false,
                 It.IsAny<string?>(), It.IsAny<HrService.Domain.Entities.Role?>(),
                 It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<string>(),
                 It.IsAny<bool>(), 1, 10, It.IsAny<CancellationToken>()))
@@ -195,7 +245,7 @@ public sealed class ApiIntegrationTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         employeeRepository.Verify(
             repository => repository.ListVisiblePageAsync(
-                actorId, true, true, false,
+                actorId, true, true, false, false,
                 It.IsAny<string?>(), It.IsAny<HrService.Domain.Entities.Role?>(),
                 It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<string>(),
                 It.IsAny<bool>(), 1, 10, It.IsAny<CancellationToken>()),

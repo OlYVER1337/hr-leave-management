@@ -66,8 +66,14 @@ public sealed class PermissionMigrationTests
         AssertPolicy(lookup, nameof(EmployeeLookupController.GetById), "permission:employees.read");
         AssertPolicy(lookup, nameof(EmployeeLookupController.GetBatch), "permission:employees.read");
 
-        // Team lookup was consolidated into /api/v1/me/team.
+        // Direct report listing uses EmployeesController.GetAll with directReportsOnly.
         Assert.Null(lookup.GetMethod("GetTeam"));
+        Assert.Null(typeof(CurrentEmployeeController).GetMethod("GetTeam"));
+
+        var employeeList = typeof(EmployeesController).GetMethod(nameof(EmployeesController.GetAll));
+        Assert.NotNull(employeeList);
+        Assert.Contains(employeeList!.GetParameters(), parameter =>
+            parameter.Name == "directReportsOnly" && parameter.ParameterType == typeof(bool));
     }
 
     // Rà soát controller để ngăn việc quay lại cơ chế [Authorize(Roles = HR)] cũ.

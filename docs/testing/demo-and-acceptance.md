@@ -222,7 +222,7 @@ khi có API tương ứng. HR không được tạo đơn nghỉ; xác nhận ro
 |---|---|---|
 | Hai microservice, database tách biệt, giao tiếp REST | Đạt | HR Service sở hữu `HR_DB`; Leave Service sở hữu `Leave_DB`; Leave gọi HR API |
 | ASP.NET Core, React/TypeScript, EF Core, migrations, OpenAPI | Đạt | Hai solution .NET 10, Vite/React, EF migrations và OpenAPI ở Development |
-| JWT, phân quyền và vòng đời token | Đạt một phần | Backend đã triển khai Dynamic RBAC V1 với permission/scope trong JWT và refresh rotation/revocation; Role claim legacy còn phục vụ UI compatibility, không là nguồn authorize cho các API đã migrate. Access JWT đã phát vẫn hợp lệ tới expiry (mặc định 1 phút). |
+| JWT, phân quyền và vòng đời token | Đạt một phần | HR/Leave API và React menu/route/action sử dụng permission/scope trong JWT; Role claim và `Employee.Role` legacy còn phục vụ nhãn hiển thị/tương thích và một số nghiệp vụ nhân viên, không là nguồn authorize cho API đã migrate. Access JWT đã phát vẫn hợp lệ tới expiry. |
 | Nghiệp vụ HR | Đạt | CRUD nhân viên/phòng ban, quản lý trực tiếp, danh mục nghỉ/ngày lễ và kiểm tra dữ liệu |
 | Nghiệp vụ nghỉ phép | Đạt | Tạo/xem/hủy/duyệt/từ chối, số dư, phân bổ năm, ngày làm việc và history |
 | Tính đồng thời | Đạt | SQL integration test cho tạo đơn cạnh tranh, trùng ngày và quyết định cạnh tranh |
@@ -261,10 +261,10 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
 | Xong | Hạng mục | Kỳ vọng khi nghiệm thu | Bằng chứng/tham chiếu |
 |---|---|---|---|
 | [x] | Dựng môi trường | Compose chạy Web, HR, Leave, SQL Server, Redis; healthcheck đạt | [README chạy hệ thống](../README.md), kiểm tra `hrbench` 03/11 |
-| [x] | Dynamic RBAC và data scope | HR/Leave API kiểm tra permission + Self/Team/All; React vẫn dùng Role legacy cho menu/route guard; refresh token bị thu hồi khi deactivate | HR/Leave authorization tests, `PermissionAuthorization`, `LeavePermissionAuthorization`, `App.tsx`; access JWT còn hiệu lực đến expiry |
+| [x] | Dynamic RBAC và data scope | HR/Leave API và React menu/route/action kiểm tra permission + Self/Team/All; Role legacy chỉ còn hiển thị/tương thích; refresh token bị thu hồi khi deactivate | HR/Leave authorization tests, `PermissionAuthorization`, `LeavePermissionAuthorization`, `authorization.ts`, `App.tsx`, `AppShell.tsx`; access JWT còn hiệu lực đến expiry |
 | [x] | Quản trị nhân sự | HR tạo/sửa nhân viên, phòng ban và quản lý trực tiếp | `/employees`, `/departments`; HR tests |
 | [x] | Chính sách nghỉ cơ bản | HR quản lý loại chuẩn, hạn mức năm và ngày lễ | `/policies`; [Redis report](../performance/redis-performance.md) |
-| [ ] | Phiên bản policy | Request chọn phiên bản theo EffectiveFrom; phiên bản cũ không bị ghi đè; chỉ năm tương lai được thay đổi | HR `LeaveCatalogServiceTests`, Leave `LeaveRequestServiceTests`; test mới chưa chạy trên HEAD hiện tại |
+| [ ] | Phiên bản policy | Năm hiện tại và năm tương lai được thêm phiên bản mới; năm đã kết thúc chỉ xem. Ngày hiệu lực không được trước ngày nghiệp vụ hiện tại hoặc vượt khỏi năm policy. Phiên bản đã hiệu lực không bị ghi đè, chỉnh sửa hoặc xóa; phiên bản tương lai có thể chỉnh nội dung mà giữ nguyên năm, loại nghỉ và ngày hiệu lực. Request chọn version theo `EffectiveFrom`. | HR `LeaveCatalogServiceTests`, `LeaveCatalogService.UpdateLeavePolicyAsync`, `EditLeavePolicyVersionAsync`; Leave `LeaveRequestServiceTests`; regression mới trên feature branch cần được chạy/gắn SHA khi nghiệm thu |
 | [ ] | Số dư cá nhân | GET và POST self-synchronize đều đồng bộ PolicyDays từ HR authoritative; Entitled được suy ra để không âm khi quota giảm | `LeaveBalanceServiceTests`, `LeavePersistenceIntegrationTests`, `LeaveBalancesController`; test đã cập nhật nhưng chưa chạy trên HEAD hiện tại |
 | [x] | Tạo đơn hợp lệ | Ngày kết thúc không trước ngày bắt đầu; chỉ tính ngày làm việc; tạo trạng thái Pending | `RequestLeavePage`; Leave tests; demo API |
 | [x] | Đơn không hợp lệ | Đơn trùng ngày, ngày không hợp lệ, số dư thiếu và tổng ngày bằng 0 bị từ chối | Leave service tests |
@@ -296,7 +296,7 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
   chứa bí mật vào báo cáo, log hoặc Git.
 
 
-## 7. Trạng thái source và bằng chứng sau merge — tổng hợp đến 26/11/2026
+## 7. Trạng thái source và bằng chứng — tổng hợp đến 27/11/2026
 
 ### 7.1. Repository và Dynamic Authorization
 
@@ -305,8 +305,12 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
 - HR sở hữu Role, Permission, UserRole assignment, Scope rules và audit log.
 - Scope đang thực thi là Self, Team, All. Department chưa có filter nghiệp vụ.
 - Leave Team reads/decisions xác minh current reporting line từ HR; không dùng `ApproverId` snapshot làm quyền hiện tại.
-- UserRole assignment APIs đã có; Role/Permission catalog CRUD và UI quản trị chưa có.
-- React vẫn dùng legacy HR/Manager/Employee roles cho navigation/route guard. Điều này không thay thế permission enforcement ở backend.
+- UserRole assignment APIs đã có; React UI quản trị UserRole assignment và Role/Permission catalog CRUD chưa có.
+- Permission-driven React UI đã merge vào `master` qua PR #18; menu, route và action đọc `authz_v=1` + `perm`, backend vẫn là enforcement cuối.
+- `Employee.Role` và Role claim legacy vẫn tồn tại cho tương thích/hiển thị, lọc/thống kê và một số nghiệp vụ legacy; không phải nguồn xác định quyền hiệu lực.
+- Nhánh `feature/consolidate-employees-team-api` hợp nhất `/my-team` vào `GET /api/v1/employees?directReportsOnly=true`; endpoint `GET /api/v1/me/team` cũ đã được gỡ khỏi controller/runtime/OpenAPI. Manager API đã được nghiệm thu HTTP 200 với `managerId` khớp JWT `sub`. Người dùng cũng xác nhận nghiệm thu HR scope `All`: tài khoản HR có thể thêm/xem/sửa/xóa nhân viên và phòng ban, đồng thời duyệt/từ chối đơn nghỉ phép.
+- Trong `scripts/load-test/workforce.js`, route `manager_team` được thay **chỉ trong `paginationContractRoutes`** từ `GET /api/v1/me/team` sang `GET /api/v1/employees?directReportsOnly=true`. Đây là request preflight cố ý bỏ `page/pageSize` để xác minh API từ chối request không phân trang bằng HTTP 400.
+- Mảng `routes` thực sự chạy trong VU workload không đổi giữa `master` và feature branch. Vì vậy route mix của phần tải đo và các custom metrics của measured workload không đổi; evidence Workforce lịch sử vẫn có giá trị đối với workload đã đo. Tuy nhiên, đây **không phải** benchmark latency/throughput riêng cho endpoint Employees/directReports mới. Nếu cần đánh giá hiệu năng endpoint này, phải thêm request phân trang vào measured workload và lưu một lượt evidence mới. Khi đọc raw k6 built-in metrics, cần lưu ý request preflight/setup vẫn thuộc vòng đời test.
 
 ### 7.2. Regression test evidence
 
@@ -314,14 +318,14 @@ Kết quả local được ghi nhận trong quá trình hoàn thiện dự án:
 
 | Bộ kiểm thử | Kết quả | Ghi chú |
 |---|---:|---|
-| HR Service | 155/155 passed | 0 failed, 0 skipped |
-| Leave Service | 123/123 passed | 0 failed, 0 skipped |
-| Web | 79 tests passed | Vitest |
-| Web production build | Thành công | TypeScript/Vite build |
+| HR Service | 162/162 passed | 0 failed, 0 skipped; feature branch `feature/consolidate-employees-team-api` |
+| Leave Service | 129/129 passed | 0 failed, 0 skipped; feature branch `feature/consolidate-employees-team-api` |
+| Web | 103/103 passed | 20/20 test files; Vitest trên feature branch |
+| Web production build | Thành công | TypeScript check và Vite production build trên feature branch |
 
-Các kết quả trên là test chạy thủ công/local do người dùng báo cáo. Output không lưu `git rev-parse HEAD`, vì vậy chưa gắn chắc chắn với merge commit `81b98704`. Không có CI/CD chạy tự động theo lựa chọn của dự án.
+Các kết quả 162/162 HR, 129/129 Leave và 103/103 Web được người dùng cung cấp sau khi đồng bộ nhánh `feature/consolidate-employees-team-api`; TypeScript check và Vite production build cũng thành công. Đây là bằng chứng local cho feature branch, không phải regression trên `master`. Chưa lưu TRX/log riêng kèm SHA của chính các lượt chạy này. Không có CI/CD chạy tự động theo lựa chọn của dự án.
 
-Stored TRX trong repository là bằng chứng lịch sử và không thay thế cho log của các lượt chạy mới. Khi cần sign-off theo revision, chạy lại test tại `master`, ghi SHA, lưu TRX và log Web tương ứng. Không suy diễn test count của HEAD từ workflow Render diagrams.
+Stored TRX trong repository là bằng chứng lịch sử và không thay thế cho log của các lượt chạy mới. Khi cần sign-off sau khi merge, chạy lại test trên `master`, ghi SHA, lưu TRX và log Web tương ứng. Không suy diễn test count của HEAD từ workflow Render diagrams.
 
 ### 7.3. Seed và Approval benchmark ngày 20/11
 

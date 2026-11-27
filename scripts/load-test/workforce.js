@@ -17,7 +17,7 @@ const paginationContractRoutes = [
   { name: 'employees', url: `${hrBaseUrl}/api/v1/employees`, token: 'hr' },
   { name: 'all_leave_requests', url: `${leaveBaseUrl}/api/v1/leave-requests`, token: 'hr' },
   { name: 'manager_approvals', url: `${leaveBaseUrl}/api/v1/leave-requests/pending-approval`, token: 'manager' },
-  { name: 'manager_team', url: `${hrBaseUrl}/api/v1/me/team`, token: 'manager' },
+  { name: 'manager_team', url: `${hrBaseUrl}/api/v1/employees?directReportsOnly=true`, token: 'manager' },
 ];
 const httpErrors = new Counter('workforce_http_errors');
 const workforceRequests = new Counter('workforce_requests');

@@ -40,14 +40,13 @@ Danh sách phân trang:
 | POST /api/v1/auth/refresh | Refresh cookie | Xoay vòng refresh token và phát access JWT mới với quyền tính lại |
 | POST /api/v1/auth/logout | Refresh cookie | Thu hồi refresh token và xóa cookie |
 | GET /api/v1/me | Authenticated | Đọc hồ sơ của caller |
-| GET /api/v1/me/team?page=1&pageSize=20 | employees.read:Team | Direct reports đang hoạt động của caller; pagination + X-Total-Count |
 | PUT /api/v1/me/password | Authenticated | Đổi mật khẩu của caller |
 
 ### 2.2. Employee và lookup
 
 | Method / route | Permission/scope | Mô tả |
 |---|---|---|
-| GET /api/v1/employees?page=1&pageSize=20 | employees.read:Self/Team/All | Danh sách trong phạm vi quyền; hỗ trợ filter/search/sort |
+| GET /api/v1/employees?page=1&pageSize=20[&directReportsOnly=true] | employees.read:Self/Team/All; filter direct reports yêu cầu Team | Danh sách trong phạm vi quyền; hỗ trợ filter/search/sort |
 | GET /api/v1/employees/overview?page=1&pageSize=20 | employees.read:Self/Team/All | Trang dữ liệu, totalCount và summary |
 | GET /api/v1/employees/{id} | employees.read:Self/Team/All | Hồ sơ trong phạm vi được phép |
 | POST /api/v1/employees | employees.create:All | Tạo nhân viên; mã được backend sinh |
@@ -57,7 +56,7 @@ Danh sách phân trang:
 | POST /api/v1/lookup/employees/batch | employees.read:Self/Team/All | Lookup tối đa 100 ID; Team chỉ gồm direct report active theo ManagerId hiện tại; All có thể đọc inactive |
 | GET /api/v1/lookup/employees/{id} | employees.read:Self/Team/All | Snapshot theo scope; Team chỉ đọc direct report active theo ManagerId hiện tại; All có thể đọc inactive |
 
-Danh sách direct reports của Manager chỉ truy cập qua `GET /api/v1/me/team`; endpoint tự lấy manager ID từ caller, yêu cầu `employees.read:Team` và hỗ trợ pagination.
+Danh sách nhân viên và direct reports dùng chung `GET /api/v1/employees?page=1&pageSize=20`. Thêm `directReportsOnly=true` để chỉ lấy direct reports đang hoạt động của caller; backend tự lấy actor ID từ JWT và bắt buộc `employees.read:Team`. Bộ lọc này dùng chung search, role/status/department filter, sort, pagination và `X-Total-Count`; không nhận `managerId` từ client. Trang giao diện `/my-team` vẫn tồn tại nhưng không phải API riêng. `GET /api/v1/me/team` đã bị loại khỏi controller và OpenAPI trên nhánh `feature/consolidate-employees-team-api`; nhánh này chưa merge vào `master`.
 
 ### 2.3. Quản lý Role assignment
 
@@ -95,8 +94,10 @@ Giới hạn: API hiện chỉ quản lý assignment cho danh mục Role đượ
 | POST /api/v1/leave-types | leave-types.create:All | Tạo/khôi phục loại nghỉ chuẩn |
 | PUT /api/v1/leave-types/{id} | leave-types.update:All | Cập nhật trạng thái active của loại nghỉ chuẩn |
 | GET /api/v1/leave-policies[/{id}] | Authenticated | Đọc các phiên bản; GET list hỗ trợ year, asOfDate và authoritative=true |
-| POST /api/v1/leave-policies | leave-policies.create:All | Tạo phiên bản policy đầu tiên cho loại nghỉ chuẩn trừ balance |
-| PUT /api/v1/leave-policies/{id} | leave-policies.update:All | Thêm phiên bản policy mới; không sửa phiên bản cũ |
+| POST /api/v1/leave-policies | leave-policies.create:All | Tạo một phiên bản policy cho loại nghỉ chuẩn trừ balance; có thể là phiên bản đầu tiên hoặc phiên bản tiếp theo trong năm |
+| PUT /api/v1/leave-policies/{id} | leave-policies.update:All | Tạo phiên bản mới cho cùng loại nghỉ và năm của policy `{id}`; không ghi đè phiên bản được tham chiếu |
+| PUT /api/v1/leave-policies/{id}/edit | leave-policies.update:All | Chỉnh trực tiếp phiên bản tương lai chưa có hiệu lực; giữ nguyên loại nghỉ, năm và ngày hiệu lực |
+| DELETE /api/v1/leave-policies/{id} | leave-policies.update:All | Xóa phiên bản tương lai khi chưa có allocation tham chiếu; nếu đã effective hoặc còn tham chiếu thì từ chối |
 | GET /api/v1/holidays[/{id}] | Authenticated | Đọc ngày lễ |
 | POST /api/v1/holidays | holidays.create:All | Thêm ngày lễ |
 | PUT /api/v1/holidays/{id} | holidays.update:All | Cập nhật ngày lễ |
@@ -104,7 +105,13 @@ Giới hạn: API hiện chỉ quản lý assignment cho danh mục Role đượ
 
 Ba loại nghỉ chuẩn là ANNUAL, SICK, UNPAID. Không cho phép loại nghỉ tùy ý; UNPAID không có quota policy. authoritative=true bypass Redis và đọc SQL trực tiếp. Leave Service dùng authoritative read khi tính nghiệp vụ.
 
-Leave Policy được lưu theo phiên bản bất biến, mỗi bản ghi có EffectiveFrom, CreatedAtUtc và Reason. POST tạo phiên bản đầu tiên; PUT thêm một phiên bản mới cho cùng loại nghỉ/năm và không sửa bản ghi cũ. Có thể tạo/thêm phiên bản cho năm hiện tại hoặc năm tương lai; năm đã kết thúc chỉ được xem. EffectiveFrom phải thuộc đúng năm policy đã chọn và không sớm hơn ngày nghiệp vụ hiện tại (UTC+07:00). Vì vậy, policy năm hiện tại có thể bắt đầu từ hôm nay; policy năm tương lai bắt đầu sớm nhất từ ngày 01/01 của chính năm đó. GET hỗ trợ asOfDate để lấy trực tiếp từ HR phiên bản mới nhất có EffectiveFrom không sau ngày chỉ định; có asOfDate thì endpoint tự dùng đường đọc authoritative kể cả khi không truyền authoritative=true.
+Leave Policy được lưu theo phiên bản, mỗi bản ghi có `EffectiveFrom`, `CreatedAtUtc` và `Reason`. Các thao tác tạo phiên bản:
+
+- `POST /api/v1/leave-policies` tạo một version cho `leaveTypeId` và `year` trong request. Có thể dùng để tạo version đầu tiên hoặc thêm version tiếp theo; chỉ từ chối nếu đã tồn tại version cùng loại nghỉ/năm có cùng ngày hiệu lực.
+- `PUT /api/v1/leave-policies/{id}` tra cứu version `{id}` rồi tạo một version mới cho đúng loại nghỉ và năm đó. Request không được chuyển version sang loại nghỉ hoặc năm khác; bản ghi gốc không bị sửa.
+- `PUT /api/v1/leave-policies/{id}/edit` chỉnh trực tiếp một version đã có nhưng chỉ khi `EffectiveFrom` còn ở tương lai. Thao tác này chỉ cập nhật số ngày và lý do; không đổi loại nghỉ, năm hoặc ngày hiệu lực.
+
+Cả `POST` và `PUT /{id}` đều có thể thêm version cho năm hiện tại hoặc năm tương lai; năm đã kết thúc chỉ được xem. `EffectiveFrom` phải thuộc đúng năm policy đã chọn và không sớm hơn ngày nghiệp vụ cho phép (UTC+07:00): năm hiện tại bắt đầu sớm nhất từ hôm nay, năm tương lai bắt đầu sớm nhất từ ngày 01/01 của chính năm đó. Version đã có hiệu lực không được chỉnh sửa hoặc xóa. Version tương lai chỉ được xóa khi chưa có allocation tham chiếu; nếu đã có tham chiếu, HR từ chối với HTTP 409. GET hỗ trợ `asOfDate` để lấy phiên bản mới nhất có `EffectiveFrom` không sau ngày chỉ định; có `asOfDate` thì endpoint tự dùng đường đọc authoritative kể cả khi không truyền `authoritative=true`.
 
 Body mẫu cho POST/PUT:
 

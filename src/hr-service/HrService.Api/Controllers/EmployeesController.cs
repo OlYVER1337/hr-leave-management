@@ -23,6 +23,7 @@ public sealed class EmployeesController(EmployeeService employeeService) : Contr
         [FromQuery] int? departmentId = null,
         [FromQuery] string? sortBy = "fullName",
         [FromQuery] string? sortDirection = "asc",
+        [FromQuery] bool directReportsOnly = false,
         CancellationToken cancellationToken = default)
     {
         if (!IsValidPagination(page, pageSize))
@@ -52,6 +53,7 @@ public sealed class EmployeesController(EmployeeService employeeService) : Contr
             departmentId,
             sortBy,
             sortDirection,
+            directReportsOnly,
             cancellationToken);
         Response.Headers["X-Total-Count"] = paged.TotalCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
         return Ok(paged.Items);

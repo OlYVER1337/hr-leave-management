@@ -70,9 +70,13 @@ public sealed class EmployeeService(
         int? departmentId,
         string? sortBy,
         string? sortDirection,
+        bool directReportsOnly,
         CancellationToken cancellationToken = default)
     {
         var scopes = GetEmployeeReadScopes(actorId, authorization);
+        if (directReportsOnly && !authorization.HasScope("employees.read", "Team"))
+            throw new ForbiddenException();
+
         var normalizedPage = Math.Max(1, page);
         var normalizedSize = Math.Clamp(pageSize, 1, 100);
         Role? roleFilter = null;
@@ -89,6 +93,7 @@ public sealed class EmployeeService(
             scopes.IncludeSelf,
             scopes.IncludeTeam,
             scopes.IncludeAll,
+            directReportsOnly,
             search,
             roleFilter,
             isActive,
@@ -117,7 +122,7 @@ public sealed class EmployeeService(
     {
         var paged = await GetVisiblePagedAsync(
             actorId, authorization, page, pageSize, search, role, isActive,
-            departmentId, sortBy, sortDirection, cancellationToken);
+            departmentId, sortBy, sortDirection, false, cancellationToken);
         var summary = await GetVisibleSummaryAsync(actorId, authorization, cancellationToken);
 
         return new EmployeeOverviewResponse(paged.Items, paged.TotalCount, summary);
@@ -229,28 +234,6 @@ public sealed class EmployeeService(
         Guid managerId,
         CancellationToken cancellationToken = default) =>
         employeeRepository.GetDirectReportIdsAsync(managerId, cancellationToken);
-
-    public async Task<PagedEmployeeResponse> GetTeamPagedAsync(
-        Guid managerId,
-        int page,
-        int pageSize,
-        string? search,
-        CancellationToken cancellationToken = default)
-    {
-        if (managerId == Guid.Empty)
-            throw new ForbiddenException();
-
-        var (items, totalCount) = await employeeRepository.ListDirectReportsPageAsync(
-            managerId,
-            search,
-            Math.Max(page, 1),
-            Math.Clamp(pageSize, 1, 100),
-            cancellationToken);
-
-        return new PagedEmployeeResponse(
-            items.Select(ToResponse).ToArray(),
-            totalCount);
-    }
 
     public async Task<IReadOnlyList<EmployeeResponse>> GetTeamAsync(
         Guid managerId,

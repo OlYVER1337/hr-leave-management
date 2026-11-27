@@ -1,7 +1,7 @@
 
 # Wireframe — Peopleflow HR Leave Management
 
-> Đặc tả wireframe được rà soát theo source branch feature/dynamic-authorization-v1 ngày 17/11/2026. Mô tả bên dưới phân biệt UI thực tế, backend permission/scope và các chức năng chưa triển khai.
+> Đặc tả wireframe được rà soát theo source ngày 27/11/2026. Mô tả bên dưới phân biệt màn hình hiện có, permission/scope backend, endpoint được sử dụng và các chức năng chưa triển khai.
 
 ## 1. Phạm vi và cách đọc
 
@@ -34,7 +34,7 @@ Không được mô tả dữ liệu Demo như dữ liệu production. Những m
 | Manager | Quản lý | Yêu cầu bản thân và các yêu cầu thuộc phạm vi phê duyệt |
 | HR | Nhân sự | Quản lý nhân sự/danh mục và xem đơn toàn tổ chức |
 
-Backend là nguồn quyết định quyền cuối cùng. HR_DB cấp Role/Permission/Scope động và JWT chứa `authz_v=1` cùng `perm` JSON; API kiểm tra permission/scope ở server. Trên nhánh `feature/permission-driven-react-ui`, React đọc grant từ JWT để lọc menu, bảo vệ route và ẩn từng action. Legacy Role không quyết định quyền UI, chỉ còn là nhãn mô tả. Nếu người dùng được gán nhiều role, các permission/scope hiệu lực đã hợp nhất trong JWT được dùng trực tiếp; việc đổi quyền sẽ phản ánh khi login/refresh token. Ẩn link/action chỉ cải thiện UX, không thay thế authorization của API. Scope backend hiện thực thi là Self/Team/All; Department chưa được dùng làm bộ lọc dữ liệu. Thay đổi UI đang ở feature branch, chưa merge vào master.
+Backend là nguồn quyết định quyền cuối cùng. HR_DB cấp Role/Permission/Scope động và JWT chứa `authz_v=1` cùng `perm` JSON; API kiểm tra permission/scope ở server. Permission-driven React UI đã merge vào `master` qua PR #18: React đọc grant từ JWT để lọc menu, bảo vệ route và ẩn từng action. Legacy Role không quyết định quyền UI; nó chỉ còn phục vụ nhãn hiển thị/tương thích và một số chức năng dữ liệu nhân viên. Nếu người dùng được gán nhiều Role, permission/scope hiệu lực được hợp nhất trong JWT; thay đổi quyền phản ánh khi login/refresh. Ẩn link/action chỉ cải thiện UX, không thay thế authorization API. Scope backend thực thi là Self/Team/All; Department chưa được dùng làm bộ lọc dữ liệu.
 
 ### 2.2. Menu và điều kiện permission hiện tại trong AppShell
 
@@ -336,9 +336,9 @@ công trực tiếp. Trang chỉ có quyền đọc, không có thao tác quản
     │ Avatar + Email     │ EMP-...    │ Kỹ thuật │ Employee│ Date       │ Active  │ [View]
     └────────────────────┴────────────┴──────────┴─────────┴────────────┴─────────┘
 
-- API mode gọi GET /api/v1/me/team; backend xác định Manager từ JWT, không nhận managerId do client chọn.
-- Chỉ trả direct reports đang hoạt động; endpoint yêu cầu page và pageSize (1–100), trả tổng số qua X-Total-Count.
-- Search ở server theo họ tên, email, mã nhân viên và phòng ban; UI sử dụng server pagination và có loading/error/empty states.
+- API mode gọi `GET /api/v1/employees` với query `directReportsOnly=true`; backend xác định caller từ JWT, không nhận `managerId` do client gửi. Trang giao diện `/my-team` vẫn giữ nguyên, nhưng không còn endpoint riêng `GET /api/v1/me/team`; route API cũ đã bị gỡ khỏi controller/runtime/OpenAPI trên nhánh `feature/consolidate-employees-team-api`.
+- Chỉ trả direct reports đang hoạt động; bộ lọc yêu cầu `employees.read:Team`, dùng pagination (page/pageSize từ 1–100) và trả tổng số qua X-Total-Count.
+- Search ở server theo họ tên, email, mã nhân viên và phòng ban; các filter/sort dùng chung với danh sách nhân viên; UI sử dụng server pagination và có loading/error/empty states.
 - Nút “Xem hồ sơ” mở modal read-only: họ tên, mã, email, vai trò, phòng ban,
   ngày vào làm, quản lý trực tiếp và trạng thái.
 - Không có nút thêm, sửa, vô hiệu hóa hoặc đổi mật khẩu. API quản trị
@@ -514,7 +514,7 @@ Employee mở My Leaves → action chỉ hiển thị với request Pending củ
 | Refresh session | HR AuthenticationController | POST /api/v1/auth/refresh |
 | Logout | HR AuthenticationController | POST /api/v1/auth/logout |
 | Current employee | HR CurrentEmployeeController | GET /api/v1/me |
-| Team | HR CurrentEmployeeController | GET /api/v1/me/team |
+| Direct reports | HR EmployeesController | GET /api/v1/employees?directReportsOnly=true |
 | Change own password | HR CurrentEmployeeController | PUT /api/v1/me/password |
 | Employee list/detail/create/update/deactivate | HR EmployeesController | GET/POST/PUT /api/v1/employees; POST /{id}/deactivate |
 | Reset employee password | HR EmployeesController | PUT /api/v1/employees/{id}/password |

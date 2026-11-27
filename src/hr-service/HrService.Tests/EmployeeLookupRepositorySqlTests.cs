@@ -77,8 +77,20 @@ public sealed class EmployeeLookupRepositorySqlTests : IClassFixture<Authorizati
 
             var teamList = await repository.GetDirectReportsAsync(managerId);
             var newManagerTeam = await repository.GetDirectReportsAsync(otherManagerId);
-            var teamPage = await repository.ListDirectReportsPageAsync(
-                managerId, search: null, page: 1, pageSize: 10);
+            var teamPage = await repository.ListVisiblePageAsync(
+                managerId,
+                includeSelf: true,
+                includeTeam: true,
+                includeAll: false,
+                directReportsOnly: true,
+                search: null,
+                role: null,
+                isActive: null,
+                departmentId: null,
+                sortBy: "fullName",
+                descending: false,
+                page: 1,
+                pageSize: 10);
             var batchLookup = await repository.ListVisibleByIdsAsync(
                 managerId,
                 includeSelf: false,

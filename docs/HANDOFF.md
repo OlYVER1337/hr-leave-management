@@ -1,6 +1,6 @@
 # Tài liệu bàn giao hệ thống HR Leave Management
 
-*Cập nhật: 26/11/2026*
+*Cập nhật: 27/11/2026*
 
 Tài liệu dành cho người tiếp nhận source, dựng môi trường, kiểm thử, demo và kiểm tra giới hạn trước khi nghiệm thu. Nội dung tách biệt **tính năng đã có**, **bằng chứng đã chạy** và **việc chưa được xác minh**.
 
@@ -9,9 +9,10 @@ Tài liệu dành cho người tiếp nhận source, dựng môi trường, ki�
 | Thuộc tính | Giá trị |
 |---|---|
 | Repository | [OlYVER1337/hr-leave-management](https://github.com/OlYVER1337/hr-leave-management) |
-| Branch source đã tích hợp | **master** |
-| Source HEAD trước lần cập nhật tài liệu này | **01be3cfa7a03efcf6ad63d3a16b4d6eafb706444** |
-| Trạng thái tài liệu | Tài liệu bàn giao được cập nhật trực tiếp trên master. |
+| Master baseline | **d69156aa8990e2d92d21ad0dac1f9e0a7e1d2c5e** (PR #18 — Permission-driven React UI) |
+| Feature branch đang rà soát | `feature/consolidate-employees-team-api` — chưa merge; hợp nhất API Employees/direct reports |
+| Code commit của thay đổi hợp nhất API | **02c9e5b375973dcc3992107c18953fb7ae9ba633** |
+| Trạng thái tài liệu | Cập nhật trên feature branch; không thay đổi `master`. |
 | Sửa lỗi HR OpenAPI | [0a34e13](https://github.com/OlYVER1337/hr-leave-management/commit/0a34e131fb7550695492d42614a3d74e385beab0) và [01be3cf](https://github.com/OlYVER1337/hr-leave-management/commit/01be3cfa7a03efcf6ad63d3a16b4d6eafb706444). |
 | Merge Dynamic Authorization V1 | [PR #6](https://github.com/OlYVER1337/hr-leave-management/pull/6), merge commit **81b987043ce4663ad11800bb331ffdbc013bd1d2** |
 | Trạng thái production | Chưa có bằng chứng triển khai hoặc nghiệm thu production. |
@@ -19,6 +20,10 @@ Tài liệu dành cho người tiếp nhận source, dựng môi trường, ki�
 | Nhánh giữ lại | `fix/approval-benchmark-metadata` được giữ để tránh mất 3 commit chưa tích hợp. |
 
 **Quy tắc đối chiếu:** Approval benchmark ngày 26/11 chạy trên source SHA **d34ca91** và image ID ghi tại Mục 8. Không lấy HEAD của branch tài liệu thay cho revision benchmark. Khi tài liệu khác với implementation, đối chiếu source code và EF Core migrations.
+
+**Ghi chú Workforce benchmark trên feature branch:** `scripts/load-test/workforce.js` chỉ đổi route `manager_team` trong `paginationContractRoutes` từ `/api/v1/me/team` sang `/api/v1/employees?directReportsOnly=true`; request preflight không gửi `page/pageSize` và mong đợi HTTP 400 để kiểm tra contract phân trang. Mảng `routes` của VU workload không thay đổi so với `master`, nên route mix và custom metrics của phần measured workload không đổi. Evidence Workforce cũ vẫn mô tả đúng workload đã đo, nhưng không cung cấp latency/throughput riêng cho endpoint Employees/directReports mới. Muốn benchmark endpoint mới, cần thêm request có phân trang vào workload đo và lưu raw/summary cùng Git SHA, image IDs mới. Lưu ý raw k6 built-in metrics có thể bao gồm request preflight/setup.
+
+**Bằng chứng nhánh hợp nhất Employees/direct reports ngày 27/11:** người dùng cung cấp kết quả HR 162/162 tests, Leave 129/129 tests, Web 103/103 tests; TypeScript check và Vite production build thành công. HR Bench đã build HR Service/Web; Manager gọi `GET /api/v1/employees?directReportsOnly=true&page=1&pageSize=20` nhận HTTP 200 và response có `managerId` trùng JWT `sub`. Người dùng đã xác nhận nghiệm thu tài khoản HR có scope `All`: tài khoản có thể thêm, xem, sửa, xóa nhân viên và phòng ban; đồng thời duyệt và từ chối đơn nghỉ phép. Đây là kết quả kiểm tra chức năng thủ công do người dùng xác nhận.
 
 ## 2. Dựng hệ thống local lần đầu
 
@@ -129,7 +134,7 @@ docker compose up -d web
 | Manager | Xem đơn trong phạm vi Team và phê duyệt/từ chối đơn có thể xử lý; xem thông tin nhóm theo quyền. |
 | Employee | Xem thông tin cá nhân/số dư, tạo đơn, theo dõi trạng thái và hủy đơn Pending của chính mình. |
 
-Backend Dynamic RBAC thực thi permission và scope Self/Team/All. React hiện vẫn dùng Role legacy HR/Manager/Employee cho menu và route guard; UI chưa chuyển hoàn toàn sang permission-driven. Không coi việc ẩn nút trên frontend là lớp bảo vệ API.
+Backend Dynamic RBAC thực thi permission và scope Self/Team/All. React đã dùng permission/scope trong JWT cho menu, route guard và action (PR #18 đã merge vào master). `Employee.Role` và Role claim legacy vẫn được giữ cho tương thích/hiển thị, lọc/thống kê và một số nghiệp vụ legacy; không phải nguồn authorization. Không coi việc ẩn nút trên frontend là lớp bảo vệ API.
 
 ## 5. Swagger và xác thực API
 
@@ -349,7 +354,9 @@ Bảng đầy đủ các lượt arrival-rate ngày 26/11 (cả lượt hợp l�
 - HR Service sở hữu HR_DB; Leave Service sở hữu Leave_DB. Leave gọi HR qua HTTP để đọc catalog/chính sách authoritative, không truy cập trực tiếp HR database.
 - Redis là cache best-effort; SQL Server vẫn là nguồn dữ liệu nghiệp vụ chính.
 - Backend Dynamic RBAC V1 quản lý Roles, Permissions, UserRoles, scope rules và audit. Scope đang thực thi gồm Self, Team, All; Department chưa thành bộ lọc dữ liệu nghiệp vụ.
-- Frontend vẫn dùng Role legacy cho navigation/route guards; chưa có UI quản trị Role/Permission catalog hoặc permission-driven UI đầy đủ.
+- React đã dùng permission/scope trong JWT cho menu, route guard và action (PR #18 đã merge vào master). Role claim/`Employee.Role` legacy chỉ còn phục vụ tương thích/hiển thị và các chức năng dữ liệu nhân viên; không phải nguồn authorization.
+- Trên nhánh `feature/consolidate-employees-team-api`, trang `/my-team` dùng chung `GET /api/v1/employees?directReportsOnly=true`; API `GET /api/v1/me/team` cũ đã bị gỡ khỏi controller/runtime/OpenAPI. Manager direct-report API đã được kiểm tra trên HR Bench. Người dùng đã nghiệm thu tài khoản HR scope `All`: thêm/xem/sửa/xóa nhân viên và phòng ban, duyệt/từ chối đơn nghỉ phép.
+- Chưa có UI quản trị UserRole assignment hoặc CRUD Role/Permission catalog.
 - Leave request lưu policy version và quota snapshot theo yearly allocation. Policy được chọn theo ngày tạo đơn ở business timezone UTC+07; request cũ giữ snapshot đã tạo.
 - Balance dùng PolicyDays, Used và Pending; Entitled được suy ra để tránh số dư âm khi quota giảm. Chưa có bulk reconciliation cho toàn bộ nhân viên.
 - Access JWT xác thực stateless; thay đổi/revoke UserRole không thu hồi tức thời access token đã phát, token cũ còn hiệu lực đến expiry. Refresh token có thể bị thu hồi.
@@ -370,7 +377,7 @@ Các gap đã xác nhận và thứ tự ưu tiên phải đối chiếu [Backlo
 | 3 | System design: kiến trúc, service ownership, giao tiếp và lỗi | [System design](architecture/SYSTEM_DESIGN.md), [Architecture diagrams](architecture/README.md) | Tài liệu đã có; đối chiếu lại với source khi có thay đổi. |
 | 4 | Database design: ERD, schema, index/constraint, migrations và seed | [Database design](architecture/DATABASE_DESIGN.md), EF Core migrations trong từng service, scripts seed | Đã có tài liệu/source; migration và seed cần xác nhận chạy được trên database mới. |
 | 5 | API documentation: Swagger/OpenAPI, request/response và lỗi | [API reference](API_REFERENCE.md), Swagger UI và OpenAPI JSON ở Development | Đã có; Swagger runtime chỉ được bật trong Development. |
-| 6 | Frontend Design System và components tái sử dụng | [Design System](design/DESIGN_SYSTEM.md), [Wireframes](design/WIREFRAMES.md), `src/web/src/` | Đã có tài liệu và UI; React authorization vẫn dùng Role legacy như Mục 9. |
+| 6 | Frontend Design System và components tái sử dụng | [Design System](design/DESIGN_SYSTEM.md), [Wireframes](design/WIREFRAMES.md), `src/web/src/` | Đã có tài liệu và UI permission-driven; menu/route/action dùng permission/scope từ JWT. UserRole assignment UI và Role/Permission catalog CRUD chưa có. |
 | 7 | Redis design/evidence: key, TTL, invalidation, miss và fallback | [Redis performance report](performance/redis-performance.md), cache implementation và tests | Đã có báo cáo Catalog Redis ON/OFF, cache key/TTL/invalidation/fallback; không dùng cache làm căn cứ duy nhất để quyết định số dư/duyệt đơn. |
 | 8 | Test & performance report: unit/integration, k6, Redis ON/OFF | [Demo/acceptance](testing/demo-and-acceptance.md), [Validation guide](testing/dynamic-authorization-validation.md), [Approval benchmark guide](testing/approval-benchmark-guide.md), [evidence](testing/evidence/) | Đã có kết quả lịch sử và benchmark Approval ngày 26/11; regression tests cần chạy lại và gắn SHA nếu cần sign-off theo revision hiện tại. |
 | 9 | Deployment package: Dockerfile, Compose, `.env.example`, README và chạy máy mới | `docker-compose.yml`, `docker-compose.loadtest.yml`, Dockerfiles, `.env.example`, [README](../README.md) | Đã có cấu hình; chưa có bằng chứng clean-machine deployment/production. |

@@ -1,6 +1,6 @@
 # Design System — Peopleflow HR Suite
 
-> Tài liệu nền tảng giao diện được rà soát theo source branch feature/dynamic-authorization-v1 ngày 16/11/2026. Đây là mô tả UI hiện có và chuẩn hóa thiết kế; đề xuất chưa triển khai được ghi riêng.
+> Tài liệu nền tảng giao diện được rà soát theo source ngày 27/11/2026. Đây là mô tả UI hiện có và chuẩn hóa thiết kế; đề xuất chưa triển khai được ghi riêng.
 
 ## 1. Phạm vi và nguyên tắc
 
@@ -9,7 +9,7 @@ Sản phẩm hiển thị thương hiệu **Peopleflow HR Suite** trong Login v�
 ### Nguyên tắc thiết kế
 
 1. **Clarity first:** trạng thái đơn, hạn mức phép, người duyệt và hành động tiếp theo phải nhìn thấy ngay.
-2. **Role-aware:** điều hướng và thao tác chỉ hiển thị theo vai trò HR, Manager hoặc Employee; backend vẫn là lớp quyết định quyền cuối cùng.
+2. **Permission-aware:** menu, route và thao tác hiển thị theo permission/scope hiệu lực trong JWT; backend vẫn là lớp quyết định quyền cuối cùng. Role badge chỉ mô tả nhãn vai trò legacy, không phải cơ chế authorization.
 3. **Data before decoration:** dashboard ưu tiên số liệu và danh sách cần xử lý; biểu đồ chỉ bổ trợ.
 4. **Predictable actions:** thao tác tạo, sửa, duyệt, từ chối, hủy và vô hiệu hóa phải có phản hồi thành công/thất bại.
 5. **Consistent Vietnamese UI:** nội dung giao diện hiện tại dùng tiếng Việt; mã trạng thái và mã loại nghỉ chỉ hiển thị khi có ích cho người dùng.
@@ -21,9 +21,9 @@ Sản phẩm hiển thị thương hiệu **Peopleflow HR Suite** trong Login v�
 - **Thiếu UI:** backend/API có khả năng nhưng frontend chưa cung cấp thao tác tương ứng.
 
 
-### Ghi chú phân quyền UI — 16/11/2026
+### Ghi chú phân quyền UI — 27/11/2026
 
-Backend đã chuyển sang Dynamic RBAC theo permission/scope. Tuy nhiên, điều hướng và route guard của React hiện vẫn dùng role legacy HR/Manager/Employee. Vì vậy quy tắc Role-aware trong Design System mô tả trạng thái UI hiện tại, không có nghĩa frontend đã hỗ trợ tùy biến menu theo permission động. API backend luôn phải tự kiểm tra quyền; frontend chỉ tối ưu trải nghiệm hiển thị.
+React đã chuyển menu, route guard và action sang permission/scope đọc từ JWT `authz_v=1` + `perm` (đã merge qua PR #18). Một nhân viên có thể có nhiều Role; UI dùng tập grant hiệu lực đã hợp nhất thay vì suy ra quyền từ một giá trị `Employee.Role`. Các badge `HR`, `Manager`, `Employee` vẫn là nhãn tương thích/hiển thị từ dữ liệu legacy. API backend luôn phải tự kiểm tra quyền; ẩn menu/action chỉ tối ưu trải nghiệm, không thay thế authorization server-side.
 
 ## 2. Visual identity
 

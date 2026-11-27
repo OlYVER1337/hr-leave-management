@@ -23,6 +23,7 @@ export interface EmployeePageQuery {
   departmentId?: number;
   sortBy?: 'fullName' | 'code' | 'departmentName' | 'role' | 'managerName' | 'hireDate' | 'isActive';
   sortDirection?: 'asc' | 'desc';
+  directReportsOnly?: boolean;
 }
 
 export interface PagedResult<T> {
@@ -81,7 +82,10 @@ export async function getEmployeeOverviewPage(
   } catch (error) { throw new Error(getApiErrorMessage(error)); }
 }
 
-export async function getEmployeePage(query: EmployeePageQuery): Promise<PagedResult<Employee>> {
+export async function getEmployeePage(
+  query: EmployeePageQuery,
+  options: { currentEmployeeId?: string } = {},
+): Promise<PagedResult<Employee>> {
   const page = Math.max(1, query.page);
   const pageSize = Math.min(100, Math.max(1, query.pageSize));
   if (DEMO_MODE) {
@@ -91,7 +95,11 @@ export async function getEmployeePage(query: EmployeePageQuery): Promise<PagedRe
       const matchesSearch = !search || [
         employee.fullName, employee.code, employee.email, employee.departmentName ?? '',
       ].some((value) => value.toLocaleLowerCase('vi-VN').includes(search));
+      const matchesDirectReports = !query.directReportsOnly ||
+        (Boolean(options.currentEmployeeId) && employee.isActive &&
+          employee.managerId === options.currentEmployeeId);
       return matchesSearch &&
+        matchesDirectReports &&
         (!query.role || employee.role === query.role) &&
         (query.isActive === undefined || employee.isActive === query.isActive) &&
         (query.departmentId === undefined || employee.departmentId === query.departmentId);
@@ -119,6 +127,7 @@ export async function getEmployeePage(query: EmployeePageQuery): Promise<PagedRe
       params: {
         page, pageSize, search: query.search || undefined, role: query.role,
         isActive: query.isActive, departmentId: query.departmentId,
+        directReportsOnly: query.directReportsOnly || undefined,
         sortBy: query.sortBy ?? 'fullName', sortDirection: query.sortDirection ?? 'asc',
       },
     });
@@ -223,46 +232,6 @@ export async function deleteDepartment(id: number): Promise<void> {
   }
   try { await hrApi.delete(`/api/v1/departments/${id}`); }
   catch (error) { throw new Error(getApiErrorMessage(error)); }
-}
-
-export async function getMyTeamPage(
-  managerId: string,
-  page: number,
-  pageSize: number,
-  search?: string,
-): Promise<PagedResult<Employee>> {
-  const normalizedPage = Math.max(1, page);
-  const normalizedSize = Math.min(100, Math.max(1, pageSize));
-  if (DEMO_MODE) {
-    const state = loadDemoState();
-    const term = search?.trim().toLocaleLowerCase('vi-VN') ?? '';
-    const visible = state.employees
-      .filter((employee) => employee.managerId === managerId && employee.isActive)
-      .filter((employee) => !term || [
-        employee.fullName, employee.code, employee.email, employee.departmentName ?? '',
-      ].some((value) => value.toLocaleLowerCase('vi-VN').includes(term)))
-      .sort((left, right) => left.fullName.localeCompare(right.fullName));
-    const offset = (normalizedPage - 1) * normalizedSize;
-    return { items: visible.slice(offset, offset + normalizedSize), totalCount: visible.length };
-  }
-  try {
-    const { data, headers } = await hrApi.get<Employee[]>('/api/v1/me/team', {
-      params: { page: normalizedPage, pageSize: normalizedSize, search: search || undefined },
-    });
-    return { items: data, totalCount: Number(headers?.['x-total-count'] ?? data.length) };
-  } catch (error) { throw new Error(getApiErrorMessage(error)); }
-}
-
-export async function getMyTeam(managerId: string): Promise<Employee[]> {
-  if (DEMO_MODE) {
-    return loadDemoState().employees
-      .filter((employee) => employee.managerId === managerId && employee.isActive)
-      .sort((a, b) => a.fullName.localeCompare(b.fullName));
-  }
-  try {
-    const { data } = await hrApi.get<Employee[]>('/api/v1/me/team', { params: { page: 1, pageSize: 100 } });
-    return data;
-  } catch (error) { throw new Error(getApiErrorMessage(error)); }
 }
 
 export async function getCurrentEmployee(id: string): Promise<Employee | null> {

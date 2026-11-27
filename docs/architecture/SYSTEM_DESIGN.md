@@ -44,11 +44,13 @@ JWT chứa authz_v=1 và perm dạng JSON, ví dụ:
       { "p": "leaves.decide", "s": ["Team"] }
     ]
 
-Login và refresh đều tính lại quyền từ HR_DB trước khi phát token. HR và Leave xác thực JWT cục bộ bằng cùng issuer/audience/signing key; request thông thường không introspect JWT qua HR. Role claim và Employee.Role vẫn tồn tại cho tương thích frontend/backfill, nhưng backend authorization của các controller đã chuyển đổi dựa trên Permission + Scope.
+Login và refresh đều tính lại quyền từ HR_DB trước khi phát token. HR và Leave xác thực JWT cục bộ bằng cùng issuer/audience/signing key; request thông thường không introspect JWT qua HR. Role claim và `Employee.Role` vẫn tồn tại cho tương thích dữ liệu, nhãn hiển thị, lọc/thống kê nhân viên và một số nghiệp vụ legacy; chúng không phải nguồn xác định effective permission. Backend authorization của các endpoint đã chuyển đổi dựa trên Permission + Scope.
 
 Các scope đang được thực thi trong API là Self, Team và All. Department tồn tại trong schema/rule constraint nhưng chưa được dùng làm bộ lọc dữ liệu. Role/Permission baseline được seed (Employee, Manager, HR, Auditor); API hiện tại quản lý UserRole assignment, chưa có CRUD tạo Role/Permission catalog hoặc chỉnh Role grants.
 
-**Frontend permission-driven (đã triển khai trên nhánh feature):** `authorization.ts` đọc claim `authz_v=1` và `perm`, hợp nhất grant trùng permission, chỉ nhận scope `Self/Team/All`, và từ chối khi claim/token không hợp lệ. `App.tsx` bảo vệ route; `AppShell.tsx` lọc menu; các trang quản trị ẩn riêng từng thao tác theo permission tương ứng. Login, restore session và refresh đều dựng/cập nhật permission trong AuthContext. Route/menu phê duyệt yêu cầu đồng thời quyền `leaves.decide` và `leaves.read` với phạm vi tương thích vì inbox và trang chi tiết dùng hai policy backend khác nhau. Legacy Role chỉ còn là nhãn hiển thị/tương thích; nó không phải điều kiện truy cập UI. Đây là kiểm soát trải nghiệm người dùng, không xác thực chữ ký JWT ở browser và không thay thế authorization của API. Thay đổi đang ở nhánh `feature/permission-driven-react-ui`, chưa merge vào `master`; kết quả test/build cần được xác nhận trên checkout local. Chưa có UI quản trị Role assignments.
+`Frontend permission-driven` đã được merge vào `master` qua PR #18 (merge commit `d69156aa8990e2d92d21ad0dac1f9e0a7e1d2c5e`). `authorization.ts` đọc claim `authz_v=1` và `perm`, hợp nhất grant trùng permission, chỉ nhận scope `Self/Team/All`, và fail closed khi claim/token không hợp lệ. `App.tsx` bảo vệ route; `AppShell.tsx` lọc menu; các trang ẩn từng action theo permission/scope. Login, restore session và refresh đều dựng/cập nhật permission trong AuthContext. Route/menu phê duyệt yêu cầu đồng thời `leaves.decide` và `leaves.read` với phạm vi tương thích vì inbox và trang chi tiết dùng hai policy backend khác nhau. Legacy Role chỉ còn cho nhãn hiển thị/tương thích; không quyết định menu, route hoặc action. Browser không xác thực chữ ký JWT; API backend vẫn là enforcement cuối cùng. Chưa có UI quản trị UserRole assignment hoặc CRUD Role/Permission catalog.
+
+Trên nhánh `feature/consolidate-employees-team-api`, trang `/my-team` vẫn được giữ làm màn hình Manager read-only nhưng dùng chung `GET /api/v1/employees?directReportsOnly=true` với trang nhân viên. Backend lấy actor ID từ JWT, bắt buộc `employees.read:Team` cho filter direct reports, chỉ trả direct report active theo `ManagerId` hiện tại và dùng chung search/filter/sort/pagination. Endpoint cũ `GET /api/v1/me/team` đã bị loại khỏi controller/runtime/OpenAPI; thay đổi hợp nhất API chưa merge vào `master`.
 
 ## 4. Luồng đăng nhập và refresh
 
@@ -118,7 +120,7 @@ GET `/api/v1/leave-balances/mine` và POST `/api/v1/leave-balances/mine/synchron
 
 ### History hiện tại
 
-Tạo, approve, reject, cancel ghi LeaveRequestHistory dạng append. Hiện chưa có GET history endpoint; UI chưa hiển thị timeline đầy đủ.
+Tạo, approve, reject, cancel ghi LeaveRequestHistory dạng append. `GET /api/v1/leave-requests/{id}` trả chi tiết đơn kèm mảng `history`; danh sách không tải kèm history và không có route `/history` riêng. Frontend tải detail một lần khi mở modal; thao tác **Xem lịch sử** chỉ ẩn/hiện timeline trong dữ liệu đã tải.
 
 ## 7. Redis và tính nhất quán
 
@@ -149,7 +151,7 @@ Leave Request validation, default year của Leave Balance và business date/yea
 
 ## 10. Giới hạn và non-goals V1
 
-Chưa có API Gateway riêng, message broker, outbox, asynchronous authorization read model, balance reconciliation worker, report/export backend, notification delivery, Role/Permission catalog CRUD, UI quản trị UserRole assignment, History read endpoint, hoặc readiness/liveness endpoints riêng.
+Chưa có API Gateway riêng, message broker, outbox, asynchronous authorization read model, balance reconciliation worker, report/export backend, notification delivery, Role/Permission catalog CRUD, UI quản trị UserRole assignment hoặc readiness/liveness endpoints riêng. History được trả trong API chi tiết đơn; chưa có route history riêng.
 
 Root Compose hiện phục vụ local/demo/benchmark; không phải production hardening. Trước production cần secret management, TLS, network restrictions, backups/restore, observability và quy trình migration/rollback.
 

@@ -93,16 +93,12 @@ Swagger/OpenAPI chỉ được bật ở Development; nếu không truy cập đ
 
 ## 2. Thao tác theo vai trò
 
-Các mục menu được giới hạn theo vai trò; nếu không thấy một mục, hãy đăng nhập
-bằng tài khoản có quyền tương ứng.
+Các mục menu, route và thao tác được hiển thị theo permission/scope hiệu lực trong JWT, không chỉ dựa trên nhãn Role. Các vai trò Employee, Manager và HR dưới đây là cấu hình baseline thường gặp; tài khoản có nhiều Role có thể có tập quyền kết hợp khác nhau.
 
 ### HR
 
 1. Vào **Phòng ban** để tạo hoặc sửa phòng ban trước khi thêm nhân viên.
-2. Vào **Nhân viên** → **Thêm nhân viên**. Nhập họ tên, email, vai trò, phòng
-   ban, ngày vào làm và người quản lý trực tiếp nếu có. Mã nhân viên được hệ
-   thống tự sinh; không cần nhập mã. Có thể tìm kiếm, lọc, phân trang, sửa hồ sơ
-   hoặc vô hiệu hóa tài khoản.
+2. Vào **Nhân viên** → **Thêm nhân viên**. Nhập họ tên, email, vai trò hiển thị legacy, phòng ban, ngày vào làm và người quản lý trực tiếp nếu có. Mã nhân viên được hệ thống tự sinh; không cần nhập mã. Có thể tìm kiếm, lọc, phân trang, sửa hồ sơ hoặc vô hiệu hóa tài khoản. Trường vai trò trên form nhân viên không thay thế thao tác gán Role động trong `UserRoles`.
 3. Vào **Chính sách nghỉ phép** để quản lý ba loại nghỉ cố định:
    `ANNUAL` (nghỉ phép năm), `SICK` (nghỉ ốm), `UNPAID` (nghỉ không lương).
    Màn hình mặc định hiển thị các chính sách đang có hiệu lực tại ngày hiện tại
@@ -153,10 +149,12 @@ HR có thể xem và xử lý mọi đơn đang chờ; quản lý chỉ xử lý
 
 Backend sử dụng Dynamic RBAC: các thao tác API được kiểm tra theo permission và data scope trong JWT (Self, Team, All). HR là nguồn quản lý Role assignment và quan hệ quản lý hiện tại; Leave Service gọi HR để xác minh Team khi cần.
 
-Giao diện React hiện vẫn hiển thị menu và chặn route theo ba role legacy HR/Manager/Employee để giữ tương thích UI. Vì vậy:
+React đọc `authz_v=1` và `perm` để hiển thị menu, bảo vệ route và ẩn/hiện từng thao tác theo permission/scope. Nhãn HR/Manager/Employee vẫn có thể xuất hiện trong hồ sơ và danh sách nhân viên như thông tin vai trò legacy; nhãn này không tự quyết định quyền.
+
 - Một API call trực tiếp vẫn phải thỏa permission/scope backend; việc thấy hoặc không thấy menu không cấp quyền.
-- API có thể hỗ trợ khả năng mà UI chưa cung cấp. Ví dụ Role assignment hiện có backend API nhưng chưa có trang quản trị.
-- Role catalog CRUD và cấu hình permission/scope cho Role chưa có UI/API quản trị tổng quát.
+- API gán/xem/thu hồi UserRole đã có ở backend nhưng chưa có trang React quản trị.
+- Role/Permission catalog CRUD và cấu hình Role grants chưa có UI/API quản trị tổng quát.
+- `Employee.Role` vẫn được giữ cho tương thích, nhãn hiển thị, lọc/thống kê và một số nghiệp vụ legacy; quyền hiệu lực lấy từ UserRole assignments.
 - Access JWT đã phát vẫn có hiệu lực đến khi hết hạn; gán/thu hồi Role không cập nhật token đang tồn tại tại chỗ.
 
 ## 3. Kịch bản demo nhanh

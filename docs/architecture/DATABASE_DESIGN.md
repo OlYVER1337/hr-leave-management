@@ -94,7 +94,9 @@ Index và constraint quan trọng:
 
 Các Scope đang được thực thi trong API là Self, Team và All. Department tồn tại trong schema để mở rộng nhưng chưa được dùng làm điều kiện lọc dữ liệu.
 
-`Employee.Role` dạng enum/string vẫn được giữ để tương thích/backfill và UI. AuthorizationSeeder tạo baseline Role/Permission/Scope, sau đó backfill UserRoles từ Employee.Role theo hướng idempotent. Employee.Role không phải nguồn quyết định backend authorization của các endpoint đã migrate.
+`Employee.Role` là trường enum/string legacy trong `Employees`. AuthorizationSeeder dùng nó để backfill Role assignment ban đầu vào `UserRoles` theo hướng idempotent; seeder không khôi phục assignment đã revoke hoặc hết hạn. Sau backfill, quyền backend được tính từ `UserRoles` → `Roles` → `RolePermissions` → `RolePermissionScopes`, có đối chiếu `PermissionScopeRules`.
+
+Trường legacy này vẫn được giữ cho nhãn vai trò trong UI/DTO, lọc và thống kê nhân viên, dữ liệu tạo/cập nhật nhân viên, claim `role` tương thích và một số quy tắc nghiệp vụ cũ. Nó không phải nguồn authorization và không tự đồng bộ với các UserRole assignment được cấp/thu hồi động; vì vậy không suy ra effective permission từ `Employees.Role`. Chỉ xóa cột sau khi các mục đích tương thích và nghiệp vụ còn lại được thay thế bằng thiết kế mới và có migration riêng.
 
 ---
 
@@ -330,7 +332,9 @@ Nguồn quyết định schema thực tế
 - HR Service sở hữu `LeavePolicies`; mỗi version có `LeaveTypeId`, `Year`, `DaysPerYear`, `EffectiveFrom`, `CreatedAtUtc`, `Reason`.
 - Unique index `(LeaveTypeId, Year, EffectiveFrom)` cho phép nhiều version trong cùng năm nhưng không cho hai version cùng ngày hiệu lực.
 - Policy GET với `asOfDate` trả phiên bản hiệu lực mới nhất theo loại nghỉ/năm tại ngày được yêu cầu. Nghiệp vụ Leave gửi `authoritative=true` để bỏ qua Redis cache.
-- POST và PUT `/api/v1/leave-policies/{id}` tạo version mới; PUT `/{id}/edit` chỉ chỉnh version chưa hiệu lực và không thay đổi năm, loại nghỉ hoặc ngày hiệu lực. Policy năm quá khứ không được sửa; version đã effective không được edit/delete.
+- `POST /api/v1/leave-policies` tạo version cho loại nghỉ/năm trong body; có thể là version đầu tiên hoặc version tiếp theo, chỉ chặn trùng `LeaveTypeId + Year + EffectiveFrom`.
+- `PUT /api/v1/leave-policies/{id}` lấy loại nghỉ/năm từ version `{id}` rồi thêm một version mới; không cập nhật bản ghi gốc và không cho chuyển version sang năm/loại nghỉ khác.
+- `PUT /api/v1/leave-policies/{id}/edit` chỉnh version đã tồn tại nhưng chỉ khi `EffectiveFrom` còn trong tương lai; chỉ đổi số ngày/lý do, giữ nguyên năm, loại nghỉ và ngày hiệu lực. Năm hiện tại và tương lai được tạo version; năm đã kết thúc chỉ xem. Version đã effective không được edit/delete.
 - DELETE version tương lai yêu cầu Leave Service đếm số `LeaveRequestYearAllocations.PolicyVersionId` tham chiếu. Có allocation tham chiếu thì HR từ chối 409; Leave không khả dụng thì thao tác fail closed. Giữa bước COUNT ở Leave và DELETE ở HR vẫn có race window nhỏ vì hai database không dùng distributed transaction.
 - Leave lưu `PolicyVersionId` và `PolicyDaysAtCreation` ở yearly allocation như snapshot lịch sử. Đây không phải FK vì HR và Leave sở hữu database riêng; xóa version đã được tham chiếu bị ngăn qua kiểm tra liên service.
 - `LeaveBalances.PolicyDays` là quota hiện hành, không phải quota snapshot lịch sử. Khi policy giảm thấp hơn `Used + Pending`, Leave cập nhật `PolicyDays` nhưng không giảm `Used/Pending`; `Entitled` được suy ra để vẫn bao phủ số ngày đã dùng/đang chờ.

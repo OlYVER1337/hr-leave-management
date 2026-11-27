@@ -84,10 +84,29 @@ describe('getEmployeePage', () => {
         role: undefined,
         isActive: undefined,
         departmentId: undefined,
+        directReportsOnly: undefined,
         sortBy: 'fullName',
         sortDirection: 'asc',
       },
     });
+  });
+
+
+  it('uses the shared employees endpoint for direct reports and never sends a manager ID', async () => {
+    await getEmployeePage(
+      { page: 1, pageSize: 10, search: 'An', directReportsOnly: true },
+      { currentEmployeeId: 'manager-1' },
+    );
+
+    expect(hrGetMock).toHaveBeenCalledWith('/api/v1/employees', {
+      params: expect.objectContaining({
+        page: 1,
+        pageSize: 10,
+        search: 'An',
+        directReportsOnly: true,
+      }),
+    });
+    expect(hrGetMock.mock.calls[0][1].params).not.toHaveProperty('managerId');
   });
 
   it('normalizes page and pageSize to the API limits', async () => {

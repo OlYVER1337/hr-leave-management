@@ -46,7 +46,9 @@ Nếu HR Service không khả dụng, Leave Service trả 503 Dependency unavail
 | RolePermissionScopes | Gán Scope cho Role-Permission; khóa ngoại kép bảo đảm Permission được gán và Scope hợp lệ |
 | AuthzAuditLog | Lưu người thực hiện, đối tượng bị thay đổi và giá trị trước/sau |
 
-Employee.Role enum được giữ tạm trong giai đoạn chuyển đổi. Không xóa trường cũ cho đến khi dữ liệu hiện tại đã được backfill sang UserRoles và mọi API, seeder, test, JWT đều đọc Dynamic RBAC.
+`Employee.Role` là trường enum legacy trong `Employees`, được giữ lại để tương thích trong giai đoạn chuyển đổi. Seeder dùng giá trị này để backfill assignment ban đầu vào `UserRoles`; sau backfill, nguồn xác định quyền backend là các UserRole assignment còn hiệu lực cùng Role/Permission/Scope trong database. Không được suy ra effective permission chỉ từ `Employee.Role`.
+
+Hiện `Employee.Role` vẫn được dùng cho nhãn vai trò trong hồ sơ/danh sách, bộ lọc và thống kê nhân viên, DTO tạo/cập nhật, claim `role` tương thích trong JWT và một số kiểm tra nghiệp vụ legacy (ví dụ chặn đổi nhãn Manager khi còn direct reports). Giá trị này không tự đồng bộ với các Role assignment động được cấp qua `UserRoles`; hai nguồn có thể khác nhau. Các endpoint đã chuyển đổi và React permission-driven không dùng nó làm căn cứ authorization.
 
 Scope được lưu dưới dạng chuỗi có constraint: Self, Team, Department, All. V1 chỉ bật các Scope đã được định nghĩa nghiệp vụ và đã được service hỗ trợ. Chưa cấp Department trước khi chốt quy tắc phòng ban hiện tại hay snapshot.
 
@@ -145,9 +147,10 @@ Authorization Service hợp các Scope trùng Permission giữa nhiều Role, lo
 Authorization Service đã được nối vào luồng phát access token của AuthenticationService. Cả login và refresh đều gọi lại GetEffectiveAuthorizationAsync trước khi phát JWT; refresh không sao chép claim perm từ access token cũ.
 
 HR Employees API đã chuyển sang Permission + Scope:
-- GET collection và GET theo ID dùng employees.read, giới hạn Self/Team/All.
-- POST, PUT, deactivate và reset-password lần lượt yêu cầu employees.create, employees.update, employees.deactivate và employees.password.reset với Scope All.
-- EmployeeLookupController dùng employees.read cho tra cứu theo ID; tra cứu Team yêu cầu employees.read với Team hoặc All. Với scope Team, Manager chỉ tra cứu direct report đang active theo `ManagerId` hiện tại; lookup ID kiểm tra quyền trên cùng employee snapshot vừa đọc để tránh race khi deactivate/reassign. Batch lookup và Team listing áp dụng cùng active/current-manager rule. Scope All vẫn đọc được hồ sơ inactive. Service kiểm tra Self/Team/All từ perm, không đọc role claim.
+- GET collection và GET theo ID dùng `employees.read`, giới hạn Self/Team/All.
+- POST, PUT, deactivate và reset-password lần lượt yêu cầu `employees.create`, `employees.update`, `employees.deactivate` và `employees.password.reset` với Scope All.
+- Trên nhánh `feature/consolidate-employees-team-api`, danh sách nhân viên và direct reports dùng chung `GET /api/v1/employees`. Thêm `directReportsOnly=true` để giới hạn direct reports đang active của caller; backend tự lấy employee ID từ JWT, bắt buộc `employees.read:Team`, và áp dụng chung search/filter/sort/pagination/`X-Total-Count`. Không nhận `managerId` từ client. Endpoint phân trang riêng `GET /api/v1/me/team` đã bị xóa; trang frontend `/my-team` vẫn tồn tại và gọi API dùng chung.
+- EmployeeLookupController dùng `employees.read` cho tra cứu theo ID; với scope Team, chỉ tra cứu direct report đang active theo `ManagerId` hiện tại. Lookup ID kiểm tra quyền trên cùng employee snapshot vừa đọc để tránh race khi deactivate/reassign. Batch lookup áp dụng cùng active/current-manager rule. Scope All vẫn đọc được hồ sơ inactive. Service kiểm tra Self/Team/All từ perm, không đọc role claim.
 
 Các thao tác ghi ở Departments, Holidays, LeavePolicies và LeaveTypes cũng dùng policy riêng: departments.create/update/delete, holidays.create/update/delete, leave-policies.create/update và leave-types.create/update; các policy ghi dùng Scope All. HR system role được seed đầy đủ các quyền này. Employee.Role enum vẫn là dữ liệu tương thích/backfill trong giai đoạn chuyển tiếp, nhưng không còn là điều kiện authorization cho các endpoint nêu trên. Đọc danh mục leave type với includeInactive cũng kiểm tra leave-types.update:All thay vì role claim.
 
@@ -207,7 +210,7 @@ LeaveRequests.ApproverId là snapshot tại thời điểm tạo đơn, chỉ ph
 2. Seed Role/Permission/Scope baseline và backfill UserRoles từ Employee.Role.
 3. Thêm Authorization Service để hợp Permission và Scope, mặc định deny.
 4. Phát perm claim từ HR login/refresh; cập nhật token tests.
-5. Refactor HR Employees API và /api/v1/me/team sang Permission + Scope.
+5. Refactor HR Employees API sang Permission + Scope; dùng `directReportsOnly=true` cho direct reports và gỡ endpoint phân trang đội nhóm riêng.
 6. Cung cấp API quản lý UserRoles có kiểm tra quyền hiện tại, chống leo thang đặc quyền, audit và bảo vệ quản trị viên cuối cùng.
 7. Chuyển HR write endpoints và EmployeeLookupController sang policy Permission; chuyển Leave API/repository sang LeaveAccess từ perm, giữ HR lookup cho Team inbox và quyết định Team.
 8. Chạy test HR/Leave và Web với skipped = 0; workload Approval sustained đã được đo bằng `constant-vus` ở 50 và 150 VU × 5 phút. Mức đánh giá hiện dừng tại 150 VU, không mở rộng tải hoặc soak test.
@@ -225,29 +228,31 @@ Outbox, asynchronous read model, backfill/reconciliation giữa hai service khô
 - Không tin cậy role/scope do client gửi trong query hoặc body.
 
 
-## As-built boundary và phần chưa triển khai (20/11/2026)
+## As-built boundary và phần chưa triển khai (27/11/2026)
 
-### Đã có trong backend
-- HR migration AddDynamicAuthorizationSchema và các bảng Roles, Permissions, UserRoles, RolePermissions, PermissionScopeRules, RolePermissionScopes, AuthzAuditLog.
-- AuthorizationSeeder seed baseline Employee, Manager, HR, Auditor và permission/scope; backfill UserRoles từ Employee.Role theo hướng idempotent.
-- Login/refresh tính quyền lại và phát authz_v=1 cùng perm JSON.
-- HR write APIs, employee list/detail/lookup, UserRole assignment API và Leave API đã có permission/scope policies.
-- UserRole grant/revoke dùng transaction; có kiểm tra actor hiện thời, chặn tự cấp quyền và privilege escalation, bảo vệ admin cuối cùng, đồng thời ghi audit.
+### Đã có
+- HR_DB có bảy bảng Dynamic Authorization: `Roles`, `Permissions`, `UserRoles`, `RolePermissions`, `PermissionScopeRules`, `RolePermissionScopes`, `AuthzAuditLog`.
+- AuthorizationSeeder seed baseline Employee, Manager, HR, Auditor và permission/scope; backfill `UserRoles` từ `Employee.Role` theo hướng idempotent, không tự khôi phục assignment đã revoke/hết hạn.
+- Login/refresh tính lại quyền và phát `authz_v=1` cùng claim `perm`.
+- HR/Leave API và React menu, route guard, action đã dùng Permission + Scope; backend là lớp enforcement cuối cùng.
+- Backend có API xem/gán/thu hồi UserRole assignment; grant/revoke dùng transaction, kiểm tra quyền hiện tại của actor, chống self-grant và privilege escalation, bảo vệ quản trị viên cuối cùng, đồng thời ghi audit.
+- Trên nhánh `feature/consolidate-employees-team-api`, danh sách nhân viên và direct reports được hợp nhất qua `GET /api/v1/employees` với `directReportsOnly=true`; route cũ `GET /api/v1/me/team` đã bị loại khỏi controller/runtime/OpenAPI. Nhánh đã được build lên HR Bench và Manager direct-report request đã được xác nhận HTTP 200 với `managerId` khớp JWT `sub`.
 
 ### Giới hạn hiện tại
-- API quản trị hiện chỉ xem danh mục Role đang active và gán/xem/thu hồi UserRole assignment. Chưa có API tạo Role tùy ý, activate/deactivate Role/Permission hoặc sửa RolePermissions/RolePermissionScopes.
-- Danh mục Role/Permission baseline được quản lý qua code seeder/migration, chưa phải catalog management UI.
-- React vẫn dùng legacy Role cho navigation và route guard. Frontend chưa đọc/áp dụng từng permission/scope để ẩn/hiện action. Backend vẫn là enforcement cuối cùng.
-- Employee.Role và Role claim legacy chưa bị loại bỏ; chỉ duy trì compatibility/UI/backfill, không dùng để authorize các endpoint đã migrate.
-- Department scope có trong schema nhưng chưa được seed/cấp cho baseline và không có repository filter thực thi.
-- Access JWT đã phát không bị thu hồi tức thời khi gán/thu hồi Role hoặc deactivate; permission mới áp dụng sau login/refresh, token cũ còn hiệu lực đến expiry.
+- Chưa có API/UI CRUD catalog để tạo Role tùy ý, activate/deactivate Role/Permission hoặc chỉnh `RolePermissions`/`RolePermissionScopes`.
+- Chưa có React UI quản trị UserRole assignment; hiện chỉ có backend GET/POST/DELETE assignment APIs.
+- `Employee.Role` và JWT Role claim legacy vẫn được giữ. Chúng phục vụ nhãn hiển thị/tương thích, lọc/thống kê, DTO quản lý nhân viên, một số kiểm tra nghiệp vụ legacy và backfill; không phải nguồn authorization. `Employee.Role` không tự đồng bộ với UserRole assignment động.
+- Department scope có trong schema nhưng chưa có bộ lọc dữ liệu được triển khai.
+- Access JWT đã phát không bị thu hồi tức thời khi gán/thu hồi Role hoặc deactivate; token cũ còn hiệu lực đến expiry. Login/refresh tiếp theo mới tính quyền hiện tại.
 
-Không nên mô tả V1 là hệ thống có thể tạo Role/Permission tùy ý end-to-end cho tới khi catalog CRUD và permission-driven frontend được triển khai.
+Chưa mô tả V1 là hệ thống CRUD Role/Permission tùy ý end-to-end cho tới khi catalog management được triển khai.
 
 
 ### Trạng thái source sau merge
 
-Dynamic Authorization V1 trong tài liệu này đã được tích hợp vào `master` qua PR #6, merge commit `81b987043ce4663ad11800bb331ffdbc013bd1d2` ngày 20/11/2026. Trạng thái merge không làm thay đổi các giới hạn V1 nêu trên: React vẫn dùng legacy Role cho navigation/route guard, Department scope chưa được thực thi, và Role/Permission catalog CRUD chưa có.
+Dynamic Authorization V1 đã được tích hợp vào `master` qua PR #6. Permission-driven React UI tiếp tục được tích hợp qua [PR #18](https://github.com/OlYVER1337/hr-leave-management/pull/18), merge commit `d69156aa8990e2d92d21ad0dac1f9e0a7e1d2c5e` ngày 27/11/2026. React hiện dùng permission/scope từ JWT cho menu, route và action; Role legacy chỉ còn vai trò tương thích/hiển thị.
+
+Việc gộp direct reports vào `GET /api/v1/employees?directReportsOnly=true` đang ở nhánh `feature/consolidate-employees-team-api` và chưa merge vào `master`. Department scope và Role/Permission catalog CRUD vẫn là các giới hạn riêng.
 
 ## Benchmark Approval sustained — 25/11/2026
 
