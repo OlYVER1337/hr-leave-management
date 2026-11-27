@@ -336,7 +336,7 @@ công trực tiếp. Trang chỉ có quyền đọc, không có thao tác quản
     │ Avatar + Email     │ EMP-...    │ Kỹ thuật │ Employee│ Date       │ Active  │ [View]
     └────────────────────┴────────────┴──────────┴─────────┴────────────┴─────────┘
 
-- API mode gọi GET /api/v1/employees với query `directReportsOnly=true`; backend xác định caller từ JWT, không nhận managerId do client gửi.
+- API mode gọi `GET /api/v1/employees` với query `directReportsOnly=true`; backend xác định caller từ JWT, không nhận `managerId` do client gửi. Trang giao diện `/my-team` vẫn giữ nguyên, nhưng không còn endpoint riêng `GET /api/v1/me/team`; route API cũ đã bị gỡ khỏi controller/runtime/OpenAPI trên nhánh `feature/consolidate-employees-team-api`.
 - Chỉ trả direct reports đang hoạt động; bộ lọc yêu cầu `employees.read:Team`, dùng pagination (page/pageSize từ 1–100) và trả tổng số qua X-Total-Count.
 - Search ở server theo họ tên, email, mã nhân viên và phòng ban; các filter/sort dùng chung với danh sách nhân viên; UI sử dụng server pagination và có loading/error/empty states.
 - Nút “Xem hồ sơ” mở modal read-only: họ tên, mã, email, vai trò, phòng ban,
