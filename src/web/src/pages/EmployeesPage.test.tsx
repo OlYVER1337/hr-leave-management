@@ -129,7 +129,7 @@ describe('EmployeesPage filtering, sorting and pagination', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: 'Số nhân viên mỗi trang' }), '25');
 
     expect(screen.getByText('Trang 1 / 1')).toBeInTheDocument();
-    expect(screen.getByText('Nhân viên 25')).toBeInTheDocument();
+    expect(await screen.findByText('Nhân viên 25')).toBeInTheDocument();
     expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(26);
     expect(document.querySelector('.table-footer')?.textContent).toContain('Đang hiển thị 1–25 / 25 nhân viên');
     await waitFor(() => expect(getEmployeeOverviewPage).toHaveBeenLastCalledWith(
