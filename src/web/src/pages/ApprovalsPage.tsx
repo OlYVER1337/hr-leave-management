@@ -43,7 +43,6 @@ export function ApprovalsPage() {
   const queryKey = JSON.stringify({
     search: debouncedQuery,
     pendingOnly: showPendingOnly,
-    pageSize,
   });
 
   const loadBlock = useCallback((requestPage: number, requestPageSize: number) => {

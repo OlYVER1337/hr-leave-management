@@ -13,7 +13,7 @@ function createPage(page: number, pageSize: number, totalCount = 45): PagedResul
 }
 
 describe('usePagedBlock', () => {
-  it('reuses one API block for two UI pages', async () => {
+  it('can reuse one API block for two UI pages when explicitly enabled', async () => {
     const load = vi.fn((page: number, pageSize: number) =>
       Promise.resolve(createPage(page, pageSize)),
     );
@@ -24,6 +24,7 @@ describe('usePagedBlock', () => {
         pageSize: 10,
         queryKey: 'all-employees',
         refreshToken: 0,
+        maxPagesPerBlock: 2,
         load,
       }),
       { initialProps: { page: 1 } },
@@ -41,7 +42,7 @@ describe('usePagedBlock', () => {
     expect(load).toHaveBeenCalledTimes(1);
   });
 
-  it('requests the exact UI page size when block preloading is disabled', async () => {
+  it('requests the exact UI page size by default', async () => {
     const load = vi.fn((page: number, pageSize: number) =>
       Promise.resolve(createPage(page, pageSize, 60)),
     );
@@ -52,7 +53,6 @@ describe('usePagedBlock', () => {
         pageSize: 25,
         queryKey: 'manager-team',
         refreshToken: 0,
-        maxPagesPerBlock: 1,
         load,
       }),
       { initialProps: { page: 1 } },
@@ -69,7 +69,7 @@ describe('usePagedBlock', () => {
     expect(result.current.items).toEqual(Array.from({ length: 25 }, (_, i) => i + 26));
   });
 
-  it('loads the next API block when entering UI page three', async () => {
+  it('requests the selected UI page directly when entering page three', async () => {
     const load = vi.fn((page: number, pageSize: number) =>
       Promise.resolve(createPage(page, pageSize)),
     );
@@ -90,7 +90,7 @@ describe('usePagedBlock', () => {
 
     await waitFor(() => expect(load).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(load).toHaveBeenNthCalledWith(2, 2, 20);
+    expect(load).toHaveBeenNthCalledWith(2, 3, 10);
     expect(result.current.items).toEqual(Array.from({ length: 10 }, (_, i) => i + 21));
     expect(result.current.totalCount).toBe(45);
   });
@@ -172,10 +172,10 @@ describe('usePagedBlock', () => {
     expect(result.current.hasTotalCount).toBe(true);
     expect(result.current.totalCount).toBe(45);
     await waitFor(() => expect(load).toHaveBeenCalledTimes(2));
-    expect(load).toHaveBeenNthCalledWith(2, 1, 50);
+    expect(load).toHaveBeenNthCalledWith(2, 1, 25);
 
     await act(async () => {
-      resolveRefresh?.(createPage(1, 50, 40));
+      resolveRefresh?.(createPage(1, 25, 40));
     });
 
     await waitFor(() => expect(result.current.totalCount).toBe(40));
@@ -192,6 +192,7 @@ describe('usePagedBlock', () => {
         pageSize: 10,
         queryKey: 'all-employees',
         refreshToken: 0,
+        maxPagesPerBlock: 2,
         load,
       }),
       { initialProps: { page: 1 } },

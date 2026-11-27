@@ -111,7 +111,7 @@ describe('ApprovalsPage', () => {
       );
     });
     expect(mocks.notify).toHaveBeenCalledWith('Đã phê duyệt đơn nghỉ.');
-    expect(getApprovalsInboxPage).toHaveBeenCalledWith(manager, expect.objectContaining({ page: 1, pageSize: 20 }));
+    expect(getApprovalsInboxPage).toHaveBeenCalledWith(manager, expect.objectContaining({ page: 1, pageSize: 10 }));
     expect(getApprovalsInboxPage).toHaveBeenCalled();
     // One initial summary load and one refresh after the decision.
     expect(getLeaveRequestSummary).toHaveBeenCalledTimes(2);
@@ -120,6 +120,34 @@ describe('ApprovalsPage', () => {
       expect.objectContaining({ pageSize: 1 }),
     );
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('sends the selected page size to the approval inbox API', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <ApprovalsPage />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole('button', { name: /Xem xét đơn/ });
+    const pageSizeSelect = screen.getByRole('combobox', { name: 'Số đơn mỗi trang' });
+
+    await user.selectOptions(pageSizeSelect, '25');
+    await waitFor(() => {
+      expect(getApprovalsInboxPage).toHaveBeenLastCalledWith(
+        manager,
+        expect.objectContaining({ page: 1, pageSize: 25 }),
+      );
+    });
+
+    await user.selectOptions(pageSizeSelect, '50');
+    await waitFor(() => {
+      expect(getApprovalsInboxPage).toHaveBeenLastCalledWith(
+        manager,
+        expect.objectContaining({ page: 1, pageSize: 50 }),
+      );
+    });
   });
 
   it('hides read metrics when the caller only has decision permission', async () => {

@@ -86,7 +86,6 @@ export function LeaveRequestsPage({ all = false }: { all?: boolean }) {
     status: status === 'All' ? undefined : status,
     typeCode: type === 'All' ? undefined : type,
     mineOnly,
-    pageSize,
   });
   const loadBlock = useCallback(
     (requestPage: number, requestPageSize: number) => {
