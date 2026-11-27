@@ -28,7 +28,7 @@ Tài liệu dành cho người tiếp nhận source, dựng môi trường, ki�
 
 Backend regression: HR **162/162 passed**, Leave **129/129 passed**, đều 0 failed/0 skipped; hai suite được chạy trên revision `30720e176106cc3357ff028ddc9a6ebdce95a93b` với SQL Server/Redis của stack `hrbench`. Đây là revision trước PR #20/#21; hai PR sau chỉ thay đổi Web, không thay đổi backend.
 
-Frontend: Web **107/107 passed** (20/20 test files), `npm ci`, `npm audit`, TypeScript `tsc --noEmit` và Vite production build thành công trên nhánh PR #21, head `8f69c5420119817faa0371f1675c96f7f5253d52`. PR #20/#21 đều đã merge; master hiện tại là `de15fd4169ea8db3cc702f95f7922ca4ab9a1e8c`. HR Bench Web đã được build lại sau PR #21; người dùng xác nhận sau khi cập nhật. Chưa lưu TRX/log riêng và chưa có ảnh Network cuối cùng cho cả bốn màn hình trong repository.
+Frontend: Web **107/107 passed** (20/20 test files), `npm ci`, `npm audit`, TypeScript `tsc --noEmit` và Vite production build thành công trên nhánh PR #21, head `8f69c5420119817faa0371f1675c96f7f5253d52`. PR #20/#21 đều đã merge; master hiện tại là `de15fd4169ea8db3cc702f95f7922ca4ab9a1e8c`. Chưa có xác nhận HR Bench Web đã được build lại từ master sau PR #21; cũng chưa lưu ảnh Network cuối cùng cho cả bốn màn hình. TRX/log riêng của các lượt regression mới chưa được lưu trong repository.
 
 ## 2. Dựng hệ thống local lần đầu
 
