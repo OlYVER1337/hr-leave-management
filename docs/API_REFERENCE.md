@@ -56,7 +56,7 @@ Danh sách phân trang:
 | POST /api/v1/lookup/employees/batch | employees.read:Self/Team/All | Lookup tối đa 100 ID; Team chỉ gồm direct report active theo ManagerId hiện tại; All có thể đọc inactive |
 | GET /api/v1/lookup/employees/{id} | employees.read:Self/Team/All | Snapshot theo scope; Team chỉ đọc direct report active theo ManagerId hiện tại; All có thể đọc inactive |
 
-Danh sách nhân viên và direct reports dùng chung `GET /api/v1/employees?page=1&pageSize=20`. Thêm `directReportsOnly=true` để chỉ lấy direct reports đang hoạt động của caller; backend tự lấy actor ID từ JWT và bắt buộc `employees.read:Team`. Bộ lọc này dùng chung search, role/status/department filter, sort, pagination và `X-Total-Count`; không nhận managerId từ client.
+Danh sách nhân viên và direct reports dùng chung `GET /api/v1/employees?page=1&pageSize=20`. Thêm `directReportsOnly=true` để chỉ lấy direct reports đang hoạt động của caller; backend tự lấy actor ID từ JWT và bắt buộc `employees.read:Team`. Bộ lọc này dùng chung search, role/status/department filter, sort, pagination và `X-Total-Count`; không nhận `managerId` từ client. Trang giao diện `/my-team` vẫn tồn tại nhưng không phải API riêng. `GET /api/v1/me/team` đã bị loại khỏi controller và OpenAPI trên nhánh `feature/consolidate-employees-team-api`; nhánh này chưa merge vào `master`.
 
 ### 2.3. Quản lý Role assignment
 
