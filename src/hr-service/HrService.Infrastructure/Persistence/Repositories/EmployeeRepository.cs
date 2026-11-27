@@ -43,6 +43,7 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
         bool includeSelf,
         bool includeTeam,
         bool includeAll,
+        bool directReportsOnly,
         string? search,
         Role? role,
         bool? isActive,
@@ -55,6 +56,12 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
     {
         IQueryable<Employee> query = BuildVisibleQuery(
             actorId, includeSelf, includeTeam, includeAll);
+
+        if (directReportsOnly)
+        {
+            // Chỉ lấy nhân viên đang hoạt động được phân công trực tiếp cho caller.
+            query = query.Where(employee => employee.IsActive && employee.ManagerId == actorId);
+        }
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -272,53 +279,6 @@ public sealed class EmployeeRepository(HrDbContext dbContext) : IEmployeeReposit
             .Include(employee => employee.Manager)
             .OrderBy(employee => employee.FullName)
             .ToListAsync(cancellationToken);
-    }
-
-    public async Task<(IReadOnlyList<EmployeeReadModel> Items, int TotalCount)> ListDirectReportsPageAsync(
-        Guid managerId,
-        string? search,
-        int page,
-        int pageSize,
-        CancellationToken cancellationToken = default)
-    {
-        var query = BuildDirectReportsQuery(managerId);
-
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            var term = search.Trim();
-            query = query.Where(employee =>
-                employee.FullName.Contains(term) ||
-                employee.Code.Contains(term) ||
-                employee.Email.Contains(term) ||
-                (employee.Department != null && employee.Department.Name.Contains(term)));
-        }
-
-        var totalCount = await query.CountAsync(cancellationToken);
-        var normalizedSize = Math.Clamp(pageSize, 1, 100);
-        var offset = ((long)Math.Max(page, 1) - 1L) * normalizedSize;
-        if (offset >= totalCount)
-            return (Array.Empty<EmployeeReadModel>(), totalCount);
-
-        var items = await query
-            .OrderBy(employee => employee.FullName)
-            .ThenBy(employee => employee.Id)
-            .Skip((int)offset)
-            .Take(normalizedSize)
-            .Select(employee => new EmployeeReadModel(
-                employee.Id,
-                employee.Code,
-                employee.FullName,
-                employee.Email,
-                employee.Role,
-                employee.HireDate,
-                employee.IsActive,
-                employee.DepartmentId,
-                employee.Department != null ? employee.Department.Name : string.Empty,
-                employee.ManagerId,
-                employee.Manager != null ? employee.Manager.FullName : null))
-            .ToListAsync(cancellationToken);
-
-        return (items, totalCount);
     }
 
     public async Task<IReadOnlyList<Guid>> GetDirectReportIdsAsync(

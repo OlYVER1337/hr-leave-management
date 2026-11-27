@@ -71,6 +71,7 @@ public sealed class EmployeeServiceTests
                 true,
                 true,
                 false,
+                false,
                 null,
                 null,
                 null,
@@ -125,7 +126,7 @@ public sealed class EmployeeServiceTests
         Assert.Equal(1, overview.TotalCount);
         Assert.Equal(new EmployeeSummaryResponse(4, 3, 1), overview.Summary);
         repository.Verify(item => item.ListVisiblePageAsync(
-            actorId, true, true, false, null, null, null, null,
+            actorId, true, true, false, false, null, null, null, null,
             "fullName", false, 1, 10, It.IsAny<CancellationToken>()), Times.Once);
         repository.Verify(item => item.GetVisibleSummaryAsync(
             actorId, true, true, false, It.IsAny<CancellationToken>()), Times.Once);
