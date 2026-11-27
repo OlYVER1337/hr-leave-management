@@ -316,10 +316,10 @@ Kết quả local được ghi nhận trong quá trình hoàn thiện dự án:
 
 | Bộ kiểm thử | Kết quả | Ghi chú |
 |---|---:|---|
-| HR Service | 155/155 passed | 0 failed, 0 skipped |
-| Leave Service | 123/123 passed | 0 failed, 0 skipped |
-| Web | 79 tests passed | Vitest |
-| Web production build | Thành công | TypeScript/Vite build |
+| HR Service | 162/162 passed | 0 failed, 0 skipped; feature branch `feature/consolidate-employees-team-api` |
+| Leave Service | 129/129 passed | 0 failed, 0 skipped; feature branch `feature/consolidate-employees-team-api` |
+| Web | 103/103 passed | 20/20 test files; Vitest trên feature branch |
+| Web production build | Thành công | TypeScript check và Vite production build trên feature branch |
 
 Các kết quả trên là test chạy thủ công/local do người dùng báo cáo. Output không lưu `git rev-parse HEAD`, vì vậy chưa gắn chắc chắn với merge commit `81b98704`. Không có CI/CD chạy tự động theo lựa chọn của dự án.
 
