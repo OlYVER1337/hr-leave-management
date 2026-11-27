@@ -46,7 +46,7 @@ Danh sách phân trang:
 
 | Method / route | Permission/scope | Mô tả |
 |---|---|---|
-| GET /api/v1/employees?page=1&pageSize=20 | employees.read:Self/Team/All | Danh sách trong phạm vi quyền; hỗ trợ filter/search/sort |
+| GET /api/v1/employees?page=1&pageSize=20[&directReportsOnly=true] | employees.read:Self/Team/All; filter direct reports yêu cầu Team | Danh sách trong phạm vi quyền; hỗ trợ filter/search/sort |
 | GET /api/v1/employees/overview?page=1&pageSize=20 | employees.read:Self/Team/All | Trang dữ liệu, totalCount và summary |
 | GET /api/v1/employees/{id} | employees.read:Self/Team/All | Hồ sơ trong phạm vi được phép |
 | POST /api/v1/employees | employees.create:All | Tạo nhân viên; mã được backend sinh |
