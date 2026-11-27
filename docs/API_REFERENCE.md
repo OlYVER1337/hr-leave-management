@@ -105,7 +105,13 @@ Giới hạn: API hiện chỉ quản lý assignment cho danh mục Role đượ
 
 Ba loại nghỉ chuẩn là ANNUAL, SICK, UNPAID. Không cho phép loại nghỉ tùy ý; UNPAID không có quota policy. authoritative=true bypass Redis và đọc SQL trực tiếp. Leave Service dùng authoritative read khi tính nghiệp vụ.
 
-Leave Policy được lưu theo phiên bản bất biến, mỗi bản ghi có EffectiveFrom, CreatedAtUtc và Reason. POST tạo phiên bản đầu tiên; PUT thêm một phiên bản mới cho cùng loại nghỉ/năm và không sửa bản ghi cũ. Có thể tạo/thêm phiên bản cho năm hiện tại hoặc năm tương lai; năm đã kết thúc chỉ được xem. EffectiveFrom phải thuộc đúng năm policy đã chọn và không sớm hơn ngày nghiệp vụ hiện tại (UTC+07:00). Vì vậy, policy năm hiện tại có thể bắt đầu từ hôm nay; policy năm tương lai bắt đầu sớm nhất từ ngày 01/01 của chính năm đó. GET hỗ trợ asOfDate để lấy trực tiếp từ HR phiên bản mới nhất có EffectiveFrom không sau ngày chỉ định; có asOfDate thì endpoint tự dùng đường đọc authoritative kể cả khi không truyền authoritative=true.
+Leave Policy được lưu theo phiên bản, mỗi bản ghi có `EffectiveFrom`, `CreatedAtUtc` và `Reason`. Các thao tác tạo phiên bản:
+
+- `POST /api/v1/leave-policies` tạo một version cho `leaveTypeId` và `year` trong request. Có thể dùng để tạo version đầu tiên hoặc thêm version tiếp theo; chỉ từ chối nếu đã tồn tại version cùng loại nghỉ/năm có cùng ngày hiệu lực.
+- `PUT /api/v1/leave-policies/{id}` tra cứu version `{id}` rồi tạo một version mới cho đúng loại nghỉ và năm đó. Request không được chuyển version sang loại nghỉ hoặc năm khác; bản ghi gốc không bị sửa.
+- `PUT /api/v1/leave-policies/{id}/edit` chỉnh trực tiếp một version đã có nhưng chỉ khi `EffectiveFrom` còn ở tương lai. Thao tác này chỉ cập nhật số ngày và lý do; không đổi loại nghỉ, năm hoặc ngày hiệu lực.
+
+Cả `POST` và `PUT /{id}` đều có thể thêm version cho năm hiện tại hoặc năm tương lai; năm đã kết thúc chỉ được xem. `EffectiveFrom` phải thuộc đúng năm policy đã chọn và không sớm hơn ngày nghiệp vụ cho phép (UTC+07:00): năm hiện tại bắt đầu sớm nhất từ hôm nay, năm tương lai bắt đầu sớm nhất từ ngày 01/01 của chính năm đó. Version đã có hiệu lực không được chỉnh sửa hoặc xóa. Version tương lai chỉ được xóa khi chưa có allocation tham chiếu; nếu đã có tham chiếu, HR từ chối với HTTP 409. GET hỗ trợ `asOfDate` để lấy phiên bản mới nhất có `EffectiveFrom` không sau ngày chỉ định; có `asOfDate` thì endpoint tự dùng đường đọc authoritative kể cả khi không truyền `authoritative=true`.
 
 Body mẫu cho POST/PUT:
 
