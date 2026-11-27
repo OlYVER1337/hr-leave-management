@@ -9,9 +9,10 @@ Tài liệu dành cho người tiếp nhận source, dựng môi trường, ki�
 | Thuộc tính | Giá trị |
 |---|---|
 | Repository | [OlYVER1337/hr-leave-management](https://github.com/OlYVER1337/hr-leave-management) |
-| Branch source đã tích hợp | **master** |
-| Source HEAD trước lần cập nhật tài liệu này | **01be3cfa7a03efcf6ad63d3a16b4d6eafb706444** |
-| Trạng thái tài liệu | Tài liệu bàn giao được cập nhật trực tiếp trên master. |
+| Master baseline | **d69156aa8990e2d92d21ad0dac1f9e0a7e1d2c5e** (PR #18 — Permission-driven React UI) |
+| Feature branch đang rà soát | `feature/consolidate-employees-team-api` — chưa merge; hợp nhất API Employees/direct reports |
+| Code commit của thay đổi hợp nhất API | **02c9e5b375973dcc3992107c18953fb7ae9ba633** |
+| Trạng thái tài liệu | Cập nhật trên feature branch; không thay đổi `master`. |
 | Sửa lỗi HR OpenAPI | [0a34e13](https://github.com/OlYVER1337/hr-leave-management/commit/0a34e131fb7550695492d42614a3d74e385beab0) và [01be3cf](https://github.com/OlYVER1337/hr-leave-management/commit/01be3cfa7a03efcf6ad63d3a16b4d6eafb706444). |
 | Merge Dynamic Authorization V1 | [PR #6](https://github.com/OlYVER1337/hr-leave-management/pull/6), merge commit **81b987043ce4663ad11800bb331ffdbc013bd1d2** |
 | Trạng thái production | Chưa có bằng chứng triển khai hoặc nghiệm thu production. |
