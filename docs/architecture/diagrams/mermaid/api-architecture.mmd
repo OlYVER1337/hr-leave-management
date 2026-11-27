@@ -16,4 +16,4 @@ flowchart TB
   end
   N["Không có API Gateway riêng<br/>Nginx chỉ proxy theo path"] -.-> W
   X["Không có cross-database FK<br/>Leave lưu HR IDs dạng scalar reference"] -.-> LV
-  Y["Access JWT stateless<br/>UI dùng perm; Role claim legacy chỉ để tương thích/hiển thị"] -.-> HR
+  Y["Access JWT stateless<br/>Role claim legacy chỉ hỗ trợ UI"] -.-> HR
