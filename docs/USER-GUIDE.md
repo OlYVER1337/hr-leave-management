@@ -93,8 +93,7 @@ Swagger/OpenAPI chỉ được bật ở Development; nếu không truy cập đ
 
 ## 2. Thao tác theo vai trò
 
-Các mục menu được giới hạn theo vai trò; nếu không thấy một mục, hãy đăng nhập
-bằng tài khoản có quyền tương ứng.
+Các mục menu, route và thao tác được hiển thị theo permission/scope hiệu lực trong JWT, không chỉ dựa trên nhãn Role. Các vai trò Employee, Manager và HR dưới đây là cấu hình baseline thường gặp; tài khoản có nhiều Role có thể có tập quyền kết hợp khác nhau.
 
 ### HR
 
