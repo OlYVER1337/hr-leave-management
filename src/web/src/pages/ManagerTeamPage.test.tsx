@@ -95,9 +95,33 @@ describe('ManagerTeamPage', () => {
     expect(screen.getByText('Trần Bình')).toBeInTheDocument();
     expect(screen.getByText('Tổng nhân viên phụ trách').parentElement?.textContent).toContain('2');
     expect(getEmployeePage).toHaveBeenCalledWith(
-      expect.objectContaining({ page: 1, directReportsOnly: true }),
+      expect.objectContaining({ page: 1, pageSize: 10, directReportsOnly: true }),
       { currentEmployeeId: manager.id },
     );
+  });
+
+  it('sends the selected UI page size unchanged to the employees API', async () => {
+    const user = userEvent.setup();
+    render(<ManagerTeamPage />);
+
+    await screen.findByText('Nguyễn An');
+    const pageSizeSelect = screen.getByRole('combobox', { name: 'Số nhân viên mỗi trang' });
+
+    await user.selectOptions(pageSizeSelect, '25');
+    await waitFor(() => {
+      expect(getEmployeePage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ page: 1, pageSize: 25, directReportsOnly: true }),
+        { currentEmployeeId: manager.id },
+      );
+    });
+
+    await user.selectOptions(pageSizeSelect, '50');
+    await waitFor(() => {
+      expect(getEmployeePage).toHaveBeenLastCalledWith(
+        expect.objectContaining({ page: 1, pageSize: 50, directReportsOnly: true }),
+        { currentEmployeeId: manager.id },
+      );
+    });
   });
 
   it('filters the manager team and opens a read-only employee detail dialog', async () => {

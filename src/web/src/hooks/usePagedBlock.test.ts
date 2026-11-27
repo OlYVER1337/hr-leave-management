@@ -41,6 +41,34 @@ describe('usePagedBlock', () => {
     expect(load).toHaveBeenCalledTimes(1);
   });
 
+  it('requests the exact UI page size when block preloading is disabled', async () => {
+    const load = vi.fn((page: number, pageSize: number) =>
+      Promise.resolve(createPage(page, pageSize, 60)),
+    );
+
+    const { result, rerender } = renderHook(
+      ({ page }) => usePagedBlock({
+        page,
+        pageSize: 25,
+        queryKey: 'manager-team',
+        refreshToken: 0,
+        maxPagesPerBlock: 1,
+        load,
+      }),
+      { initialProps: { page: 1 } },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(load).toHaveBeenNthCalledWith(1, 1, 25);
+    expect(result.current.items).toEqual(Array.from({ length: 25 }, (_, i) => i + 1));
+
+    rerender({ page: 2 });
+    await waitFor(() => expect(load).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(load).toHaveBeenNthCalledWith(2, 2, 25);
+    expect(result.current.items).toEqual(Array.from({ length: 25 }, (_, i) => i + 26));
+  });
+
   it('loads the next API block when entering UI page three', async () => {
     const load = vi.fn((page: number, pageSize: number) =>
       Promise.resolve(createPage(page, pageSize)),

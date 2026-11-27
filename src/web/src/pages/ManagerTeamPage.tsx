@@ -24,7 +24,7 @@ export function ManagerTeamPage() {
     return () => window.clearTimeout(handle);
   }, [search]);
 
-  const queryKey = JSON.stringify({ managerId: user?.id, search: debouncedSearch, pageSize });
+  const queryKey = JSON.stringify({ managerId: user?.id, search: debouncedSearch });
   const loadBlock = useCallback(
     (requestPage: number, requestPageSize: number) => {
       if (!user || !hasPermission(user.permissions, 'employees.read', ['Team'])) {
@@ -53,6 +53,8 @@ export function ManagerTeamPage() {
     queryKey,
     refreshToken: 0,
     load: loadBlock,
+    // Trang Manager gửi đúng số dòng đang chọn, không gộp hai trang vào một request.
+    maxPagesPerBlock: 1,
   });
   const pageCount = Math.max(1, Math.ceil(totalCount / pageSize));
   const currentPage = Math.min(page, pageCount);
