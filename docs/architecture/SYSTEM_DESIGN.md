@@ -151,7 +151,7 @@ Leave Request validation, default year của Leave Balance và business date/yea
 
 ## 10. Giới hạn và non-goals V1
 
-Chưa có API Gateway riêng, message broker, outbox, asynchronous authorization read model, balance reconciliation worker, report/export backend, notification delivery, Role/Permission catalog CRUD, UI quản trị UserRole assignment, History read endpoint, hoặc readiness/liveness endpoints riêng.
+Chưa có API Gateway riêng, message broker, outbox, asynchronous authorization read model, balance reconciliation worker, report/export backend, notification delivery, Role/Permission catalog CRUD, UI quản trị UserRole assignment hoặc readiness/liveness endpoints riêng. History được trả trong API chi tiết đơn; chưa có route history riêng.
 
 Root Compose hiện phục vụ local/demo/benchmark; không phải production hardening. Trước production cần secret management, TLS, network restrictions, backups/restore, observability và quy trình migration/rollback.
 
