@@ -171,7 +171,7 @@ describe('DashboardPage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Số dư phép của tôi' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Tổng quan số dư phép' })).not.toBeInTheDocument();
-    expect(await screen.findByRole('link', { name: 'Tạo đơn nghỉ', exact: true })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: /^Tạo đơn nghỉ$/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Xuất báo cáo \(chưa khả dụng\)/ })).toBeDisabled();
   });
 
