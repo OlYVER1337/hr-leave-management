@@ -1,6 +1,6 @@
 # Design System — Peopleflow HR Suite
 
-> Tài liệu nền tảng giao diện được rà soát theo source branch feature/dynamic-authorization-v1 ngày 16/11/2026. Đây là mô tả UI hiện có và chuẩn hóa thiết kế; đề xuất chưa triển khai được ghi riêng.
+> Tài liệu nền tảng giao diện được rà soát theo source ngày 27/11/2026. Đây là mô tả UI hiện có và chuẩn hóa thiết kế; đề xuất chưa triển khai được ghi riêng.
 
 ## 1. Phạm vi và nguyên tắc
 
