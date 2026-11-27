@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PagedResult } from '../services/hrService';
 
-// Mặc định mỗi request tải tối đa 2 trang giao diện nhưng không vượt giới hạn 100 bản ghi của API.
-const MAX_PAGES_PER_BLOCK = 2;
+// Mặc định mỗi request tải đúng một trang giao diện và không vượt giới hạn 100 bản ghi của API.
+const DEFAULT_MAX_PAGES_PER_BLOCK = 1;
 const MAX_API_PAGE_SIZE = 100;
 const MAX_CACHED_BLOCKS = 4;
 
@@ -12,7 +12,7 @@ export function usePagedBlock<T>({
   queryKey,
   refreshToken,
   load,
-  maxPagesPerBlock = MAX_PAGES_PER_BLOCK,
+  maxPagesPerBlock = DEFAULT_MAX_PAGES_PER_BLOCK,
 }: {
   page: number;
   pageSize: number;
@@ -39,7 +39,7 @@ export function usePagedBlock<T>({
   // Cho phép từng màn hình chọn tải trước nhiều trang hoặc tải đúng một trang mỗi request.
   const normalizedMaxPagesPerBlock = Number.isFinite(maxPagesPerBlock)
     ? Math.max(1, Math.floor(maxPagesPerBlock))
-    : MAX_PAGES_PER_BLOCK;
+    : DEFAULT_MAX_PAGES_PER_BLOCK;
   // A UI page size of 100 must use one page per block; otherwise the second
   // UI page would require 200 records and be silently truncated by the API.
   const pagesPerBlock = Math.min(
