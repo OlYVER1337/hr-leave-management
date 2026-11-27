@@ -95,7 +95,7 @@ describe('EmployeesPage filtering, sorting and pagination', () => {
 
     expect(getEmployeeOverviewPage).toHaveBeenCalledTimes(1);
     expect(getEmployeeOverviewPage).toHaveBeenCalledWith(
-      expect.objectContaining({ page: 1, pageSize: 20 }),
+      expect.objectContaining({ page: 1, pageSize: 10 }),
     );
     const totalMetric = screen.getByText('Tổng số nhân viên').closest('.summary-metric');
     expect(totalMetric?.textContent).toContain('25');
@@ -132,6 +132,9 @@ describe('EmployeesPage filtering, sorting and pagination', () => {
     expect(screen.getByText('Nhân viên 25')).toBeInTheDocument();
     expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(26);
     expect(document.querySelector('.table-footer')?.textContent).toContain('Đang hiển thị 1–25 / 25 nhân viên');
+    await waitFor(() => expect(getEmployeeOverviewPage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ page: 1, pageSize: 25 }),
+    ));
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Lọc theo trạng thái' }), {
       target: { value: 'Inactive' },
@@ -140,25 +143,31 @@ describe('EmployeesPage filtering, sorting and pagination', () => {
     expect(screen.getByRole('button', { name: 'Trang sau' })).toBeDisabled();
   });
 
-  it('reuses the prefetched page and requests another block only when leaving it', async () => {
+  it('requests the matching API page when navigating through employee pages', async () => {
     const user = userEvent.setup();
     render(<EmployeesPage />);
     await screen.findByText('Nhân viên 01');
 
     const matchingBlockCalls = () => vi.mocked(getEmployeeOverviewPage).mock.calls.filter(([query]) =>
-      query.pageSize === 20 && query.sortBy === 'fullName' &&
+      query.pageSize === 10 && query.sortBy === 'fullName' &&
       query.sortDirection === 'asc' && query.search === undefined).length;
     expect(matchingBlockCalls()).toBe(1);
+    expect(getEmployeeOverviewPage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ page: 1, pageSize: 10 }),
+    );
 
     await user.click(screen.getByRole('button', { name: 'Trang 2' }));
-    expect(screen.getByText('Nhân viên 11')).toBeInTheDocument();
-    expect(matchingBlockCalls()).toBe(1);
+    expect(await screen.findByText('Nhân viên 11')).toBeInTheDocument();
+    await waitFor(() => expect(matchingBlockCalls()).toBe(2));
+    expect(getEmployeeOverviewPage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ page: 2, pageSize: 10 }),
+    );
 
     await user.click(screen.getByRole('button', { name: 'Trang 3' }));
     expect(await screen.findByText('Nhân viên 21')).toBeInTheDocument();
-    await waitFor(() => expect(matchingBlockCalls()).toBe(2));
-    expect(getEmployeeOverviewPage).toHaveBeenCalledWith(
-      expect.objectContaining({ page: 2, pageSize: 20 }),
+    await waitFor(() => expect(matchingBlockCalls()).toBe(3));
+    expect(getEmployeeOverviewPage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ page: 3, pageSize: 10 }),
     );
   });
 
