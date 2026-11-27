@@ -21,6 +21,8 @@ Tài liệu dành cho người tiếp nhận source, dựng môi trường, ki�
 
 **Quy tắc đối chiếu:** Approval benchmark ngày 26/11 chạy trên source SHA **d34ca91** và image ID ghi tại Mục 8. Không lấy HEAD của branch tài liệu thay cho revision benchmark. Khi tài liệu khác với implementation, đối chiếu source code và EF Core migrations.
 
+**Ghi chú Workforce benchmark trên feature branch:** `scripts/load-test/workforce.js` chỉ đổi route `manager_team` trong `paginationContractRoutes` từ `/api/v1/me/team` sang `/api/v1/employees?directReportsOnly=true`; request preflight không gửi `page/pageSize` và mong đợi HTTP 400 để kiểm tra contract phân trang. Mảng `routes` của VU workload không thay đổi so với `master`, nên route mix và custom metrics của phần measured workload không đổi. Evidence Workforce cũ vẫn mô tả đúng workload đã đo, nhưng không cung cấp latency/throughput riêng cho endpoint Employees/directReports mới. Muốn benchmark endpoint mới, cần thêm request có phân trang vào workload đo và lưu raw/summary cùng Git SHA, image IDs mới. Lưu ý raw k6 built-in metrics có thể bao gồm request preflight/setup.
+
 **Bằng chứng nhánh hợp nhất Employees/direct reports ngày 27/11:** người dùng cung cấp kết quả HR 162/162 tests, Leave 129/129 tests, Web 103/103 tests; TypeScript check và Vite production build thành công. HR Bench đã build HR Service/Web; Manager gọi `GET /api/v1/employees?directReportsOnly=true&page=1&pageSize=20` nhận HTTP 200 và response có `managerId` trùng JWT `sub`. Việc nghiệm thu tài khoản HR với scope All vẫn đang chờ; không coi hạng mục này là đã nghiệm thu hoàn toàn.
 
 ## 2. Dựng hệ thống local lần đầu
