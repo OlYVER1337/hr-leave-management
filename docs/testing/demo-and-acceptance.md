@@ -1,6 +1,6 @@
 # Kịch bản demo, kết quả kiểm thử và checklist nghiệm thu
 
-> **Snapshot ngày 27/11/2026:** `master` hiện tại là `de15fd4169ea8db3cc702f95f7922ca4ab9a1e8c`. API Employees/direct reports đã hợp nhất qua [PR #19](https://github.com/OlYVER1337/hr-leave-management/pull/19); đồng bộ pageSize đã merge qua [PR #20](https://github.com/OlYVER1337/hr-leave-management/pull/20) và [PR #21](https://github.com/OlYVER1337/hr-leave-management/pull/21). Regression trên revision sau PR #19 (`30720e176106cc3357ff028ddc9a6ebdce95a93b`): HR 162/162, Leave 129/129, Web 103/103 pass; Web sau PR #21 đạt 107/107 trên head `8f69c5420119817faa0371f1675c96f7f5253d52`, TypeScript check và Vite production build thành công. Chưa có lượt chạy lại đủ cả ba suite trên đúng master HEAD và chưa lưu ảnh Network nghiệm thu cuối cùng của bốn màn hình phân trang. Approval benchmark arrival-rate 50/s × 300 giây ngày 26/11 vẫn là phép đo trên SHA riêng `d34ca9100f1db34261b7792dcc2058855bcd29aa`; không gắn nó vào master HEAD mới. Không có CI/CD theo quyết định dự án. Chi tiết ở Mục 7.2, 7.5 và 7.8.
+> **Snapshot ngày 27/11/2026:** `master` hiện tại là `edd71414809d155261498836763ab44000e712e5` (PR #22 chỉ cập nhật tài liệu). API Employees/direct reports đã hợp nhất qua [PR #19](https://github.com/OlYVER1337/hr-leave-management/pull/19); đồng bộ pageSize đã merge qua [PR #20](https://github.com/OlYVER1337/hr-leave-management/pull/20) và [PR #21](https://github.com/OlYVER1337/hr-leave-management/pull/21). Regression HR/Leave/Web đã chạy trên cùng master SHA `edd71414809d155261498836763ab44000e712e5`: HR 162/162, Leave 129/129, Web 107/107; tổng 398/398, 0 failed/0 skipped. `npm audit` báo 0 vulnerabilities; TypeScript và Vite production build thành công. Người dùng xác nhận nghiệm thu runtime cả bốn màn hình phân trang. Approval benchmark arrival-rate 50/s × 300 giây ngày 26/11 vẫn là phép đo trên SHA riêng `d34ca9100f1db34261b7792dcc2058855bcd29aa`; không gắn nó vào master HEAD mới. Không có CI/CD theo quyết định dự án. Chi tiết ở Mục 7.2, 7.5 và 7.8.
 
 ## 1. Kết quả kiểm thử hồi quy và tích hợp (lịch sử — 03/11/2026)
 
@@ -276,9 +276,9 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
 | [x] | Redis cache | Tối thiểu 2 nhóm dữ liệu có key/TTL/invalidation; cache miss đọc SQL | [Redis report](../performance/redis-performance.md) |
 | [x] | Redis outage | Catalog vẫn đọc được từ SQL; nghiệp vụ không dựa cache cũ | [Redis report](../performance/redis-performance.md) |
 | [x] | HR outage | Tác vụ cần HR trả lỗi dependency phù hợp và không lưu đơn dở dang | `HrServiceOutageTests`; [Redis report](../performance/redis-performance.md) |
-| [x] | Regression backend theo revision | HR 162/162 và Leave 129/129 pass, 0 failed/0 skipped trên revision `30720e176106cc3357ff028ddc9a6ebdce95a93b` sau PR #19 | Kết quả local có revision; PR #20/#21 chỉ đổi Web, không đổi backend. Chưa chạy lại backend trên đúng master HEAD `de15fd4`; xem Mục 7.2 |
-| [x] | Regression frontend | Web 107/107 tests, 20/20 files; TypeScript và Vite production build thành công | Head PR #21 `8f69c5420119817faa0371f1675c96f7f5253d52`; xem Mục 7.2 |
-| [ ] | Runtime pageSize trên bốn danh sách | Employees, Manager Team, Leave Requests và Approvals phải gửi đúng `page`/`pageSize` bằng lựa chọn hiện trên UI (10/25/50) và response total đúng | PR #20/#21, `usePagedBlock` tests và [HANDOFF Mục 6.5](../HANDOFF.md); cần kiểm tra Network trên HR Bench sau khi build Web từ master `de15fd4` |
+| [x] | Regression backend theo revision | HR 162/162 và Leave 129/129 pass, 0 failed/0 skipped trên master SHA `edd71414809d155261498836763ab44000e712e5` | Cả hai solution chạy trên .NET 10.0.13; xem Mục 7.2 |
+| [x] | Regression frontend | Web 107/107 tests, 20/20 files; `npm audit` 0 vulnerabilities; TypeScript và Vite production build thành công trên cùng master SHA `edd71414809d155261498836763ab44000e712e5` | Regression run 27/11/2026; xem Mục 7.2 |
+| [x] | Runtime pageSize trên bốn danh sách | Employees, Manager Team, Leave Requests và Approvals đã được người dùng xác nhận gửi đúng phân trang theo lựa chọn trên UI | PR #20/#21, automated tests và xác nhận nghiệm thu runtime của người dùng; [HANDOFF Mục 6.5](../HANDOFF.md) |
 | [x] | Load test catalog Redis ON/OFF | 50 và 100 VU, 5 phút mỗi lượt; báo cáo RPS/p50/p95/error và cấu hình máy | [Redis performance report](../performance/redis-performance.md) |
 | [x] | Load test workforce — Redis ON | 50/100 VU, 5 phút, dataset 1.000 nhân viên/5.000 đơn | 50 VU 0 lỗi; lượt đầu 100 VU 21 HTTP 500; hai lần chạy lại 100 VU 0 lỗi; [summary](./evidence/workforce-load-summary.json) |
 | [x] | Đóng sự cố workforce HTTP 500 lịch sử | Không mở lại sự cố cũ khi đã xác định Docker bị dừng giữa chừng trong lúc benchmark; chỉ điều tra lại nếu lỗi tái xuất hiện trong lượt chạy ổn định | Nguyên nhân gián đoạn môi trường đã được xác nhận. Redis OFF cho workforce là phép đo còn thiếu riêng, không phải điều kiện truy nguyên lỗi cũ |
@@ -316,19 +316,20 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
 
 ### 7.2. Regression test evidence
 
-Kết quả local được ghi nhận trong quá trình hoàn thiện dự án:
+**Lượt regression đầy đủ mới nhất — 27/11/2026:** người triển khai đã cập nhật `master`, ghi nhận `git rev-parse HEAD` trước và sau kiểm thử đều là `edd71414809d155261498836763ab44000e712e5`, sau đó chạy liên tiếp cả HR, Leave và Web.
 
-| Bộ kiểm thử | Kết quả | Revision và ghi chú |
-|---|---:|---|
-| HR Service | 162/162 passed | 0 failed, 0 skipped; master sau PR #19: `30720e176106cc3357ff028ddc9a6ebdce95a93b` |
-| Leave Service | 129/129 passed | 0 failed, 0 skipped; cùng revision `30720e176106cc3357ff028ddc9a6ebdce95a93b` |
-| Web — sau PR #19 | 103/103 passed | 20/20 test files; cùng revision `30720e176106cc3357ff028ddc9a6ebdce95a93b` |
-| Web — sau PR #21 | 107/107 passed | 20/20 test files; head PR #21 `8f69c5420119817faa0371f1675c96f7f5253d52` |
-| TypeScript và Vite production build | Thành công | Head PR #21; `npm ci`, `npm audit`, `tsc --noEmit` và `npm run build` đã chạy không lỗi |
+| Bộ kiểm thử | Passed | Failed | Skipped | Thời gian test |
+|---|---:|---:|---:|---:|
+| HR Service (.NET 10.0.13) | 162 | 0 | 0 | 7,8 giây |
+| Leave Service (.NET 10.0.13) | 129 | 0 | 0 | 18,5 giây |
+| Web — Vitest (20/20 files) | 107 | 0 | 0 | 9,35 giây |
+| **Tổng** | **398** | **0** | **0** | |
 
-HR/Leave regression và Web 103/103 được ghi nhận tại revision `30720e176106cc3357ff028ddc9a6ebdce95a93b` sau PR #19. PR #20/#21 chỉ thay đổi Web, không thay đổi source backend. Web regression mới nhất 107/107 cùng TypeScript check và production build được chạy trên head PR #21 `8f69c5420119817faa0371f1675c96f7f5253d52`, sau đó PR #21 merge thành master `de15fd4169ea8db3cc702f95f7922ca4ab9a1e8c`.
+Web chạy trong Node 20 container. `npm ci` thành công; `npm audit` báo **0 vulnerabilities**; `npm test -- --run` đạt 107/107; `npm run build` chạy `tsc --noEmit` và Vite production build đều thành công (Vite 5,07 giây). Hai backend solution build thành công; HR test 7,8 giây và Leave test 18,5 giây.
 
-Đây là các lượt chạy local có revision riêng, không phải một lần chạy đủ ba suite trên cùng master HEAD. Chưa lưu TRX/log riêng của những lượt mới trong thư mục evidence. Không có CI/CD chạy tự động theo lựa chọn của dự án. Khi cần sign-off nghiêm ngặt trên một SHA duy nhất, chạy lại HR, Leave và Web trên master hiện tại, lưu TRX/log/build output và SHA tương ứng.
+TRX HR/Leave được tạo trong thư mục TEMP trên máy chạy test: `%TEMP%\hr-regression-edd71414809d155261498836763ab44000e712e5\hr` và `...\leave`. Các file TRX chưa được commit vào repository. Báo cáo này dựa trên terminal output do người triển khai cung cấp; không có CI/CD chạy tự động theo quyết định dự án.
+
+Các kết quả lịch sử trên revision `30720e...` và PR #21 head đã được thay thế làm regression baseline mới nhất bởi lượt chạy chung SHA này. Approval benchmark 26/11 vẫn giữ SHA riêng, không liên quan tới revision regression hiện tại.
 
 ### 7.3. Seed và Approval benchmark ngày 20/11
 
@@ -426,9 +427,9 @@ Không đánh dấu Swagger hoặc demo là nghiệm thu xong chỉ dựa trên 
 
 ### 7.8. Hợp đồng phân trang sau PR #20/#21
 
-PR #20 sửa trang Nhân viên phụ trách; PR #21 đồng bộ cách gửi `pageSize` cho toàn bộ danh sách. `usePagedBlock` mặc định gửi mỗi request cho đúng một trang đang hiển thị thay vì tải một block nhiều trang. Phạm vi gồm Employees, Manager Team, Leave Requests và Approvals. Test frontend đạt 107/107 trên head PR #21; TypeScript và Vite production build thành công.
+PR #20 sửa trang Nhân viên phụ trách; PR #21 đồng bộ cách gửi `pageSize` cho toàn bộ danh sách. `usePagedBlock` mặc định gửi mỗi request cho đúng một trang đang hiển thị thay vì tải một block nhiều trang. Phạm vi gồm Employees, Manager Team, Leave Requests và Approvals. Regression Web đạt 107/107 trên master SHA `edd71414809d155261498836763ab44000e712e5`; TypeScript và Vite production build thành công.
 
-Đây là bằng chứng implementation và automated tests. Chưa có ảnh/log Network cuối cùng được lưu trong repository để xác nhận runtime sau khi dựng lại Web từ master `de15fd4169ea8db3cc702f95f7922ca4ab9a1e8c`. Trước khi đánh dấu nghiệm thu runtime, kiểm tra từng màn hình: thay dropdown 10/25/50 phải tạo request có `pageSize` tương ứng; chuyển trang phải tăng `page`; kiểm tra HTTP status và tổng số bản ghi response/header.
+**Nghiệm thu runtime:** người dùng xác nhận cả bốn màn hình Employees, Manager Team, Leave Requests và Approvals đều phân trang đúng. Hạng mục nghiệm thu này đã hoàn tất. Ảnh/log Network không được lưu thành artifact trong repository; trạng thái hoàn tất dựa trên xác nhận nghiệm thu của người dùng, không phải screenshot/HAR đã lưu.
 
 ## 8. Quy trình tái xác minh sau merge
 
