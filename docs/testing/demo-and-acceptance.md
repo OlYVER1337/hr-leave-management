@@ -321,9 +321,9 @@ Kết quả local được ghi nhận trong quá trình hoàn thiện dự án:
 | Web | 103/103 passed | 20/20 test files; Vitest trên feature branch |
 | Web production build | Thành công | TypeScript check và Vite production build trên feature branch |
 
-Các kết quả trên là test chạy thủ công/local do người dùng báo cáo. Output không lưu `git rev-parse HEAD`, vì vậy chưa gắn chắc chắn với merge commit `81b98704`. Không có CI/CD chạy tự động theo lựa chọn của dự án.
+Các kết quả 162/162 HR, 129/129 Leave và 103/103 Web được người dùng cung cấp sau khi đồng bộ nhánh `feature/consolidate-employees-team-api`; TypeScript check và Vite production build cũng thành công. Đây là bằng chứng local cho feature branch, không phải regression trên `master`. Chưa lưu TRX/log riêng kèm SHA của chính các lượt chạy này. Không có CI/CD chạy tự động theo lựa chọn của dự án.
 
-Stored TRX trong repository là bằng chứng lịch sử và không thay thế cho log của các lượt chạy mới. Khi cần sign-off theo revision, chạy lại test tại `master`, ghi SHA, lưu TRX và log Web tương ứng. Không suy diễn test count của HEAD từ workflow Render diagrams.
+Stored TRX trong repository là bằng chứng lịch sử và không thay thế cho log của các lượt chạy mới. Khi cần sign-off sau khi merge, chạy lại test trên `master`, ghi SHA, lưu TRX và log Web tương ứng. Không suy diễn test count của HEAD từ workflow Render diagrams.
 
 ### 7.3. Seed và Approval benchmark ngày 20/11
 
