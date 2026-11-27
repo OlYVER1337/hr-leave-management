@@ -1,7 +1,7 @@
 
 # Wireframe — Peopleflow HR Leave Management
 
-> Đặc tả wireframe được rà soát theo source branch feature/dynamic-authorization-v1 ngày 17/11/2026. Mô tả bên dưới phân biệt UI thực tế, backend permission/scope và các chức năng chưa triển khai.
+> Đặc tả wireframe được rà soát theo source ngày 27/11/2026. Mô tả bên dưới phân biệt màn hình hiện có, permission/scope backend, endpoint được sử dụng và các chức năng chưa triển khai.
 
 ## 1. Phạm vi và cách đọc
 
