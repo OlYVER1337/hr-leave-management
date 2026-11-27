@@ -120,7 +120,7 @@ GET `/api/v1/leave-balances/mine` và POST `/api/v1/leave-balances/mine/synchron
 
 ### History hiện tại
 
-Tạo, approve, reject, cancel ghi LeaveRequestHistory dạng append. Hiện chưa có GET history endpoint; UI chưa hiển thị timeline đầy đủ.
+Tạo, approve, reject, cancel ghi LeaveRequestHistory dạng append. `GET /api/v1/leave-requests/{id}` trả chi tiết đơn kèm mảng `history`; danh sách không tải kèm history và không có route `/history` riêng. Frontend tải detail một lần khi mở modal; thao tác **Xem lịch sử** chỉ ẩn/hiện timeline trong dữ liệu đã tải.
 
 ## 7. Redis và tính nhất quán
 
