@@ -132,7 +132,7 @@ docker compose up -d web
 | Manager | Xem đơn trong phạm vi Team và phê duyệt/từ chối đơn có thể xử lý; xem thông tin nhóm theo quyền. |
 | Employee | Xem thông tin cá nhân/số dư, tạo đơn, theo dõi trạng thái và hủy đơn Pending của chính mình. |
 
-Backend Dynamic RBAC thực thi permission và scope Self/Team/All. React hiện vẫn dùng Role legacy HR/Manager/Employee cho menu và route guard; UI chưa chuyển hoàn toàn sang permission-driven. Không coi việc ẩn nút trên frontend là lớp bảo vệ API.
+Backend Dynamic RBAC thực thi permission và scope Self/Team/All. React đã dùng permission/scope trong JWT cho menu, route guard và action (PR #18 đã merge vào master). `Employee.Role` và Role claim legacy vẫn được giữ cho tương thích/hiển thị, lọc/thống kê và một số nghiệp vụ legacy; không phải nguồn authorization. Không coi việc ẩn nút trên frontend là lớp bảo vệ API.
 
 ## 5. Swagger và xác thực API
 
