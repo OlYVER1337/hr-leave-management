@@ -332,7 +332,9 @@ Nguồn quyết định schema thực tế
 - HR Service sở hữu `LeavePolicies`; mỗi version có `LeaveTypeId`, `Year`, `DaysPerYear`, `EffectiveFrom`, `CreatedAtUtc`, `Reason`.
 - Unique index `(LeaveTypeId, Year, EffectiveFrom)` cho phép nhiều version trong cùng năm nhưng không cho hai version cùng ngày hiệu lực.
 - Policy GET với `asOfDate` trả phiên bản hiệu lực mới nhất theo loại nghỉ/năm tại ngày được yêu cầu. Nghiệp vụ Leave gửi `authoritative=true` để bỏ qua Redis cache.
-- POST và PUT `/api/v1/leave-policies/{id}` tạo version mới; PUT `/{id}/edit` chỉ chỉnh version chưa hiệu lực và không thay đổi năm, loại nghỉ hoặc ngày hiệu lực. Policy năm quá khứ không được sửa; version đã effective không được edit/delete.
+- `POST /api/v1/leave-policies` tạo version cho loại nghỉ/năm trong body; có thể là version đầu tiên hoặc version tiếp theo, chỉ chặn trùng `LeaveTypeId + Year + EffectiveFrom`.
+- `PUT /api/v1/leave-policies/{id}` lấy loại nghỉ/năm từ version `{id}` rồi thêm một version mới; không cập nhật bản ghi gốc và không cho chuyển version sang năm/loại nghỉ khác.
+- `PUT /api/v1/leave-policies/{id}/edit` chỉnh version đã tồn tại nhưng chỉ khi `EffectiveFrom` còn trong tương lai; chỉ đổi số ngày/lý do, giữ nguyên năm, loại nghỉ và ngày hiệu lực. Năm hiện tại và tương lai được tạo version; năm đã kết thúc chỉ xem. Version đã effective không được edit/delete.
 - DELETE version tương lai yêu cầu Leave Service đếm số `LeaveRequestYearAllocations.PolicyVersionId` tham chiếu. Có allocation tham chiếu thì HR từ chối 409; Leave không khả dụng thì thao tác fail closed. Giữa bước COUNT ở Leave và DELETE ở HR vẫn có race window nhỏ vì hai database không dùng distributed transaction.
 - Leave lưu `PolicyVersionId` và `PolicyDaysAtCreation` ở yearly allocation như snapshot lịch sử. Đây không phải FK vì HR và Leave sở hữu database riêng; xóa version đã được tham chiếu bị ngăn qua kiểm tra liên service.
 - `LeaveBalances.PolicyDays` là quota hiện hành, không phải quota snapshot lịch sử. Khi policy giảm thấp hơn `Used + Pending`, Leave cập nhật `PolicyDays` nhưng không giảm `Used/Pending`; `Entitled` được suy ra để vẫn bao phủ số ngày đã dùng/đang chờ.
