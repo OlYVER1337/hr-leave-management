@@ -207,7 +207,7 @@ LeaveRequests.ApproverId là snapshot tại thời điểm tạo đơn, chỉ ph
 2. Seed Role/Permission/Scope baseline và backfill UserRoles từ Employee.Role.
 3. Thêm Authorization Service để hợp Permission và Scope, mặc định deny.
 4. Phát perm claim từ HR login/refresh; cập nhật token tests.
-5. Refactor HR Employees API và /api/v1/me/team sang Permission + Scope.
+5. Refactor HR Employees API sang Permission + Scope; dùng `directReportsOnly=true` cho direct reports và gỡ endpoint phân trang đội nhóm riêng.
 6. Cung cấp API quản lý UserRoles có kiểm tra quyền hiện tại, chống leo thang đặc quyền, audit và bảo vệ quản trị viên cuối cùng.
 7. Chuyển HR write endpoints và EmployeeLookupController sang policy Permission; chuyển Leave API/repository sang LeaveAccess từ perm, giữ HR lookup cho Team inbox và quyết định Team.
 8. Chạy test HR/Leave và Web với skipped = 0; workload Approval sustained đã được đo bằng `constant-vus` ở 50 và 150 VU × 5 phút. Mức đánh giá hiện dừng tại 150 VU, không mở rộng tải hoặc soak test.
