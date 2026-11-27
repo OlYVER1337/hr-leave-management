@@ -358,42 +358,21 @@ Xem từng lần và cách diễn giải tại dynamic-authorization-benchmark-r
 
 **Giới hạn bằng chứng:** benchmark_metadata trong cả sáu raw JSON đang ghi git_sha=not-provided và image_tag=not-provided. Không gắn các kết quả này với một binary/revision chính xác; không xem đây là baseline bất biến cho nghiệm thu. Các số liệu ở các mục trước thuộc ngày 12–13/11 là lịch sử, không thay thế kết quả mới.
 
-### 10.2. Chạy lại và gắn Git SHA/image ID
+### 10.2. Gắn Git SHA cho lần chạy tiếp theo
 
-PowerShell ở thư mục repository:
+PowerShell tại thư mục repository:
 
     $env:GIT_SHA = (git rev-parse HEAD).Trim()
-    $env:PAGE_SIZE = "50"
 
-Build stack benchmark từ revision hiện tại (đảm bảo .env đã có account và secret riêng cho benchmark):
+Khi chạy Workforce benchmark, truyền Git SHA vào container k6 bằng biến `GIT_SHA`. Ví dụ:
 
-    docker compose -p hrbench -f docker-compose.yml -f docker-compose.loadtest.yml up -d --build
-    docker compose -p hrbench -f docker-compose.yml -f docker-compose.loadtest.yml ps
+    docker compose -p hrbench -f docker-compose.yml -f docker-compose.loadtest.yml --profile loadtest run --rm -e GIT_SHA=$env:GIT_SHA -e VUS=50 -e DURATION=5m -e REPORT_JSON=/reports/workforce-50vu-run1.json k6 run /scripts/workforce.js
 
-Lấy image IDs sau build; kiểm tra tên image thực tế bằng lệnh images nếu Compose project đặt tên khác:
-
-    docker compose -p hrbench -f docker-compose.yml -f docker-compose.loadtest.yml images
-
-Ví dụ lấy ID image HR được Compose gắn cho service:
-
-    $env:IMAGE_TAG = (docker compose -p hrbench -f docker-compose.yml -f docker-compose.loadtest.yml images -q hr-service | Select-Object -First 1).Trim()
-
-Nếu muốn metadata phản ánh cả hai service image, đặt IMAGE_TAG thành chuỗi có cả HR và Leave image ID; không dùng nhãn mutable latest.
-
-Chờ hai API healthy:
-
-    Invoke-RestMethod http://localhost:18081/health
-    Invoke-RestMethod http://localhost:18082/health
-
-Chạy 50 VU; lưu raw JSON và không ghi đè các lượt trước:
-
-    docker compose -p hrbench -f docker-compose.yml -f docker-compose.loadtest.yml --profile loadtest run --rm -e VUS=50 -e DURATION=5m -e PAGE_SIZE=$env:PAGE_SIZE -e GIT_SHA=$env:GIT_SHA -e IMAGE_TAG=$env:IMAGE_TAG -e REPORT_JSON=/reports/workforce-50vu-paged-v3-run1.json k6 run /scripts/workforce.js
-
-Chạy ba lượt độc lập để đo biến động; đổi REPORT_JSON mỗi lượt. Sau đó chạy lại với VUS=100 và tên report 100vu tương ứng. Script đọc VUS/DURATION từ environment; không dựa vào k6 CLI --vus/--duration để ghi đè scenario.
+Sau khi chạy, kiểm tra summary hoặc raw JSON có trường `git_sha` đúng bằng kết quả `git rev-parse HEAD`. Chỉ cần lưu Git SHA cùng kết quả benchmark; không bắt buộc thu thập image ID hoặc metadata bổ sung.
 
 ### 10.3. Điều kiện so sánh và giới hạn
 
-- Giữ cùng Git SHA, immutable image IDs, page size, seed data, token role mix, duration và resource limits.
+- Ghi lại Git SHA của source chạy benchmark trong report. Các tham số workload còn lại giữ theo cấu hình của lượt đo cần thực hiện; không yêu cầu image ID trong evidence.
 - Seed/load test chỉ thực hiện trong project hrbench riêng. Không xóa volume stack phát triển hr-leave.
 - Workforce là sustained load 5 phút; Approval script là per-vu-iterations burst, không ghép RPS hoặc percentile hai workload.
 - Custom HR metrics ghi request đo trong vòng VU, loại trừ login, pagination-contract checks và warm-up.
