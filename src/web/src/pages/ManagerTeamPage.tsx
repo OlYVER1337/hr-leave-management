@@ -7,6 +7,7 @@ import { getMyTeamPage } from '../services/hrService';
 import { Pagination } from '../components/Pagination';
 import { usePagedBlock } from '../hooks/usePagedBlock';
 import type { Employee } from '../types';
+import { hasPermission } from '../utils/authorization';
 
 const pageSizeOptions = [10, 25, 50];
 
@@ -26,7 +27,7 @@ export function ManagerTeamPage() {
   const queryKey = JSON.stringify({ managerId: user?.id, search: debouncedSearch, pageSize });
   const loadBlock = useCallback(
     (requestPage: number, requestPageSize: number) => {
-      if (!user || user.role !== 'Manager') {
+      if (!user || !hasPermission(user.permissions, 'employees.read', ['Team'])) {
         return Promise.resolve({ items: [], totalCount: 0 });
       }
       return getMyTeamPage(user.id, requestPage, requestPageSize, debouncedSearch || undefined);

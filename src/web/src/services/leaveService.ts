@@ -1,8 +1,9 @@
-import type { AuthUser, Holiday, LeaveBalance, LeavePolicy, LeaveRequest, LeaveRequestHistory } from '../types';
+import type { AuthUser, Holiday, LeaveBalance, LeavePolicy, LeaveRequest, LeaveRequestHistory, UserRole } from '../types';
 import { DEMO_MODE } from './config';
 import { getApiErrorMessage, hrApi, leaveApi } from './apiClient';
 import { loadDemoState, updateDemoState } from './mockStore';
 import { formatDateOnlyUtc, getBusinessDate, getBusinessYear, parseDateOnlyUtc } from '../utils/businessTime';
+import { hasPermission } from '../utils/authorization';
 
 export interface CreateLeaveInput {
   typeCode: LeaveRequest['typeCode'];
@@ -93,7 +94,7 @@ function cacheEmployeeDisplay(userId: string, employee: EmployeeRecord): void {
 }
 
 async function getCachedLeaveTypes(user: AuthUser): Promise<LeaveTypeRecord[]> {
-  const includeInactive = user.role === 'HR';
+  const includeInactive = hasPermission(user.permissions, 'leave-types.update', ['All']);
   const cached = leaveTypeCache.get(includeInactive);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
 
@@ -237,7 +238,8 @@ async function getEmployeeDirectory(
 ): Promise<Map<string, EmployeeRecord>> {
   const directory = new Map<string, EmployeeRecord>();
 
-  if (user.role === 'Employee') {
+  const canReadOtherEmployees = hasPermission(user.permissions, 'employees.read', ['Team', 'All']);
+  if (!canReadOtherEmployees) {
     const key = employeeDisplayCacheKey(user.id, user.id);
     const cached = employeeDisplayCache.get(key);
     let currentEmployee = cached && cached.expiresAt > Date.now() ? cached.value : undefined;
@@ -322,7 +324,8 @@ async function getEmployeeDirectory(
     id: user.id,
     code: '',
     fullName: user.fullName,
-    role: user.role,
+    // Employee.Role vẫn là enum legacy; permission roles có thể mở rộng độc lập.
+    role: (['HR', 'Manager', 'Employee'] as const).includes(user.role as UserRole) ? user.role as UserRole : 'Employee',
     isActive: true,
     departmentId: 0,
     departmentName: '',
@@ -364,14 +367,19 @@ async function mapApiRequests(records: LeaveRequestRecord[], user: AuthUser): Pr
   });
 }
 
-function filterDemoRequests(user: AuthUser, query: LeavePageQuery, pendingOnly = false): LeaveRequest[] {
+function filterDemoRequests(user: AuthUser, query: LeavePageQuery, pendingOnly = false, permissionOverride?: 'leaves.read' | 'leaves.decide'): LeaveRequest[] {
   const state = loadDemoState();
+  // Demo mode mô phỏng đúng phạm vi của permission; không suy luận quyền từ role cũ.
+  const permission = permissionOverride ?? (pendingOnly ? 'leaves.decide' : 'leaves.read');
+  const canReadAll = hasPermission(user.permissions, permission, ['All']);
+  const canReadTeam = hasPermission(user.permissions, permission, ['Team']);
+  const canReadSelf = hasPermission(user.permissions, permission, ['Self']);
   const allowedEmployeeIds = new Set(
-    user.role === 'HR'
+    canReadAll
       ? state.employees.map((employee) => employee.id)
-      : user.role === 'Manager'
+      : canReadTeam
         ? [user.id, ...state.employees.filter((employee) => employee.managerId === user.id).map((employee) => employee.id)]
-        : [user.id],
+        : canReadSelf ? [user.id] : [],
   );
   const search = query.search?.trim().toLocaleLowerCase('vi-VN') ?? '';
   return state.requests
@@ -425,7 +433,7 @@ export async function getApprovalsInboxPage(
   user: AuthUser,
   query: Pick<LeavePageQuery, 'page' | 'pageSize' | 'search'>,
 ): Promise<{ items: LeaveRequest[]; totalCount: number }> {
-  if (user.role === 'Employee') return { items: [], totalCount: 0 };
+  if (!hasPermission(user.permissions, 'leaves.decide', ['Team', 'All'])) return { items: [], totalCount: 0 };
   const page = Math.max(1, query.page);
   const pageSize = Math.min(100, Math.max(1, query.pageSize));
   if (DEMO_MODE) {
@@ -478,7 +486,7 @@ export async function getLeaveRequestDetails(
 
 export async function getLeaveRequestSummary(user: AuthUser): Promise<LeaveRequestSummaryRecord> {
   if (DEMO_MODE) {
-    const visible = filterDemoRequests(user, { page: 1, pageSize: 100 });
+    const visible = filterDemoRequests(user, { page: 1, pageSize: 100 }, false, 'leaves.decide');
     return {
       pending: visible.filter((item) => item.status === 'Pending').length,
       approved: visible.filter((item) => item.status === 'Approved').length,
@@ -493,7 +501,7 @@ export async function getLeaveRequestSummary(user: AuthUser): Promise<LeaveReque
 }
 
 export async function getCalendarLeaves(user: AuthUser, from: string, to: string): Promise<LeaveRequest[]> {
-  if (DEMO_MODE) return loadDemoState().requests.filter((item) => ['Pending', 'Approved'].includes(item.status) && item.startDate <= to && item.endDate >= from).map(localizeLeaveRequest);
+  if (DEMO_MODE) return filterDemoRequests(user, { page: 1, pageSize: Number.MAX_SAFE_INTEGER }).filter((item) => ['Pending', 'Approved'].includes(item.status) && item.startDate <= to && item.endDate >= from);
   try {
     const { data } = await leaveApi.get<LeaveRequestRecord[]>('/api/v1/leave-requests/calendar', { params: { from, to } });
     return await mapApiRequests(data, user);

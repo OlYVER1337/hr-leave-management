@@ -3,6 +3,8 @@ import { ArrowDown, ArrowDownUp, ArrowUp, Building2, ChevronDown, Download, Edit
 import { Avatar, EmptyState, formatDate, PageHeader } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { useToast } from '../components/ToastProvider';
+import { useAuth } from '../contexts';
+import { hasPermission } from '../utils/authorization';
 import { deactivateEmployee, getDepartments, getEmployeePage, getEmployeeOverviewPage, saveEmployee, type EmployeeInput, type EmployeePageQuery } from '../services/hrService';
 import { getApiErrorMessage } from '../services/apiClient';
 import type { Department, Employee, UserRole } from '../types';
@@ -17,7 +19,11 @@ type EmployeeSortField = 'fullName' | 'code' | 'departmentName' | 'role' | 'mana
 type SortDirection = 'asc' | 'desc';
 
 export function EmployeesPage() {
+  const { user } = useAuth();
   const notify = useToast();
+  const canCreateEmployees = hasPermission(user?.permissions, 'employees.create', ['All']);
+  const canUpdateEmployees = hasPermission(user?.permissions, 'employees.update', ['All']);
+  const canDeactivateEmployees = hasPermission(user?.permissions, 'employees.deactivate', ['All']);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [managerOptions, setManagerOptions] = useState<Employee[]>([]);
   const [managerSearch, setManagerSearch] = useState('');
@@ -224,7 +230,7 @@ export function EmployeesPage() {
 
   const managers = managerOptions.filter((employee) => employee.id !== editing?.id);
   return <div className="page-stack">
-    <PageHeader eyebrow="QUẢN TRỊ" title="Nhân viên" description="Quản lý hồ sơ nhân viên, phân công đội nhóm và quyền truy cập." actions={<><button className="button button-secondary" disabled title="Chưa khả dụng: API xuất danh sách chưa được triển khai"><Download size={16} /> Xuất danh sách (chưa khả dụng)</button><button className="button button-primary" onClick={openCreate}><Plus size={17} /> Thêm nhân viên</button></>} />
+    <PageHeader eyebrow="QUẢN TRỊ" title="Nhân viên" description="Quản lý hồ sơ nhân viên, phân công đội nhóm và quyền truy cập." actions={<><button className="button button-secondary" disabled title="Chưa khả dụng: API xuất danh sách chưa được triển khai"><Download size={16} /> Xuất danh sách (chưa khả dụng)</button>{canCreateEmployees && <button className="button button-primary" onClick={openCreate}><Plus size={17} /> Thêm nhân viên</button>}</>} />
     <div className="page-summary-row"><div className="summary-metric"><span>Tổng số nhân viên</span><strong>{summary.total}</strong></div><div className="summary-metric"><span>Đang hoạt động</span><strong>{summary.active}</strong></div><div className="summary-metric"><span>Quản lý</span><strong>{summary.managers}</strong></div><div className="summary-metric"><span>Phòng ban</span><strong>{departments.length}</strong></div></div>
     {error && <div className="inline-alert alert-warning">{error}</div>}
     <section className="panel page-table-panel">
@@ -292,9 +298,9 @@ export function EmployeesPage() {
               <th aria-sort={sortField === 'isActive' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}>
                 <button type="button" className="table-sort-button" aria-label="Sắp xếp theo trạng thái" onClick={() => handleSort('isActive')}>Trạng thái {renderSortIcon('isActive')}</button>
               </th>
-              <th />
+              {(canUpdateEmployees || canDeactivateEmployees) && <th />}
             </tr>
-          </thead><tbody>{pageEmployees.map((employee) => <tr key={employee.id}><td><div className="person-cell"><Avatar name={employee.fullName} size="sm" /><div><strong>{employee.fullName}</strong><small>{employee.email}</small></div></div></td><td><span className="code-pill">{employee.code}</span></td><td>{employee.departmentName || '—'}</td><td><span className={`role-pill role-${employee.role.toLowerCase()}`}>{employee.role === 'HR' ? 'Nhân sự' : employee.role === 'Manager' ? 'Quản lý' : 'Nhân viên'}</span></td><td>{employee.managerName || <span className="muted-copy">Chưa phân công</span>}</td><td>{formatDate(employee.hireDate)}</td><td><span className={`employee-status ${employee.isActive ? 'employee-active' : 'employee-inactive'}`}><i />{employee.isActive ? 'Đang hoạt động' : 'Đã vô hiệu hóa'}</span></td><td><div className="row-actions"><button className="icon-button" title="Sửa nhân viên" aria-label={`Sửa ${employee.fullName}`} onClick={() => openEdit(employee)}><Edit3 size={16} /></button>{employee.isActive && <button className="icon-button danger-icon" title="Vô hiệu hóa nhân viên" aria-label={`Vô hiệu hóa ${employee.fullName}`} onClick={() => void onDeactivate(employee)}><UserMinus size={16} /></button>}</div></td></tr>)}</tbody></table></div>}
+          </thead><tbody>{pageEmployees.map((employee) => <tr key={employee.id}><td><div className="person-cell"><Avatar name={employee.fullName} size="sm" /><div><strong>{employee.fullName}</strong><small>{employee.email}</small></div></div></td><td><span className="code-pill">{employee.code}</span></td><td>{employee.departmentName || '—'}</td><td><span className={`role-pill role-${employee.role.toLowerCase()}`}>{employee.role === 'HR' ? 'Nhân sự' : employee.role === 'Manager' ? 'Quản lý' : 'Nhân viên'}</span></td><td>{employee.managerName || <span className="muted-copy">Chưa phân công</span>}</td><td>{formatDate(employee.hireDate)}</td><td><span className={`employee-status ${employee.isActive ? 'employee-active' : 'employee-inactive'}`}><i />{employee.isActive ? 'Đang hoạt động' : 'Đã vô hiệu hóa'}</span></td>{(canUpdateEmployees || canDeactivateEmployees) && <td><div className="row-actions">{canUpdateEmployees && <button className="icon-button" title="Sửa nhân viên" aria-label={`Sửa ${employee.fullName}`} onClick={() => openEdit(employee)}><Edit3 size={16} /></button>}{canDeactivateEmployees && employee.isActive && <button className="icon-button danger-icon" title="Vô hiệu hóa nhân viên" aria-label={`Vô hiệu hóa ${employee.fullName}`} onClick={() => void onDeactivate(employee)}><UserMinus size={16} /></button>}</div></td>}</tr>)}</tbody></table></div>}
       <div className="table-footer">
         <span aria-live="polite">Đang hiển thị <strong>{firstVisibleEmployee}–{lastVisibleEmployee}</strong> / <strong>{totalCount}</strong> nhân viên</span>
         <div className="employee-pagination">

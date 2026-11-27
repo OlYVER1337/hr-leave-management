@@ -29,6 +29,12 @@ const employee: AuthUser = {
   email: 'employee@example.com',
   role: 'Employee',
   accessToken: 'test-token',
+  permissions: [
+    { p: 'employees.read', s: ['Self'] },
+    { p: 'leaves.read', s: ['Self'] },
+    { p: 'leaves.create', s: ['Self'] },
+    { p: 'leaves.cancel', s: ['Self'] },
+  ],
 };
 
 const request: LeaveRequest = {

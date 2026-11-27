@@ -10,21 +10,33 @@ import { DEMO_MODE } from '../services/config';
 import { getApiErrorMessage } from '../services/apiClient';
 import { Avatar } from './ui';
 import { BUSINESS_TIME_ZONE } from '../utils/businessTime';
+import { hasAnyPermission, hasApprovalAccess, hasPermission, type PermissionRequirement } from '../utils/authorization';
 
-type NavItem = { label: string; to: string; icon: typeof LayoutDashboard; roles?: Array<'HR' | 'Manager' | 'Employee'>; badge?: string };
+type NavItem = { label: string; to: string; icon: typeof LayoutDashboard; requirements?: PermissionRequirement[]; accessMode?: 'approvals'; badge?: string };
 const primaryItems: NavItem[] = [
   { label: 'Tổng quan', to: '/', icon: LayoutDashboard },
-  { label: 'Đơn nghỉ của tôi', to: '/leaves', icon: FileClock, roles: ['Employee', 'Manager'] },
-  { label: 'Tạo đơn nghỉ', to: '/request', icon: CalendarDays, roles: ['Employee', 'Manager'] },
-  { label: 'Hộp thư phê duyệt', to: '/approvals', icon: ClipboardCheck, roles: ['Manager', 'HR'] },
-  { label: 'Nhân viên phụ trách', to: '/my-team', icon: Users, roles: ['Manager'] },
-  { label: 'Lịch nghỉ của nhóm', to: '/calendar', icon: CalendarRange, roles: ['Employee', 'Manager', 'HR'] },
+  { label: 'Đơn nghỉ của tôi', to: '/leaves', icon: FileClock, requirements: [{ permission: 'leaves.read', scopes: ['Self', 'Team', 'All'] }] },
+  { label: 'Tạo đơn nghỉ', to: '/request', icon: CalendarDays, requirements: [{ permission: 'leaves.create', scopes: ['Self'] }] },
+  { label: 'Hộp thư phê duyệt', to: '/approvals', icon: ClipboardCheck, accessMode: 'approvals' },
+  { label: 'Nhân viên phụ trách', to: '/my-team', icon: Users, requirements: [{ permission: 'employees.read', scopes: ['Team'] }] },
+  { label: 'Lịch nghỉ của nhóm', to: '/calendar', icon: CalendarRange, requirements: [{ permission: 'leaves.read', scopes: ['Self', 'Team', 'All'] }] },
 ];
 const adminItems: NavItem[] = [
-  { label: 'Nhân viên', to: '/employees', icon: Users, roles: ['HR'] },
-  { label: 'Phòng ban', to: '/departments', icon: Building2, roles: ['HR'] },
-  { label: 'Chính sách nghỉ phép', to: '/policies', icon: BriefcaseBusiness, roles: ['HR'] },
-  { label: 'Tất cả đơn nghỉ', to: '/all-leaves', icon: Clock3, roles: ['HR'] },
+  { label: 'Nhân viên', to: '/employees', icon: Users, requirements: [{ permission: 'employees.read', scopes: ['All'] }] },
+  { label: 'Phòng ban', to: '/departments', icon: Building2, requirements: [
+    { permission: 'departments.create', scopes: ['All'] },
+    { permission: 'departments.update', scopes: ['All'] },
+    { permission: 'departments.delete', scopes: ['All'] },
+  ] },
+  { label: 'Chính sách nghỉ phép', to: '/policies', icon: BriefcaseBusiness, requirements: [
+    { permission: 'leave-policies.create', scopes: ['All'] },
+    { permission: 'leave-policies.update', scopes: ['All'] },
+    { permission: 'holidays.create', scopes: ['All'] },
+    { permission: 'holidays.update', scopes: ['All'] },
+    { permission: 'holidays.delete', scopes: ['All'] },
+    { permission: 'leave-types.update', scopes: ['All'] },
+  ] },
+  { label: 'Tất cả đơn nghỉ', to: '/all-leaves', icon: Clock3, requirements: [{ permission: 'leaves.read', scopes: ['All'] }] },
 ];
 
 export function AppShell() {
@@ -34,8 +46,20 @@ export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const role = user?.role ?? 'Employee';
-  const visiblePrimary = primaryItems.filter((item) => !item.roles || item.roles.includes(role));
-  const visibleAdmin = adminItems.filter((item) => item.roles?.includes(role));
+  const policyRequirements: PermissionRequirement[] = [
+    { permission: 'leave-policies.create', scopes: ['All'] },
+    { permission: 'leave-policies.update', scopes: ['All'] },
+    { permission: 'holidays.create', scopes: ['All'] },
+    { permission: 'holidays.update', scopes: ['All'] },
+    { permission: 'holidays.delete', scopes: ['All'] },
+    { permission: 'leave-types.update', scopes: ['All'] },
+  ];
+  const canManagePolicies = hasAnyPermission(user?.permissions, policyRequirements);
+  const visiblePrimary = primaryItems.filter((item) =>
+    (!item.requirements || hasAnyPermission(user?.permissions, item.requirements)) &&
+    (item.accessMode !== 'approvals' || hasApprovalAccess(user?.permissions)));
+  const visibleAdmin = adminItems.filter((item) =>
+    !item.requirements || hasAnyPermission(user?.permissions, item.requirements));
 
   async function handleSignOut() {
     try { await signOut(); }
@@ -45,8 +69,16 @@ export function AppShell() {
   function renderNav(items: NavItem[]) {
     return items.map((item) => {
       const Icon = item.icon;
+      const canReadTeamOrAllLeaves = hasPermission(user?.permissions, 'leaves.read', ['Team', 'All']);
+      const label = item.to === '/leaves' && canReadTeamOrAllLeaves
+        ? 'Đơn nghỉ trong phạm vi'
+        : item.to === '/calendar' && !canReadTeamOrAllLeaves
+          ? 'Lịch nghỉ của tôi'
+          : item.to === '/calendar'
+            ? 'Lịch nghỉ trong phạm vi'
+            : item.label;
       return <NavLink end={item.to === '/'} to={item.to} className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`} key={item.to} onClick={() => setMobileOpen(false)} title={collapsed ? item.label : undefined}>
-        <Icon size={19} strokeWidth={1.8} /><span className="nav-label">{item.label}</span>{item.badge && <span className="nav-badge">{item.badge}</span>}
+        <Icon size={19} strokeWidth={1.8} /><span className="nav-label">{label}</span>{item.badge && <span className="nav-badge">{item.badge}</span>}
       </NavLink>;
     });
   }
@@ -83,7 +115,7 @@ export function AppShell() {
             <button className="icon-button notification-button" aria-label="Thông báo chưa khả dụng" title="Thông báo chưa khả dụng" disabled><Bell size={19} /></button>
             <div className="topbar-profile-wrap">
               <button className="topbar-profile" onClick={() => setProfileOpen((value) => !value)}><Avatar name={user?.fullName ?? 'Người dùng'} size="sm" /><span>{user?.fullName.split(' ').slice(-1)[0]}</span><ChevronDown size={14} /></button>
-              {profileOpen && <div className="profile-menu"><button onClick={() => { setProfileOpen(false); navigate('/profile'); }}><UserRound size={16} /> Hồ sơ của tôi</button>{role === 'HR' && <button onClick={() => { setProfileOpen(false); navigate('/policies'); }}><Settings2 size={16} /> Chính sách nghỉ phép</button>}<button onClick={handleSignOut}><LogOut size={16} /> Đăng xuất</button></div>}
+              {profileOpen && <div className="profile-menu"><button onClick={() => { setProfileOpen(false); navigate('/profile'); }}><UserRound size={16} /> Hồ sơ của tôi</button>{canManagePolicies && <button onClick={() => { setProfileOpen(false); navigate('/policies'); }}><Settings2 size={16} /> Chính sách nghỉ phép</button>}<button onClick={handleSignOut}><LogOut size={16} /> Đăng xuất</button></div>}
             </div>
           </div>
         </header>

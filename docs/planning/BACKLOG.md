@@ -18,7 +18,7 @@ Dynamic Authorization V1 đã được merge vào `master` qua PR #6, merge comm
 
 | Ưu tiên | Hạng mục | Trạng thái hiện tại | Tiêu chí hoàn thành |
 |---|---|---|---|
-| P2 | **Permission-driven React UI** | Backend Dynamic RBAC đã có; UI vẫn dùng Role legacy | Đưa permission/scope claim hoặc effective-permission DTO vào session; guard menu/route/action theo permission; backend vẫn là enforcement cuối; test multi-role union, scope, token refresh và thiếu permission. |
+| P2 | **Permission-driven React UI** | Đã triển khai trên nhánh `feature/permission-driven-react-ui`: parse `authz_v=1` + `perm`; restore/refresh đồng bộ grant; menu, route và các thao tác Employees/Departments/Policies/Leave dùng permission/scope. Đã thêm test cho multi-role, scope, thiếu quyền và scope đọc/duyệt. Chưa chạy regression/build trên checkout local và chưa merge `master`. | Chạy `npm ci`, `npm test -- --run` và production build; xử lý hết lỗi; nghiệm thu UI bằng tài khoản có multi-role và role thiếu permission; sau đó merge PR. Backend tiếp tục là enforcement cuối. |
 | P2 | **Role assignment UI** | Backend GET/POST/DELETE UserRole APIs có; chưa có UI | HR admin xem/gán/gia hạn/thu hồi Role; hiển thị expiry/audit; giữ backend guard chống self-grant/escalation. |
 | P3 | **Role/Permission catalog management** | Chỉ seed baseline; chưa có CRUD catalog | Chỉ triển khai sau khi chốt lifecycle/versioning; tạo/sửa/disable Role, Permission, Scope rules và Role grants có audit, validation scope, bảo vệ last admin. |
 | P3 | **Department scope** | Có trong schema nhưng chưa thực thi | Định nghĩa Department dựa trên quan hệ hiện tại hay snapshot; triển khai SQL filter cho từng resource trước khi cấp scope này. |
@@ -51,7 +51,7 @@ Dynamic Authorization V1 đã được merge vào `master` qua PR #6, merge comm
 3. Approval arrival-rate đã có raw/summary, commit SHA và immutable image IDs. Phần còn thiếu metadata là Workforce paged-v2: ghi PAGE_SIZE, seed version, exact SHA, image IDs và timestamps; thu resource metrics đồng bộ nếu cần profiling.
 4. Kiểm tra thêm business timezone tại boundary 31/12–01/01 khi có thể mô phỏng thời điểm phù hợp.
 5. Cân nhắc bulk balance reconciliation, readiness và HR client resilience theo nhu cầu; API chi tiết kèm history đã hoàn tất và merge ở PR #15.
-6. Permission-driven UI và Role assignment UI.
+6. Xác nhận regression/build và nghiệm thu Permission-driven UI trên feature branch; sau đó mới merge. Role assignment UI vẫn là hạng mục riêng.
 7. Role/Permission catalog CRUD, Department scope và các phần mở rộng.
 
 Không triển khai outbox, event bus hoặc distributed read model chỉ để xử lý một gap chưa đo. Trước mắt HR HTTP API vẫn là nguồn chính thức; chỉ nâng kiến trúc khi có yêu cầu hoặc bằng chứng benchmark.

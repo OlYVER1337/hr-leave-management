@@ -5,7 +5,7 @@ import { AppShell } from './components/AppShell';
 import { useAuth } from './contexts';
 import { ToastProvider } from './components/ToastProvider';
 import { LoginPage } from './pages/LoginPage';
-import type { UserRole } from './types';
+import { hasAnyPermission, hasApprovalAccess, hasPermission, type PermissionRequirement } from './utils/authorization';
 
 // Load authenticated pages only when their route is visited.
 // Named page exports are adapted to React.lazy's required default export.
@@ -46,10 +46,40 @@ function RequireAuth() {
   return user ? <Outlet /> : <Navigate to="/login" replace />;
 }
 
-function RequireRole({ roles, children }: { roles: UserRole[]; children: ReactNode }) {
+function RequirePermission({
+  permission,
+  scopes,
+  children,
+}: {
+  permission: string;
+  scopes?: readonly string[];
+  children: ReactNode;
+}) {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
-  return roles.includes(user.role) ? <>{children}</> : <Navigate to="/" replace />;
+  return hasPermission(user.permissions, permission, scopes)
+    ? <>{children}</>
+    : <Navigate to="/" replace />;
+}
+
+function RequireAnyPermission({
+  requirements,
+  children,
+}: {
+  requirements: PermissionRequirement[];
+  children: ReactNode;
+}) {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  return hasAnyPermission(user.permissions, requirements)
+    ? <>{children}</>
+    : <Navigate to="/" replace />;
+}
+
+function RequireApprovalAccess({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  return hasApprovalAccess(user.permissions) ? <>{children}</> : <Navigate to="/" replace />;
 }
 
 export default function App() {
@@ -58,15 +88,15 @@ export default function App() {
     <Route element={<RequireAuth />}>
       <Route element={<AppShell />}>
         <Route index element={<DashboardPage />} />
-        <Route path="leaves" element={<LeaveRequestsPage />} />
-        <Route path="all-leaves" element={<RequireRole roles={['HR']}><LeaveRequestsPage all /></RequireRole>} />
-        <Route path="request" element={<RequireRole roles={['Employee', 'Manager']}><RequestLeavePage /></RequireRole>} />
-        <Route path="approvals" element={<RequireRole roles={['Manager', 'HR']}><ApprovalsPage /></RequireRole>} />
-        <Route path="my-team" element={<RequireRole roles={['Manager']}><ManagerTeamPage /></RequireRole>} />
-        <Route path="calendar" element={<CalendarPage />} />
-        <Route path="employees" element={<RequireRole roles={['HR']}><EmployeesPage /></RequireRole>} />
-        <Route path="departments" element={<RequireRole roles={['HR']}><DepartmentsPage /></RequireRole>} />
-        <Route path="policies" element={<RequireRole roles={['HR']}><PoliciesPage /></RequireRole>} />
+        <Route path="leaves" element={<RequirePermission permission="leaves.read" scopes={['Self', 'Team', 'All']}><LeaveRequestsPage /></RequirePermission>} />
+        <Route path="all-leaves" element={<RequirePermission permission="leaves.read" scopes={['All']}><LeaveRequestsPage all /></RequirePermission>} />
+        <Route path="request" element={<RequirePermission permission="leaves.create" scopes={['Self']}><RequestLeavePage /></RequirePermission>} />
+        <Route path="approvals" element={<RequireApprovalAccess><ApprovalsPage /></RequireApprovalAccess>} />
+        <Route path="my-team" element={<RequirePermission permission="employees.read" scopes={['Team']}><ManagerTeamPage /></RequirePermission>} />
+        <Route path="calendar" element={<RequirePermission permission="leaves.read" scopes={['Self', 'Team', 'All']}><CalendarPage /></RequirePermission>} />
+        <Route path="employees" element={<RequirePermission permission="employees.read" scopes={['All']}><EmployeesPage /></RequirePermission>} />
+        <Route path="departments" element={<RequireAnyPermission requirements={[{ permission: 'departments.create', scopes: ['All'] }, { permission: 'departments.update', scopes: ['All'] }, { permission: 'departments.delete', scopes: ['All'] }]}><DepartmentsPage /></RequireAnyPermission>} />
+        <Route path="policies" element={<RequireAnyPermission requirements={[{ permission: 'leave-policies.create', scopes: ['All'] }, { permission: 'leave-policies.update', scopes: ['All'] }, { permission: 'holidays.create', scopes: ['All'] }, { permission: 'holidays.update', scopes: ['All'] }, { permission: 'holidays.delete', scopes: ['All'] }, { permission: 'leave-types.update', scopes: ['All'] }]}><PoliciesPage /></RequireAnyPermission>} />
         <Route path="profile" element={<ProfilePage />} />
       </Route>
     </Route>

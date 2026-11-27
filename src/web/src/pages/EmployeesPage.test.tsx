@@ -6,6 +6,7 @@ import { deactivateEmployee, getDepartments, getEmployeeOverviewPage, getEmploye
 import { EmployeesPage } from './EmployeesPage';
 
 const mocks = vi.hoisted(() => ({
+  useAuth: vi.fn(),
   notify: vi.fn(),
   deactivateEmployee: vi.fn(),
   getDepartments: vi.fn(),
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   saveEmployee: vi.fn(),
 }));
 
+vi.mock('../contexts', () => ({ useAuth: mocks.useAuth }));
 vi.mock('../components/ToastProvider', () => ({ useToast: () => mocks.notify }));
 vi.mock('../services/hrService', () => ({
   deactivateEmployee: mocks.deactivateEmployee,
@@ -46,6 +48,20 @@ const employees: Employee[] = Array.from({ length: 25 }, (_, index) => {
 describe('EmployeesPage filtering, sorting and pagination', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.useAuth.mockReturnValue({
+      user: {
+        id: 'hr-1',
+        fullName: 'HR User',
+        email: 'hr@example.com',
+        role: 'HR',
+        accessToken: 'test-token',
+        permissions: [{"p":"employees.read","s":["All"]},{"p":"employees.create","s":["All"]},{"p":"employees.update","s":["All"]},{"p":"employees.deactivate","s":["All"]},{"p":"employees.password.reset","s":["All"]},{"p":"departments.create","s":["All"]},{"p":"departments.update","s":["All"]},{"p":"departments.delete","s":["All"]},{"p":"leave-policies.create","s":["All"]},{"p":"leave-policies.update","s":["All"]},{"p":"leave-types.create","s":["All"]},{"p":"leave-types.update","s":["All"]},{"p":"holidays.create","s":["All"]},{"p":"holidays.update","s":["All"]},{"p":"holidays.delete","s":["All"]},{"p":"leaves.read","s":["All"]},{"p":"leaves.create","s":["Self"]},{"p":"leaves.decide","s":["All"]},{"p":"leaves.cancel","s":["Self"]}],
+      },
+      busy: false,
+      restoreError: null,
+      signIn: vi.fn(),
+      signOut: vi.fn(),
+    });
     vi.mocked(getEmployeePage).mockImplementation(async (query) => {
       const search = query.search?.toLocaleLowerCase('vi-VN') ?? '';
       const filtered = employees.filter((employee) =>

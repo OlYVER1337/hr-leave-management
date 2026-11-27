@@ -48,7 +48,7 @@ Login và refresh đều tính lại quyền từ HR_DB trước khi phát token
 
 Các scope đang được thực thi trong API là Self, Team và All. Department tồn tại trong schema/rule constraint nhưng chưa được dùng làm bộ lọc dữ liệu. Role/Permission baseline được seed (Employee, Manager, HR, Auditor); API hiện tại quản lý UserRole assignment, chưa có CRUD tạo Role/Permission catalog hoặc chỉnh Role grants.
 
-**Frontend chưa dynamic hoàn toàn:** App.tsx và AppShell vẫn dùng Role legacy (HR/Manager/Employee) để ẩn menu và guard route. Backend mới là nguồn quyết định bảo mật cuối cùng; ẩn route ở UI không thay thế API authorization. Chưa có UI quản trị Role assignments.
+**Frontend permission-driven (đã triển khai trên nhánh feature):** `authorization.ts` đọc claim `authz_v=1` và `perm`, hợp nhất grant trùng permission, chỉ nhận scope `Self/Team/All`, và từ chối khi claim/token không hợp lệ. `App.tsx` bảo vệ route; `AppShell.tsx` lọc menu; các trang quản trị ẩn riêng từng thao tác theo permission tương ứng. Login, restore session và refresh đều dựng/cập nhật permission trong AuthContext. Route/menu phê duyệt yêu cầu đồng thời quyền `leaves.decide` và `leaves.read` với phạm vi tương thích vì inbox và trang chi tiết dùng hai policy backend khác nhau. Legacy Role chỉ còn là nhãn hiển thị/tương thích; nó không phải điều kiện truy cập UI. Đây là kiểm soát trải nghiệm người dùng, không xác thực chữ ký JWT ở browser và không thay thế authorization của API. Thay đổi đang ở nhánh `feature/permission-driven-react-ui`, chưa merge vào `master`; kết quả test/build cần được xác nhận trên checkout local. Chưa có UI quản trị Role assignments.
 
 ## 4. Luồng đăng nhập và refresh
 
@@ -149,7 +149,7 @@ Leave Request validation, default year của Leave Balance và business date/yea
 
 ## 10. Giới hạn và non-goals V1
 
-Chưa có API Gateway riêng, message broker, outbox, asynchronous authorization read model, balance reconciliation worker, report/export backend, notification delivery, Role/Permission catalog CRUD, permission-driven UI, History read endpoint, hoặc readiness/liveness endpoints riêng.
+Chưa có API Gateway riêng, message broker, outbox, asynchronous authorization read model, balance reconciliation worker, report/export backend, notification delivery, Role/Permission catalog CRUD, UI quản trị UserRole assignment, History read endpoint, hoặc readiness/liveness endpoints riêng.
 
 Root Compose hiện phục vụ local/demo/benchmark; không phải production hardening. Trước production cần secret management, TLS, network restrictions, backups/restore, observability và quy trình migration/rollback.
 

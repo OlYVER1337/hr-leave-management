@@ -1,7 +1,8 @@
 import axios from 'axios';
 import type { InternalAxiosRequestConfig } from 'axios';
 import { HR_API_BASE_URL, LEAVE_API_BASE_URL, TOKEN_STORAGE_KEY, USER_STORAGE_KEY } from './config';
-import type { AuthUser, UserRole } from '../types';
+import type { AuthUser } from '../types';
+import { readPermissionGrants } from '../utils/authorization';
 
 interface AuthenticationResponse {
   accessToken: string;
@@ -30,14 +31,13 @@ function refreshAccessToken(): Promise<string> {
           id: data.userId,
           fullName: data.fullName,
           email: data.email,
-          role: data.role as UserRole,
+          role: data.role,
           accessToken: data.accessToken,
           expiresAtUtc: data.expiresAtUtc,
+          permissions: readPermissionGrants(data.accessToken),
         };
         sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
-        window.dispatchEvent(new CustomEvent('auth:session-updated', {
-          detail: { accessToken: user.accessToken, expiresAtUtc: user.expiresAtUtc },
-        }));
+        window.dispatchEvent(new CustomEvent<AuthUser>('auth:session-updated', { detail: user }));
         return data.accessToken;
       })
       .finally(() => {
