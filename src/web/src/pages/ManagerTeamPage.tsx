@@ -3,7 +3,7 @@ import { Eye, Search, Users } from 'lucide-react';
 import { Avatar, EmptyState, formatDate, PageHeader } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { useAuth } from '../contexts';
-import { getMyTeamPage } from '../services/hrService';
+import { getEmployeePage } from '../services/hrService';
 import { Pagination } from '../components/Pagination';
 import { usePagedBlock } from '../hooks/usePagedBlock';
 import type { Employee } from '../types';
@@ -30,7 +30,15 @@ export function ManagerTeamPage() {
       if (!user || !hasPermission(user.permissions, 'employees.read', ['Team'])) {
         return Promise.resolve({ items: [], totalCount: 0 });
       }
-      return getMyTeamPage(user.id, requestPage, requestPageSize, debouncedSearch || undefined);
+      return getEmployeePage(
+        {
+          page: requestPage,
+          pageSize: requestPageSize,
+          search: debouncedSearch || undefined,
+          directReportsOnly: true,
+        },
+        { currentEmployeeId: user.id },
+      );
     },
     [user, queryKey],
   );

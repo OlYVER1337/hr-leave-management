@@ -3,16 +3,16 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthUser, Employee } from '../types';
 import { useAuth } from '../contexts';
-import { getMyTeamPage } from '../services/hrService';
+import { getEmployeePage } from '../services/hrService';
 import { ManagerTeamPage } from './ManagerTeamPage';
 
 const mocks = vi.hoisted(() => ({
   useAuth: vi.fn(),
-  getMyTeamPage: vi.fn(),
+  getEmployeePage: vi.fn(),
 }));
 
 vi.mock('../contexts', () => ({ useAuth: mocks.useAuth }));
-vi.mock('../services/hrService', () => ({ getMyTeamPage: mocks.getMyTeamPage }));
+vi.mock('../services/hrService', () => ({ getEmployeePage: mocks.getEmployeePage }));
 
 const manager: AuthUser = {
   id: 'manager-1',
@@ -68,19 +68,21 @@ describe('ManagerTeamPage', () => {
       signIn: vi.fn(),
       signOut: vi.fn(),
     });
-    vi.mocked(getMyTeamPage).mockImplementation(async (_managerId, page, pageSize, search) => {
-      const term = search?.trim().toLocaleLowerCase('vi-VN') ?? '';
-      const filtered = team.filter((employee) =>
-        !term || [
-          employee.fullName,
-          employee.code,
-          employee.email,
-          employee.departmentName,
-        ].some((value) => value.toLocaleLowerCase('vi-VN').includes(term)),
-      );
-      const offset = (page - 1) * pageSize;
+    vi.mocked(getEmployeePage).mockImplementation(async (query, options) => {
+      const term = query.search?.trim().toLocaleLowerCase('vi-VN') ?? '';
+      const filtered = team
+        .filter((employee) => employee.isActive && employee.managerId === options?.currentEmployeeId)
+        .filter((employee) =>
+          !term || [
+            employee.fullName,
+            employee.code,
+            employee.email,
+            employee.departmentName,
+          ].some((value) => value.toLocaleLowerCase('vi-VN').includes(term)),
+        );
+      const offset = (query.page - 1) * query.pageSize;
       return {
-        items: filtered.slice(offset, offset + pageSize),
+        items: filtered.slice(offset, offset + query.pageSize),
         totalCount: filtered.length,
       };
     });
@@ -92,7 +94,10 @@ describe('ManagerTeamPage', () => {
     expect(await screen.findByText('Nguyễn An')).toBeInTheDocument();
     expect(screen.getByText('Trần Bình')).toBeInTheDocument();
     expect(screen.getByText('Tổng nhân viên phụ trách').parentElement?.textContent).toContain('2');
-    expect(getMyTeamPage).toHaveBeenCalledWith(manager.id, 1, 20, undefined);
+    expect(getEmployeePage).toHaveBeenCalledWith(
+      expect.objectContaining({ page: 1, directReportsOnly: true }),
+      { currentEmployeeId: manager.id },
+    );
   });
 
   it('filters the manager team and opens a read-only employee detail dialog', async () => {
@@ -113,7 +118,7 @@ describe('ManagerTeamPage', () => {
   });
 
   it('shows an empty state when the manager has no assigned active employees', async () => {
-    vi.mocked(getMyTeamPage).mockResolvedValue({ items: [], totalCount: 0 });
+    vi.mocked(getEmployeePage).mockResolvedValue({ items: [], totalCount: 0 });
     render(<ManagerTeamPage />);
 
     expect(await screen.findByText('Bạn chưa có nhân viên được phân công')).toBeInTheDocument();

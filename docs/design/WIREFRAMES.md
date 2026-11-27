@@ -336,9 +336,9 @@ công trực tiếp. Trang chỉ có quyền đọc, không có thao tác quản
     │ Avatar + Email     │ EMP-...    │ Kỹ thuật │ Employee│ Date       │ Active  │ [View]
     └────────────────────┴────────────┴──────────┴─────────┴────────────┴─────────┘
 
-- API mode gọi GET /api/v1/me/team; backend xác định Manager từ JWT, không nhận managerId do client chọn.
-- Chỉ trả direct reports đang hoạt động; endpoint yêu cầu page và pageSize (1–100), trả tổng số qua X-Total-Count.
-- Search ở server theo họ tên, email, mã nhân viên và phòng ban; UI sử dụng server pagination và có loading/error/empty states.
+- API mode gọi GET /api/v1/employees với query `directReportsOnly=true`; backend xác định caller từ JWT, không nhận managerId do client gửi.
+- Chỉ trả direct reports đang hoạt động; bộ lọc yêu cầu `employees.read:Team`, dùng pagination (page/pageSize từ 1–100) và trả tổng số qua X-Total-Count.
+- Search ở server theo họ tên, email, mã nhân viên và phòng ban; các filter/sort dùng chung với danh sách nhân viên; UI sử dụng server pagination và có loading/error/empty states.
 - Nút “Xem hồ sơ” mở modal read-only: họ tên, mã, email, vai trò, phòng ban,
   ngày vào làm, quản lý trực tiếp và trạng thái.
 - Không có nút thêm, sửa, vô hiệu hóa hoặc đổi mật khẩu. API quản trị
@@ -514,7 +514,7 @@ Employee mở My Leaves → action chỉ hiển thị với request Pending củ
 | Refresh session | HR AuthenticationController | POST /api/v1/auth/refresh |
 | Logout | HR AuthenticationController | POST /api/v1/auth/logout |
 | Current employee | HR CurrentEmployeeController | GET /api/v1/me |
-| Team | HR CurrentEmployeeController | GET /api/v1/me/team |
+| Direct reports | HR EmployeesController | GET /api/v1/employees?directReportsOnly=true |
 | Change own password | HR CurrentEmployeeController | PUT /api/v1/me/password |
 | Employee list/detail/create/update/deactivate | HR EmployeesController | GET/POST/PUT /api/v1/employees; POST /{id}/deactivate |
 | Reset employee password | HR EmployeesController | PUT /api/v1/employees/{id}/password |

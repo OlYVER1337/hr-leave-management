@@ -40,7 +40,6 @@ Danh sách phân trang:
 | POST /api/v1/auth/refresh | Refresh cookie | Xoay vòng refresh token và phát access JWT mới với quyền tính lại |
 | POST /api/v1/auth/logout | Refresh cookie | Thu hồi refresh token và xóa cookie |
 | GET /api/v1/me | Authenticated | Đọc hồ sơ của caller |
-| GET /api/v1/me/team?page=1&pageSize=20 | employees.read:Team | Direct reports đang hoạt động của caller; pagination + X-Total-Count |
 | PUT /api/v1/me/password | Authenticated | Đổi mật khẩu của caller |
 
 ### 2.2. Employee và lookup
@@ -57,7 +56,7 @@ Danh sách phân trang:
 | POST /api/v1/lookup/employees/batch | employees.read:Self/Team/All | Lookup tối đa 100 ID; Team chỉ gồm direct report active theo ManagerId hiện tại; All có thể đọc inactive |
 | GET /api/v1/lookup/employees/{id} | employees.read:Self/Team/All | Snapshot theo scope; Team chỉ đọc direct report active theo ManagerId hiện tại; All có thể đọc inactive |
 
-Danh sách direct reports của Manager chỉ truy cập qua `GET /api/v1/me/team`; endpoint tự lấy manager ID từ caller, yêu cầu `employees.read:Team` và hỗ trợ pagination.
+Danh sách nhân viên và direct reports dùng chung `GET /api/v1/employees?page=1&pageSize=20`. Thêm `directReportsOnly=true` để chỉ lấy direct reports đang hoạt động của caller; backend tự lấy actor ID từ JWT và bắt buộc `employees.read:Team`. Bộ lọc này dùng chung search, role/status/department filter, sort, pagination và `X-Total-Count`; không nhận managerId từ client.
 
 ### 2.3. Quản lý Role assignment
 
