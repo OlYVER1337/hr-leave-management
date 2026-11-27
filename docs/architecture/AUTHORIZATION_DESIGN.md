@@ -250,7 +250,9 @@ Chưa mô tả V1 là hệ thống CRUD Role/Permission tùy ý end-to-end cho t
 
 ### Trạng thái source sau merge
 
-Dynamic Authorization V1 trong tài liệu này đã được tích hợp vào `master` qua PR #6, merge commit `81b987043ce4663ad11800bb331ffdbc013bd1d2` ngày 20/11/2026. Trạng thái merge không làm thay đổi các giới hạn V1 nêu trên: React vẫn dùng legacy Role cho navigation/route guard, Department scope chưa được thực thi, và Role/Permission catalog CRUD chưa có.
+Dynamic Authorization V1 đã được tích hợp vào `master` qua PR #6. Permission-driven React UI tiếp tục được tích hợp qua [PR #18](https://github.com/OlYVER1337/hr-leave-management/pull/18), merge commit `d69156aa8990e2d92d21ad0dac1f9e0a7e1d2c5e` ngày 27/11/2026. React hiện dùng permission/scope từ JWT cho menu, route và action; Role legacy chỉ còn vai trò tương thích/hiển thị.
+
+Việc gộp direct reports vào `GET /api/v1/employees?directReportsOnly=true` đang ở nhánh `feature/consolidate-employees-team-api` và chưa merge vào `master`. Department scope và Role/Permission catalog CRUD vẫn là các giới hạn riêng.
 
 ## Benchmark Approval sustained — 25/11/2026
 
