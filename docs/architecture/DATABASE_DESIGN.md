@@ -94,7 +94,9 @@ Index và constraint quan trọng:
 
 Các Scope đang được thực thi trong API là Self, Team và All. Department tồn tại trong schema để mở rộng nhưng chưa được dùng làm điều kiện lọc dữ liệu.
 
-`Employee.Role` dạng enum/string vẫn được giữ để tương thích/backfill và UI. AuthorizationSeeder tạo baseline Role/Permission/Scope, sau đó backfill UserRoles từ Employee.Role theo hướng idempotent. Employee.Role không phải nguồn quyết định backend authorization của các endpoint đã migrate.
+`Employee.Role` là trường enum/string legacy trong `Employees`. AuthorizationSeeder dùng nó để backfill Role assignment ban đầu vào `UserRoles` theo hướng idempotent; seeder không khôi phục assignment đã revoke hoặc hết hạn. Sau backfill, quyền backend được tính từ `UserRoles` → `Roles` → `RolePermissions` → `RolePermissionScopes`, có đối chiếu `PermissionScopeRules`.
+
+Trường legacy này vẫn được giữ cho nhãn vai trò trong UI/DTO, lọc và thống kê nhân viên, dữ liệu tạo/cập nhật nhân viên, claim `role` tương thích và một số quy tắc nghiệp vụ cũ. Nó không phải nguồn authorization và không tự đồng bộ với các UserRole assignment được cấp/thu hồi động; vì vậy không suy ra effective permission từ `Employees.Role`. Chỉ xóa cột sau khi các mục đích tương thích và nghiệp vụ còn lại được thay thế bằng thiết kế mới và có migration riêng.
 
 ---
 
