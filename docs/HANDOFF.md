@@ -352,7 +352,9 @@ Bảng đầy đủ các lượt arrival-rate ngày 26/11 (cả lượt hợp l�
 - HR Service sở hữu HR_DB; Leave Service sở hữu Leave_DB. Leave gọi HR qua HTTP để đọc catalog/chính sách authoritative, không truy cập trực tiếp HR database.
 - Redis là cache best-effort; SQL Server vẫn là nguồn dữ liệu nghiệp vụ chính.
 - Backend Dynamic RBAC V1 quản lý Roles, Permissions, UserRoles, scope rules và audit. Scope đang thực thi gồm Self, Team, All; Department chưa thành bộ lọc dữ liệu nghiệp vụ.
-- Frontend vẫn dùng Role legacy cho navigation/route guards; chưa có UI quản trị Role/Permission catalog hoặc permission-driven UI đầy đủ.
+- React đã dùng permission/scope trong JWT cho menu, route guard và action (PR #18 đã merge vào master). Role claim/`Employee.Role` legacy chỉ còn phục vụ tương thích/hiển thị và các chức năng dữ liệu nhân viên; không phải nguồn authorization.
+- Trên nhánh `feature/consolidate-employees-team-api`, trang `/my-team` dùng chung `GET /api/v1/employees?directReportsOnly=true`; API `GET /api/v1/me/team` cũ đã bị gỡ khỏi controller/runtime/OpenAPI. Manager direct-report API đã được kiểm tra trên HR Bench; nghiệm thu HR scope All còn chờ.
+- Chưa có UI quản trị UserRole assignment hoặc CRUD Role/Permission catalog.
 - Leave request lưu policy version và quota snapshot theo yearly allocation. Policy được chọn theo ngày tạo đơn ở business timezone UTC+07; request cũ giữ snapshot đã tạo.
 - Balance dùng PolicyDays, Used và Pending; Entitled được suy ra để tránh số dư âm khi quota giảm. Chưa có bulk reconciliation cho toàn bộ nhân viên.
 - Access JWT xác thực stateless; thay đổi/revoke UserRole không thu hồi tức thời access token đã phát, token cũ còn hiệu lực đến expiry. Refresh token có thể bị thu hồi.
