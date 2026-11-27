@@ -46,7 +46,9 @@ Nếu HR Service không khả dụng, Leave Service trả 503 Dependency unavail
 | RolePermissionScopes | Gán Scope cho Role-Permission; khóa ngoại kép bảo đảm Permission được gán và Scope hợp lệ |
 | AuthzAuditLog | Lưu người thực hiện, đối tượng bị thay đổi và giá trị trước/sau |
 
-Employee.Role enum được giữ tạm trong giai đoạn chuyển đổi. Không xóa trường cũ cho đến khi dữ liệu hiện tại đã được backfill sang UserRoles và mọi API, seeder, test, JWT đều đọc Dynamic RBAC.
+`Employee.Role` là trường enum legacy trong `Employees`, được giữ lại để tương thích trong giai đoạn chuyển đổi. Seeder dùng giá trị này để backfill assignment ban đầu vào `UserRoles`; sau backfill, nguồn xác định quyền backend là các UserRole assignment còn hiệu lực cùng Role/Permission/Scope trong database. Không được suy ra effective permission chỉ từ `Employee.Role`.
+
+Hiện `Employee.Role` vẫn được dùng cho nhãn vai trò trong hồ sơ/danh sách, bộ lọc và thống kê nhân viên, DTO tạo/cập nhật, claim `role` tương thích trong JWT và một số kiểm tra nghiệp vụ legacy (ví dụ chặn đổi nhãn Manager khi còn direct reports). Giá trị này không tự đồng bộ với các Role assignment động được cấp qua `UserRoles`; hai nguồn có thể khác nhau. Các endpoint đã chuyển đổi và React permission-driven không dùng nó làm căn cứ authorization.
 
 Scope được lưu dưới dạng chuỗi có constraint: Self, Team, Department, All. V1 chỉ bật các Scope đã được định nghĩa nghiệp vụ và đã được service hỗ trợ. Chưa cấp Department trước khi chốt quy tắc phòng ban hiện tại hay snapshot.
 
