@@ -222,7 +222,7 @@ khi có API tương ứng. HR không được tạo đơn nghỉ; xác nhận ro
 |---|---|---|
 | Hai microservice, database tách biệt, giao tiếp REST | Đạt | HR Service sở hữu `HR_DB`; Leave Service sở hữu `Leave_DB`; Leave gọi HR API |
 | ASP.NET Core, React/TypeScript, EF Core, migrations, OpenAPI | Đạt | Hai solution .NET 10, Vite/React, EF migrations và OpenAPI ở Development |
-| JWT, phân quyền và vòng đời token | Đạt một phần | Backend đã triển khai Dynamic RBAC V1 với permission/scope trong JWT và refresh rotation/revocation; Role claim legacy còn phục vụ UI compatibility, không là nguồn authorize cho các API đã migrate. Access JWT đã phát vẫn hợp lệ tới expiry (mặc định 1 phút). |
+| JWT, phân quyền và vòng đời token | Đạt một phần | HR/Leave API và React menu/route/action sử dụng permission/scope trong JWT; Role claim và `Employee.Role` legacy còn phục vụ nhãn hiển thị/tương thích và một số nghiệp vụ nhân viên, không là nguồn authorize cho API đã migrate. Access JWT đã phát vẫn hợp lệ tới expiry. |
 | Nghiệp vụ HR | Đạt | CRUD nhân viên/phòng ban, quản lý trực tiếp, danh mục nghỉ/ngày lễ và kiểm tra dữ liệu |
 | Nghiệp vụ nghỉ phép | Đạt | Tạo/xem/hủy/duyệt/từ chối, số dư, phân bổ năm, ngày làm việc và history |
 | Tính đồng thời | Đạt | SQL integration test cho tạo đơn cạnh tranh, trùng ngày và quyết định cạnh tranh |
