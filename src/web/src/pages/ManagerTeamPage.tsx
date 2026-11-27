@@ -24,7 +24,7 @@ export function ManagerTeamPage() {
     return () => window.clearTimeout(handle);
   }, [search]);
 
-  const queryKey = JSON.stringify({ managerId: user?.id, search: debouncedSearch, pageSize });
+  const queryKey = JSON.stringify({ managerId: user?.id, search: debouncedSearch });
   const loadBlock = useCallback(
     (requestPage: number, requestPageSize: number) => {
       if (!user || !hasPermission(user.permissions, 'employees.read', ['Team'])) {
