@@ -21,9 +21,9 @@ Sản phẩm hiển thị thương hiệu **Peopleflow HR Suite** trong Login v�
 - **Thiếu UI:** backend/API có khả năng nhưng frontend chưa cung cấp thao tác tương ứng.
 
 
-### Ghi chú phân quyền UI — 16/11/2026
+### Ghi chú phân quyền UI — 27/11/2026
 
-Backend đã chuyển sang Dynamic RBAC theo permission/scope. Tuy nhiên, điều hướng và route guard của React hiện vẫn dùng role legacy HR/Manager/Employee. Vì vậy quy tắc Role-aware trong Design System mô tả trạng thái UI hiện tại, không có nghĩa frontend đã hỗ trợ tùy biến menu theo permission động. API backend luôn phải tự kiểm tra quyền; frontend chỉ tối ưu trải nghiệm hiển thị.
+React đã chuyển menu, route guard và action sang permission/scope đọc từ JWT `authz_v=1` + `perm` (đã merge qua PR #18). Một nhân viên có thể có nhiều Role; UI dùng tập grant hiệu lực đã hợp nhất thay vì suy ra quyền từ một giá trị `Employee.Role`. Các badge `HR`, `Manager`, `Employee` vẫn là nhãn tương thích/hiển thị từ dữ liệu legacy. API backend luôn phải tự kiểm tra quyền; ẩn menu/action chỉ tối ưu trải nghiệm, không thay thế authorization server-side.
 
 ## 2. Visual identity
 
