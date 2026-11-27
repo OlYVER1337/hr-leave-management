@@ -38,7 +38,7 @@ Master hiện tại là `edd71414809d155261498836763ab44000e712e5` (PR #22; ch�
 
 | Ưu tiên | Hạng mục | Trạng thái hiện tại | Tiêu chí hoàn thành |
 |---|---|---|---|
-| P1 | **Gắn revision/image vào k6 metadata** | Workforce paged-v2 JSON ngày 16/11 vẫn thiếu SHA/image. Approval `constant-arrival-rate` 50/100 VU ngày 26/11 đã có raw/summary evidence gắn cùng Git SHA `d34ca9100f1db34261b7792dcc2058855bcd29aa` và immutable HR/Leave image IDs. Các benchmark Approval `constant-vus` lịch sử là workload riêng, không gộp với kết quả arrival-rate. | Hoàn thiện metadata cho Workforce paged-v2: chạy từ cùng Git SHA và immutable image IDs; ghi PAGE_SIZE, seed version, CPU/RAM limit và timestamps. Giữ evidence các workload Approval tách biệt theo executor. |
+| P1 | **Gắn Git SHA cho Workforce benchmark** | Sáu raw JSON Workforce paged-v2 ngày 16/11 chưa có Git SHA (`git_sha=not-provided`), nên chưa xác định chính xác source revision của lượt đo. | Khi chạy Workforce benchmark, lấy SHA bằng `git rev-parse HEAD`, truyền vào biến `GIT_SHA` và xác nhận trường `git_sha` trong report. Chỉ yêu cầu Git SHA; không bắt buộc image ID hoặc metadata bổ sung. |
 | P2 | **Profile bottleneck Workforce/Approval** | Workforce paged-v2 lịch sử có p95 tăng khi tăng VU. Approval constant-arrival-rate ngày 26/11 đạt 50/s ở cả pool 50/100, nhưng chưa thu CPU/RAM/GC/thread pool/connection pool/SQL waits đồng bộ. Chưa có bằng chứng xác định bottleneck cho cặp arrival-rate. | Chỉ profiling khi cần phân tích sâu: thu CPU, GC, thread pool, connection pool và SQL waits/query duration đồng bộ với cùng workload 5 phút; giữ source/image/seed cố định. Không trì hoãn merge tài liệu vì thiếu profiling. |
 | P2 | **Redis ON/OFF cho Workforce** | Catalog ON/OFF có phép đo; Workforce paged-v2 chưa phải A/B Redis | Chỉ chạy nếu cần đo cache impact cho workload này; giữ image/HEAD/dataset/seed/page-size đồng nhất; tách khỏi Catalog benchmark. |
 | — | **21 HTTP 500 lịch sử trong Workforce benchmark** | Đã xác định nguyên nhân là Docker bị dừng giữa chừng trong lúc benchmark ngày 03/11; không phải lỗi ứng dụng được tái hiện. Không cần điều tra thêm theo phạm vi hiện tại. | Đã giải thích và đóng hạng mục. Chỉ mở lại nếu HTTP 500 tái xuất hiện trong một lượt benchmark có stack Docker hoạt động ổn định. |
@@ -47,7 +47,7 @@ Master hiện tại là `edd71414809d155261498836763ab44000e712e5` (PR #22; ch�
 
 ## 5. Thứ tự thực hiện đề xuất
 
-1. **Workforce benchmark metadata (P1):** hoàn thiện evidence paged-v2 với PAGE_SIZE, seed version, exact Git SHA, immutable image IDs và timestamps. Không chạy lại benchmark nếu chưa cần số đo mới; trước hết xác định chính xác metadata còn thiếu và workload cần giữ cố định.
+1. **Workforce benchmark — Git SHA (P1):** ở lần chạy tiếp theo, ghi Git SHA của source bằng `git rev-parse HEAD` và truyền vào report qua `GIT_SHA`. Không cần bổ sung image ID hoặc các metadata chi tiết khác.
 2. **Business timezone boundary:** kiểm tra 31/12–01/01 khi có thể mô phỏng thời điểm phù hợp.
 3. **Các gap backend theo nhu cầu:** cân nhắc bulk balance reconciliation, readiness/liveness và HR client resilience; không mở rộng nếu chưa có yêu cầu hoặc bằng chứng.
 4. **Quản trị authorization:** Role assignment UI, Role/Permission catalog CRUD, Department scope và JWT revocation tức thời vẫn là hạng mục riêng.
