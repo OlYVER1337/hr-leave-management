@@ -27,11 +27,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
     };
     const handleUpdated = (event: Event) => {
-      const { accessToken, expiresAtUtc } = (event as CustomEvent<{
-        accessToken: string;
-        expiresAtUtc: string;
-      }>).detail;
-      setUser((current) => current ? { ...current, accessToken, expiresAtUtc } : current);
+      const updatedUser = (event as CustomEvent<AuthUser>).detail;
+      if (!updatedUser?.accessToken) return;
+
+      // Chỉ cập nhật phiên hiện tại của cùng nhân viên sau khi refresh thành công.
+      setUser((current) => current?.id === updatedUser.id ? updatedUser : current);
     };
 
     window.addEventListener('auth:session-expired', handleExpired);

@@ -20,6 +20,13 @@ const manager: AuthUser = {
   email: 'manager@example.com',
   role: 'Manager',
   accessToken: 'test-token',
+  permissions: [
+    { p: 'employees.read', s: ['Self', 'Team'] },
+    { p: 'leaves.read', s: ['Self', 'Team'] },
+    { p: 'leaves.create', s: ['Self'] },
+    { p: 'leaves.cancel', s: ['Self'] },
+    { p: 'leaves.decide', s: ['Team'] },
+  ],
 };
 
 const team: Employee[] = [

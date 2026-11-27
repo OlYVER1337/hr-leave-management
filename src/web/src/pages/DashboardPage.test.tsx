@@ -55,6 +55,12 @@ const employee: AuthUser = {
   email: 'employee@example.com',
   role: 'Employee',
   accessToken: 'test-token',
+  permissions: [
+    { p: 'employees.read', s: ['Self'] },
+    { p: 'leaves.read', s: ['Self'] },
+    { p: 'leaves.create', s: ['Self'] },
+    { p: 'leaves.cancel', s: ['Self'] },
+  ],
 };
 const manager: AuthUser = {
   id: 'manager-1',
@@ -62,6 +68,13 @@ const manager: AuthUser = {
   email: 'manager@example.com',
   role: 'Manager',
   accessToken: 'test-token',
+  permissions: [
+    { p: 'employees.read', s: ['Self', 'Team'] },
+    { p: 'leaves.read', s: ['Self', 'Team'] },
+    { p: 'leaves.create', s: ['Self'] },
+    { p: 'leaves.cancel', s: ['Self'] },
+    { p: 'leaves.decide', s: ['Team'] },
+  ],
 };
 const hr: AuthUser = {
   id: 'hr-1',
@@ -69,6 +82,26 @@ const hr: AuthUser = {
   email: 'hr@example.com',
   role: 'HR',
   accessToken: 'test-token',
+  permissions: [
+    { p: 'employees.read', s: ['All'] },
+    { p: 'employees.create', s: ['All'] },
+    { p: 'employees.update', s: ['All'] },
+    { p: 'employees.deactivate', s: ['All'] },
+    { p: 'leaves.read', s: ['All'] },
+    { p: 'leaves.create', s: ['Self'] },
+    { p: 'leaves.decide', s: ['All'] },
+    { p: 'leaves.cancel', s: ['Self'] },
+    { p: 'departments.create', s: ['All'] },
+    { p: 'departments.update', s: ['All'] },
+    { p: 'departments.delete', s: ['All'] },
+    { p: 'holidays.create', s: ['All'] },
+    { p: 'holidays.update', s: ['All'] },
+    { p: 'holidays.delete', s: ['All'] },
+    { p: 'leave-policies.create', s: ['All'] },
+    { p: 'leave-policies.update', s: ['All'] },
+    { p: 'leave-types.create', s: ['All'] },
+    { p: 'leave-types.update', s: ['All'] },
+  ],
 };
 
 const balance: LeaveBalance = {
@@ -138,7 +171,7 @@ describe('DashboardPage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Số dư phép của tôi' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Tổng quan số dư phép' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Tạo đơn nghỉ/ })).not.toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: /Tạo đơn nghỉ/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Xuất báo cáo \(chưa khả dụng\)/ })).toBeDisabled();
   });
 

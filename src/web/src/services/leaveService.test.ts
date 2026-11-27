@@ -29,6 +29,12 @@ const employee: AuthUser = {
   email: 'employee@example.com',
   role: 'Employee',
   accessToken: 'test-token',
+  permissions: [
+    { p: 'employees.read', s: ['Self'] },
+    { p: 'leaves.read', s: ['Self'] },
+    { p: 'leaves.create', s: ['Self'] },
+    { p: 'leaves.cancel', s: ['Self'] },
+  ],
 };
 
 const currentEmployee = {
@@ -96,6 +102,13 @@ describe('leave request summary and decisions', () => {
       email: 'manager@example.com',
       role: 'Manager',
       accessToken: 'test-token',
+      permissions: [
+        { p: 'employees.read', s: ['Self', 'Team'] },
+        { p: 'leaves.read', s: ['Self', 'Team'] },
+        { p: 'leaves.create', s: ['Self'] },
+        { p: 'leaves.cancel', s: ['Self'] },
+        { p: 'leaves.decide', s: ['Team'] },
+      ],
     };
     mocks.leaveGet.mockResolvedValue({
       data: { pending: 4, approved: 8, total: 16 },
@@ -239,6 +252,12 @@ describe('paged leave display lookups', () => {
       email: 'hr@example.com',
       role: 'HR',
       accessToken: 'test-token',
+      permissions: [
+        { p: 'employees.read', s: ['All'] },
+        { p: 'leaves.read', s: ['All'] },
+        { p: 'leaves.decide', s: ['All'] },
+        { p: 'leave-types.update', s: ['All'] },
+      ],
     };
 
     const firstPage = await getLeaveRequestsPage(hrUser, { page: 1, pageSize: 10 });

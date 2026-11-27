@@ -3,12 +3,19 @@ import { Building2, Edit3, Plus, Trash2, Users } from 'lucide-react';
 import { PageHeader, Avatar, EmptyState } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { useToast } from '../components/ToastProvider';
+import { useAuth } from '../contexts';
+import { hasPermission } from '../utils/authorization';
 import { deleteDepartment, getDepartments, getEmployeePage, saveDepartment } from '../services/hrService';
 import { getApiErrorMessage, getRejectedReason } from '../services/apiClient';
 import type { Department, Employee } from '../types';
 
 export function DepartmentsPage() {
+  const { user } = useAuth();
   const notify = useToast();
+  const canCreateDepartment = hasPermission(user?.permissions, 'departments.create', ['All']);
+  const canUpdateDepartment = hasPermission(user?.permissions, 'departments.update', ['All']);
+  const canDeleteDepartment = hasPermission(user?.permissions, 'departments.delete', ['All']);
+  const canReadAllEmployees = hasPermission(user?.permissions, 'employees.read', ['All']);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [departmentMembers, setDepartmentMembers] = useState<Record<number, Employee[]>>({});
   const [departmentCounts, setDepartmentCounts] = useState<Record<number, number>>({});
@@ -32,6 +39,15 @@ export function DepartmentsPage() {
 
     const nextDepartments = departmentResult[0].value;
     setDepartments(nextDepartments);
+
+    // Không gọi Employees API nếu phiên chỉ có quyền quản lý phòng ban.
+    if (!canReadAllEmployees) {
+      setDepartmentMembers({});
+      setDepartmentCounts({});
+      setEmployeeSummary({ total: 0, active: 0 });
+      setLoading(false);
+      return;
+    }
     const requests = await Promise.allSettled([
       getEmployeePage({ page: 1, pageSize: 1 }),
       getEmployeePage({ page: 1, pageSize: 1, isActive: true }),
@@ -70,7 +86,7 @@ export function DepartmentsPage() {
     setLoading(false);
   }
 
-  useEffect(() => { void reload(); }, []);
+  useEffect(() => { void reload(); }, [canReadAllEmployees]);
 
   function openCreate() { setEditing(null); setName(''); setModalOpen(true); }
   function openEdit(department: Department) { setEditing(department); setName(department.name); setModalOpen(true); }
@@ -106,18 +122,20 @@ export function DepartmentsPage() {
       eyebrow="QUẢN TRỊ"
       title="Phòng ban"
       description="Sắp xếp nhân sự theo đội nhóm và quản lý cơ cấu báo cáo."
-      actions={<button className="button button-primary" onClick={openCreate}><Plus size={17} /> Thêm phòng ban</button>}
+      actions={canCreateDepartment ? <button className="button button-primary" onClick={openCreate}><Plus size={17} /> Thêm phòng ban</button> : undefined}
     />
     <div className="page-summary-row">
       <div className="summary-metric"><span>Tổng số phòng ban</span><strong>{departments.length}</strong></div>
-      <div className="summary-metric"><span>Tổng số nhân viên</span><strong>{employeeSummary.total}</strong></div>
-      <div className="summary-metric"><span>Nhân viên đang hoạt động</span><strong>{employeeSummary.active}</strong></div>
+      {canReadAllEmployees && <>
+        <div className="summary-metric"><span>Tổng số nhân viên</span><strong>{employeeSummary.total}</strong></div>
+        <div className="summary-metric"><span>Nhân viên đang hoạt động</span><strong>{employeeSummary.active}</strong></div>
+      </>}
     </div>
     {error && <div className="inline-alert alert-warning">{error}</div>}
     {loading ? (
       <div className="table-loading"><span /> Đang tải phòng ban…</div>
     ) : departments.length === 0 ? (
-      <EmptyState title="Chưa có phòng ban" description="Tạo phòng ban đầu tiên để tổ chức nhân sự." action={<button className="button button-primary" onClick={openCreate}><Plus size={16} /> Thêm phòng ban</button>} />
+      <EmptyState title="Chưa có phòng ban" description="Tạo phòng ban đầu tiên để tổ chức nhân sự." action={canCreateDepartment ? <button className="button button-primary" onClick={openCreate}><Plus size={16} /> Thêm phòng ban</button> : undefined} />
     ) : (
       <div className="department-grid">
         {departments.map((department, index) => {
@@ -129,18 +147,21 @@ export function DepartmentsPage() {
             <article className="panel department-card" key={department.id}>
               <div className="department-card-top">
                 <span className={`department-icon department-${tone}`}><Building2 size={21} /></span>
-                <button className="icon-button" aria-label={`Sửa ${department.name}`} onClick={() => openEdit(department)}><Edit3 size={16} /></button>
+                {canUpdateDepartment && <button className="icon-button" aria-label={`Sửa ${department.name}`} onClick={() => openEdit(department)}><Edit3 size={16} /></button>}
               </div>
               <h2>{department.name}</h2>
               <p>Mã phòng ban · {department.id.toString().padStart(3, '0')}</p>
-              <div className="department-card-count"><span className="department-count-icon"><Users size={15} /></span><strong>{count}</strong><span>nhân viên</span></div>
-              <div className="department-card-bottom">
-                <div className="avatar-stack-small">
-                  {people.map((person) => <Avatar key={person.id} name={person.fullName} size="sm" />)}
-                  {count > people.length && <span className="avatar-overflow">+{count - people.length}</span>}
+              {canReadAllEmployees && <>
+                <div className="department-card-count"><span className="department-count-icon"><Users size={15} /></span><strong>{count}</strong><span>nhân viên</span></div>
+                <div className="department-card-bottom">
+                  <div className="avatar-stack-small">
+                    {people.map((person) => <Avatar key={person.id} name={person.fullName} size="sm" />)}
+                    {count > people.length && <span className="avatar-overflow">+{count - people.length}</span>}
+                  </div>
+                  {canDeleteDepartment && <button className="text-button danger-text" onClick={() => void onDelete(department)}><Trash2 size={15} /> Xóa</button>}
                 </div>
-                <button className="text-button danger-text" onClick={() => void onDelete(department)}><Trash2 size={15} /> Xóa</button>
-              </div>
+              </>}
+              {!canReadAllEmployees && canDeleteDepartment && <div className="department-card-bottom"><button className="text-button danger-text" onClick={() => void onDelete(department)}><Trash2 size={15} /> Xóa</button></div>}
             </article>
           );
         })}

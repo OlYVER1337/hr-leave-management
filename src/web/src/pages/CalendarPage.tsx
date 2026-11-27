@@ -7,6 +7,7 @@ import { getCalendarLeaves, getHolidays } from '../services/leaveService';
 import { getApiErrorMessage, getRejectedReason } from '../services/apiClient';
 import type { Holiday, LeaveRequest } from '../types';
 import { BUSINESS_TIME_ZONE, formatDateOnlyUtc, getBusinessDate, parseDateOnlyUtc } from '../utils/businessTime';
+import { hasPermission } from '../utils/authorization';
 
 function isoDate(year: number, month: number, day: number): string {
   return formatDateOnlyUtc(new Date(Date.UTC(year, month, day)));
@@ -53,7 +54,7 @@ export function CalendarPage() {
   const upcoming = [...visibleRequests].filter((item) => item.endDate >= today).sort((a, b) => a.startDate.localeCompare(b.startDate)).slice(0, 5);
 
   return <div className="page-stack">
-    <PageHeader eyebrow="LẬP KẾ HOẠCH NHÓM" title="Lịch nghỉ của nhóm" description="Theo dõi lịch nghỉ dự kiến và ngày lễ của tổ chức." actions={user?.role !== 'HR' ? <Link to="/request" className="button button-primary"><Plus size={16} /> Tạo đơn nghỉ</Link> : undefined} />
+    <PageHeader eyebrow="LẬP KẾ HOẠCH NHÓM" title="Lịch nghỉ của nhóm" description="Theo dõi lịch nghỉ dự kiến và ngày lễ của tổ chức." actions={hasPermission(user?.permissions, 'leaves.create', ['Self']) ? <Link to="/request" className="button button-primary"><Plus size={16} /> Tạo đơn nghỉ</Link> : undefined} />
     {error && <div className="inline-alert alert-warning">{error}</div>}
     <div className="calendar-layout">
       <section className="panel calendar-panel">

@@ -1,13 +1,19 @@
 export type UserRole = 'HR' | 'Manager' | 'Employee';
+
+export interface PermissionGrant {
+  p: string;
+  s: string[];
+}
 export type LeaveStatus = 'Pending' | 'Approved' | 'Rejected' | 'Cancelled';
 
 export interface AuthUser {
   id: string;
   fullName: string;
   email: string;
-  role: UserRole;
+  role: string;
   accessToken: string;
   expiresAtUtc?: string;
+  permissions: PermissionGrant[];
 }
 
 export interface Department {

@@ -16,9 +16,9 @@ sequenceDiagram
   HR->>DB: Lưu SHA-256 hash của refresh token
   HR-->>W: Access JWT (authz_v=1, perm, legacy role claim)
   HR-->>W: Set refresh token trong HttpOnly cookie (15 ngày)
-  W->>W: Lưu access token, menu vẫn dùng legacy role
+  W->>W: Đọc perm và dựng menu/route/action theo permission + scope
 
-  Note over W,HR: API backend mới là enforcement, frontend role guard chỉ phục vụ UX.
+  Note over W,HR: React guard chỉ phục vụ UX; HR và Leave API vẫn là enforcement cuối.
   Note over W,HR: Access JWT được các service xác thực cục bộ, không introspect HR mỗi request.
 
   U->>W: Access token hết hạn

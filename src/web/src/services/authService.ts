@@ -1,4 +1,5 @@
-import type { AuthUser, UserRole } from '../types';
+import type { AuthUser, PermissionGrant, UserRole } from '../types';
+import { readPermissionGrants } from '../utils/authorization';
 import { DEMO_MODE, TOKEN_STORAGE_KEY, USER_STORAGE_KEY } from './config';
 import { getApiErrorMessage, hrApi } from './apiClient';
 import { loadDemoState } from './mockStore';
@@ -12,14 +13,64 @@ interface LoginResponse {
   role: string;
 }
 
+const demoPermissionGrants: Record<UserRole, PermissionGrant[]> = {
+  Employee: [
+    { p: 'employees.read', s: ['Self'] },
+    { p: 'leaves.read', s: ['Self'] },
+    { p: 'leaves.create', s: ['Self'] },
+    { p: 'leaves.cancel', s: ['Self'] },
+  ],
+  Manager: [
+    { p: 'employees.read', s: ['Self', 'Team'] },
+    { p: 'leaves.read', s: ['Self', 'Team'] },
+    { p: 'leaves.create', s: ['Self'] },
+    { p: 'leaves.cancel', s: ['Self'] },
+    { p: 'leaves.decide', s: ['Team'] },
+  ],
+  HR: [
+    { p: 'employees.read', s: ['All'] },
+    { p: 'employees.create', s: ['All'] },
+    { p: 'employees.update', s: ['All'] },
+    { p: 'employees.deactivate', s: ['All'] },
+    { p: 'employees.password.reset', s: ['All'] },
+    { p: 'leaves.read', s: ['All'] },
+    { p: 'leaves.create', s: ['Self'] },
+    { p: 'leaves.decide', s: ['All'] },
+    { p: 'leaves.cancel', s: ['Self'] },
+    { p: 'roles.manage', s: ['All'] },
+    { p: 'departments.create', s: ['All'] },
+    { p: 'departments.update', s: ['All'] },
+    { p: 'departments.delete', s: ['All'] },
+    { p: 'holidays.create', s: ['All'] },
+    { p: 'holidays.update', s: ['All'] },
+    { p: 'holidays.delete', s: ['All'] },
+    { p: 'leave-policies.create', s: ['All'] },
+    { p: 'leave-policies.update', s: ['All'] },
+    { p: 'leave-types.create', s: ['All'] },
+    { p: 'leave-types.update', s: ['All'] },
+  ],
+};
+
+function getSessionPermissions(role: string, accessToken: string): PermissionGrant[] {
+  if (DEMO_MODE) {
+    return (demoPermissionGrants[role as UserRole] ?? []).map((grant) => ({
+      p: grant.p,
+      s: [...grant.s],
+    }));
+  }
+
+  return readPermissionGrants(accessToken);
+}
+
 function saveUser(data: LoginResponse): AuthUser {
   const user: AuthUser = {
     id: data.userId,
     fullName: data.fullName,
     email: data.email,
-    role: data.role as UserRole,
+    role: data.role,
     accessToken: data.accessToken,
     expiresAtUtc: data.expiresAtUtc,
+    permissions: getSessionPermissions(data.role, data.accessToken),
   };
   sessionStorage.setItem(TOKEN_STORAGE_KEY, user.accessToken);
   sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
@@ -45,6 +96,7 @@ export async function login(email: string, password: string): Promise<AuthUser> 
       role: account.role,
       accessToken: `demo-token-${account.role.toLowerCase()}`,
       expiresAtUtc: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(),
+      permissions: getSessionPermissions(account.role, `demo-token-${account.role.toLowerCase()}`),
     };
     sessionStorage.setItem(TOKEN_STORAGE_KEY, user.accessToken);
     sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
@@ -77,18 +129,35 @@ export function getStoredUser(): AuthUser | null {
   try {
     const raw = sessionStorage.getItem(USER_STORAGE_KEY);
     if (!raw) return null;
+
     const user = JSON.parse(raw) as AuthUser;
+    if (
+      !user ||
+      typeof user.id !== 'string' ||
+      typeof user.accessToken !== 'string' ||
+      typeof user.role !== 'string' || !user.role.trim()
+    ) {
+      clearSession();
+      return null;
+    }
+
     if (user.expiresAtUtc && new Date(user.expiresAtUtc) < new Date()) {
       clearSession();
       return null;
     }
-    return user;
+
+    // Không tin quyền lưu trong sessionStorage; dựng lại từ access token hiện tại.
+    const restoredUser: AuthUser = {
+      ...user,
+      permissions: getSessionPermissions(user.role, user.accessToken),
+    };
+    sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(restoredUser));
+    return restoredUser;
   } catch {
     clearSession();
     return null;
   }
 }
-
 export function clearSession(): void {
   sessionStorage.removeItem(TOKEN_STORAGE_KEY);
   sessionStorage.removeItem(USER_STORAGE_KEY);

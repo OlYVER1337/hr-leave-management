@@ -34,50 +34,47 @@ Không được mô tả dữ liệu Demo như dữ liệu production. Những m
 | Manager | Quản lý | Yêu cầu bản thân và các yêu cầu thuộc phạm vi phê duyệt |
 | HR | Nhân sự | Quản lý nhân sự/danh mục và xem đơn toàn tổ chức |
 
-Backend là nguồn quyết định quyền cuối cùng. HR_DB cấp Role/Permission/Scope động và JWT chứa authz_v=1 cùng perm JSON; API kiểm tra permission/scope ở server. Tuy nhiên UI hiện vẫn dùng Employee.Role legacy (HR/Manager/Employee) cho nav và route guards, chưa permission-driven. Ẩn link/action trong React chỉ là UX, không thay thế authorization. Scope backend hiện thực thi là Self/Team/All; Department chưa được dùng để lọc dữ liệu.
+Backend là nguồn quyết định quyền cuối cùng. HR_DB cấp Role/Permission/Scope động và JWT chứa `authz_v=1` cùng `perm` JSON; API kiểm tra permission/scope ở server. Trên nhánh `feature/permission-driven-react-ui`, React đọc grant từ JWT để lọc menu, bảo vệ route và ẩn từng action. Legacy Role không quyết định quyền UI, chỉ còn là nhãn mô tả. Nếu người dùng được gán nhiều role, các permission/scope hiệu lực đã hợp nhất trong JWT được dùng trực tiếp; việc đổi quyền sẽ phản ánh khi login/refresh token. Ẩn link/action chỉ cải thiện UX, không thay thế authorization của API. Scope backend hiện thực thi là Self/Team/All; Department chưa được dùng làm bộ lọc dữ liệu. Thay đổi UI đang ở feature branch, chưa merge vào master.
 
-### 2.2. Menu hiện tại trong AppShell
+### 2.2. Menu và điều kiện permission hiện tại trong AppShell
 
-| Menu | Employee | Manager | HR |
-|---|:---:|:---:|:---:|
-| Tổng quan | ✓ | ✓ | ✓ |
-| Đơn nghỉ của tôi | ✓ | ✓ | — |
-| Tạo đơn nghỉ | ✓ | ✓ | — |
-| Hộp thư phê duyệt | — | ✓ | ✓ |
-| Lịch nghỉ của nhóm | ✓ | ✓ | ✓ |
-| Nhân viên phụ trách | — | ✓ | — |
-| Nhân viên (quản trị) | — | — | ✓ |
-| Phòng ban | — | — | ✓ |
-| Chính sách nghỉ phép | — | — | ✓ |
-| Tất cả đơn nghỉ | — | — | ✓ |
-| Hồ sơ của tôi | ✓ | ✓ | ✓ |
+Bảng dưới đây mô tả permission cần thiết, không suy luận quyền từ Role. Một user có thể thấy nhiều mục nếu JWT chứa nhiều grant; user cùng Role cũng có thể thấy menu khác nhau khi được cấp permission khác nhau.
+
+| Menu | Permission cần thiết |
+|---|---|
+| Tổng quan, Hồ sơ của tôi | Authenticated |
+| Đơn nghỉ | `leaves.read:Self`, `Team` hoặc `All` |
+| Tạo đơn nghỉ | `leaves.create:Self` |
+| Hộp thư phê duyệt | `leaves.decide:Team/All` và `leaves.read:Team/All` với scope tương thích |
+| Lịch nghỉ | `leaves.read:Self`, `Team` hoặc `All` |
+| Nhân viên phụ trách | `employees.read:Team` |
+| Nhân viên | `employees.read:All` |
+| Phòng ban | Ít nhất một trong `departments.create/update/delete:All` |
+| Chính sách nghỉ phép | Ít nhất một trong các quyền ghi `leave-policies`, `holidays` hoặc `leave-types` với scope `All` |
+| Tất cả đơn nghỉ | `leaves.read:All` |
 
 Profile và Help nằm cuối sidebar. Header có ngày hiện tại, nhãn Demo (nếu bật), notification icon và profile menu.
 
 ### 2.3. Route guard đang triển khai
 
-| Route | Quyền |
+| Route | Điều kiện truy cập |
 |---|---|
-| /login | Public |
-| / | Authenticated |
-| /leaves | Authenticated |
-| /all-leaves | HR |
-| /request | Employee, Manager |
-| /approvals | Manager, HR |
-| /my-team | Manager |
-| /calendar | Authenticated |
-| /employees | HR |
-| /departments | HR |
-| /policies | HR |
-| /profile | Authenticated |
+| `/login` | Public |
+| `/` | Authenticated |
+| `/leaves` | `leaves.read` với `Self`, `Team` hoặc `All` |
+| `/all-leaves` | `leaves.read:All` |
+| `/request` | `leaves.create:Self` |
+| `/approvals` | `leaves.decide` và `leaves.read` với scope tương thích (`Team` hoặc `All`) |
+| `/my-team` | `employees.read:Team` |
+| `/calendar` | `leaves.read` với `Self`, `Team` hoặc `All` |
+| `/employees` | `employees.read:All` |
+| `/departments` | Ít nhất một quyền `departments.create/update/delete:All` |
+| `/policies` | Ít nhất một quyền ghi chính sách/ngày lễ/loại nghỉ, scope `All` |
+| `/profile` | Authenticated |
 
-Nếu chưa đăng nhập, ứng dụng chuyển về Login. Nếu không đủ role, route guard chuyển về Dashboard.
+Nếu chưa đăng nhập, ứng dụng chuyển về Login. Nếu đã đăng nhập nhưng thiếu permission/scope, route guard chuyển về Dashboard. API vẫn kiểm tra quyền độc lập ở server.
 
-**Điểm cần quyết định:** HR không có link “Tạo đơn nghỉ” trong sidebar nhưng route /request vẫn mở được và Dashboard/Calendar có CTA tới route này. Chọn một chính sách rõ ràng:
-1. Cho HR tạo đơn nghỉ cho bản thân: thêm link phù hợp và hiển thị approver thực tế.
-2. Không cho HR tạo đơn: ẩn CTA tương ứng với HR và chặn route bằng role guard.
-
-Không nên để nav và route thể hiện hai ý định khác nhau.
+CTA tạo đơn được hiển thị nhất quán theo `leaves.create:Self`, không dựa vào Role. Baseline HR hiện có grant này nên HR cũng có thể tạo đơn cho bản thân; Backend vẫn xác định người duyệt và từ chối thao tác không hợp lệ.
 
 ## 3. Global application shell
 
@@ -558,7 +555,7 @@ Endpoints are relative to each service's API base URL.
 ## 8. Acceptance checklist
 
 ### Global
-- [ ] Navigation khác nhau theo HR, Manager, Employee và khớp route guard.
+- [ ] Navigation được lọc theo permission/scope hiệu lực trong JWT và khớp điều kiện route guard.
 - [ ] Sidebar có active, collapsed, mobile drawer và keyboard states.
 - [ ] Focus-visible, labels và accessible names cho interactive controls.
 - [ ] Data page có loading, empty, error và forbidden states.
@@ -587,8 +584,8 @@ Endpoints are relative to each service's API base URL.
 
 | Source | Nội dung định nghĩa |
 |---|---|
-| src/web/src/App.tsx | Routes và role guards |
-| src/web/src/components/AppShell.tsx | Role-specific sidebar, shell, profile menu |
+| src/web/src/App.tsx | Routes và permission/scope guards |
+| src/web/src/components/AppShell.tsx | Permission/scope-filtered sidebar, shell, profile menu |
 | src/web/src/pages/*.tsx | Screen UI và interaction |
 | src/web/src/services/hrService.ts | HR frontend API calls |
 | src/web/src/services/leaveService.ts | Leave frontend API calls |
