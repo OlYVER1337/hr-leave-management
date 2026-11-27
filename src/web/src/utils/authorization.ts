@@ -86,12 +86,12 @@ export function hasPermission(
   const requiredPermission = permission.trim().toLowerCase();
   const requiredScopes = scopes?.map((scope) => scope.toLowerCase());
 
-  return grants.some((grant) => {
+  return grants.some((grant: PermissionGrant) => {
     // Dữ liệu quyền có thể cũ hoặc hỏng trong session; luôn từ chối grant sai cấu trúc.
     if (!grant || typeof grant.p !== 'string' || !Array.isArray(grant.s)) return false;
     if (grant.p.trim().toLowerCase() !== requiredPermission) return false;
     if (!requiredScopes?.length) return true;
-    return grant.s.some((scope) =>
+    return grant.s.some((scope: string) =>
       typeof scope === 'string' && requiredScopes.includes(scope.toLowerCase()));
   });
 }
