@@ -1,6 +1,6 @@
 # Kịch bản demo, kết quả kiểm thử và checklist nghiệm thu
 
-> **Snapshot ngày 26/11/2026:** Source Dynamic Authorization V1 đã được merge vào `master` qua [PR #6](https://github.com/OlYVER1337/hr-leave-management/pull/6), merge commit `81b987043ce4663ad11800bb331ffdbc013bd1d2`. Approval benchmark arrival-rate mới nhất chạy trên SHA `d34ca9100f1db34261b7792dcc2058855bcd29aa`: hai pool 50/50 và 100/100 đều hoàn thành 15.000/15.000 approvals trong 300 giây, target 50/s, 0 dropped iteration và 0 approval error. Pool 100 có 1 out-of-plan iteration bị guard bỏ qua trước HTTP. Kết quả regression 155 HR, 123 Leave và 79 Web là bằng chứng local lịch sử chưa gắn SHA chính xác; cần chạy lại trên revision bàn giao nếu yêu cầu sign-off. Không có CI/CD theo quyết định dự án. Chi tiết ở Mục 7.5 và [Approval benchmark guide](approval-benchmark-guide.md).
+> **Snapshot ngày 27/11/2026:** `master` hiện tại là `de15fd4169ea8db3cc702f95f7922ca4ab9a1e8c`. API Employees/direct reports đã hợp nhất qua [PR #19](https://github.com/OlYVER1337/hr-leave-management/pull/19); đồng bộ pageSize đã merge qua [PR #20](https://github.com/OlYVER1337/hr-leave-management/pull/20) và [PR #21](https://github.com/OlYVER1337/hr-leave-management/pull/21). Regression trên revision sau PR #19 (`30720e176106cc3357ff028ddc9a6ebdce95a93b`): HR 162/162, Leave 129/129, Web 103/103 pass; Web sau PR #21 đạt 107/107 trên head `8f69c5420119817faa0371f1675c96f7f5253d52`, TypeScript check và Vite production build thành công. Chưa có lượt chạy lại đủ cả ba suite trên đúng master HEAD và chưa lưu ảnh Network nghiệm thu cuối cùng của bốn màn hình phân trang. Approval benchmark arrival-rate 50/s × 300 giây ngày 26/11 vẫn là phép đo trên SHA riêng `d34ca9100f1db34261b7792dcc2058855bcd29aa`; không gắn nó vào master HEAD mới. Không có CI/CD theo quyết định dự án. Chi tiết ở Mục 7.2, 7.5 và 7.8.
 
 ## 1. Kết quả kiểm thử hồi quy và tích hợp (lịch sử — 03/11/2026)
 
@@ -276,8 +276,9 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
 | [x] | Redis cache | Tối thiểu 2 nhóm dữ liệu có key/TTL/invalidation; cache miss đọc SQL | [Redis report](../performance/redis-performance.md) |
 | [x] | Redis outage | Catalog vẫn đọc được từ SQL; nghiệp vụ không dựa cache cũ | [Redis report](../performance/redis-performance.md) |
 | [x] | HR outage | Tác vụ cần HR trả lỗi dependency phù hợp và không lưu đơn dở dang | `HrServiceOutageTests`; [Redis report](../performance/redis-performance.md) |
-| Lịch sử | Regression backend (03/11) | HR 53/53 và Leave 25/25 được ghi nhận ở lượt chạy khi đó | Lượt local mới hơn ngày 17/11 do người dùng cung cấp: HR 132/132 và Leave 118/118 pass, 0 failed/0 skipped. Output chưa kèm Git SHA và chưa lưu TRX tương ứng; cần lưu evidence gắn revision trước sign-off. |
-| [x] | Regression frontend | 31 UI tests pass và production build thành công | Vitest/build lượt mới nhất, báo cáo mục 1 |
+| [x] | Regression backend theo revision | HR 162/162 và Leave 129/129 pass, 0 failed/0 skipped trên revision `30720e176106cc3357ff028ddc9a6ebdce95a93b` sau PR #19 | Kết quả local có revision; PR #20/#21 chỉ đổi Web, không đổi backend. Chưa chạy lại backend trên đúng master HEAD `de15fd4`; xem Mục 7.2 |
+| [x] | Regression frontend | Web 107/107 tests, 20/20 files; TypeScript và Vite production build thành công | Head PR #21 `8f69c5420119817faa0371f1675c96f7f5253d52`; xem Mục 7.2 |
+| [ ] | Runtime pageSize trên bốn danh sách | Employees, Manager Team, Leave Requests và Approvals phải gửi đúng `page`/`pageSize` bằng lựa chọn hiện trên UI (10/25/50) và response total đúng | PR #20/#21, `usePagedBlock` tests và [HANDOFF Mục 6.5](../HANDOFF.md); cần kiểm tra Network trên HR Bench sau khi build Web từ master `de15fd4` |
 | [x] | Load test catalog Redis ON/OFF | 50 và 100 VU, 5 phút mỗi lượt; báo cáo RPS/p50/p95/error và cấu hình máy | [Redis performance report](../performance/redis-performance.md) |
 | [x] | Load test workforce — Redis ON | 50/100 VU, 5 phút, dataset 1.000 nhân viên/5.000 đơn | 50 VU 0 lỗi; lượt đầu 100 VU 21 HTTP 500; hai lần chạy lại 100 VU 0 lỗi; [summary](./evidence/workforce-load-summary.json) |
 | [x] | Đóng sự cố workforce HTTP 500 lịch sử | Không mở lại sự cố cũ khi đã xác định Docker bị dừng giữa chừng trong lúc benchmark; chỉ điều tra lại nếu lỗi tái xuất hiện trong lượt chạy ổn định | Nguyên nhân gián đoạn môi trường đã được xác nhận. Redis OFF cho workforce là phép đo còn thiếu riêng, không phải điều kiện truy nguyên lỗi cũ |
@@ -308,24 +309,26 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
 - UserRole assignment APIs đã có; React UI quản trị UserRole assignment và Role/Permission catalog CRUD chưa có.
 - Permission-driven React UI đã merge vào `master` qua PR #18; menu, route và action đọc `authz_v=1` + `perm`, backend vẫn là enforcement cuối.
 - `Employee.Role` và Role claim legacy vẫn tồn tại cho tương thích/hiển thị, lọc/thống kê và một số nghiệp vụ legacy; không phải nguồn xác định quyền hiệu lực.
-- Nhánh `feature/consolidate-employees-team-api` hợp nhất `/my-team` vào `GET /api/v1/employees?directReportsOnly=true`; endpoint `GET /api/v1/me/team` cũ đã được gỡ khỏi controller/runtime/OpenAPI. Manager API đã được nghiệm thu HTTP 200 với `managerId` khớp JWT `sub`. Người dùng cũng xác nhận nghiệm thu HR scope `All`: tài khoản HR có thể thêm/xem/sửa/xóa nhân viên và phòng ban, đồng thời duyệt/từ chối đơn nghỉ phép.
-- Trong `scripts/load-test/workforce.js`, route `manager_team` được thay **chỉ trong `paginationContractRoutes`** từ `GET /api/v1/me/team` sang `GET /api/v1/employees?directReportsOnly=true`. Đây là request preflight cố ý bỏ `page/pageSize` để xác minh API từ chối request không phân trang bằng HTTP 400.
-- Mảng `routes` thực sự chạy trong VU workload không đổi giữa `master` và feature branch. Vì vậy route mix của phần tải đo và các custom metrics của measured workload không đổi; evidence Workforce lịch sử vẫn có giá trị đối với workload đã đo. Tuy nhiên, đây **không phải** benchmark latency/throughput riêng cho endpoint Employees/directReports mới. Nếu cần đánh giá hiệu năng endpoint này, phải thêm request phân trang vào measured workload và lưu một lượt evidence mới. Khi đọc raw k6 built-in metrics, cần lưu ý request preflight/setup vẫn thuộc vòng đời test.
+- PR #19 đã hợp nhất `/my-team` vào `GET /api/v1/employees?directReportsOnly=true`; endpoint `GET /api/v1/me/team` cũ đã gỡ khỏi controller/runtime/OpenAPI. Manager API trên HR Bench trả HTTP 200 với `managerId` trùng JWT `sub`. Người dùng xác nhận HR scope `All` cho CRUD nhân viên/phòng ban và duyệt/từ chối đơn nghỉ phép.
+- PR #20 sửa phân trang trang Nhân viên phụ trách; PR #21 đặt mặc định `usePagedBlock` tải đúng một trang UI/request cho Employees, Manager Team, Leave Requests và Approvals. Giá trị dropdown 10/25/50 được gửi dưới dạng `pageSize` tương ứng; backend server pagination vẫn nhận tối đa 100 bản ghi/request.
+- Trong `scripts/load-test/workforce.js`, route `manager_team` chỉ được đổi trong `paginationContractRoutes` để xác minh API từ chối request thiếu `page/pageSize` bằng HTTP 400.
+- Mảng `routes` thực sự chạy trong VU workload không đổi, nên route mix và metrics Workforce lịch sử không đổi. Benchmark cũ không phải phép đo latency/throughput riêng cho endpoint Employees/directReports mới.
 
 ### 7.2. Regression test evidence
 
 Kết quả local được ghi nhận trong quá trình hoàn thiện dự án:
 
-| Bộ kiểm thử | Kết quả | Ghi chú |
+| Bộ kiểm thử | Kết quả | Revision và ghi chú |
 |---|---:|---|
-| HR Service | 162/162 passed | 0 failed, 0 skipped; feature branch `feature/consolidate-employees-team-api` |
-| Leave Service | 129/129 passed | 0 failed, 0 skipped; feature branch `feature/consolidate-employees-team-api` |
-| Web | 103/103 passed | 20/20 test files; Vitest trên feature branch |
-| Web production build | Thành công | TypeScript check và Vite production build trên feature branch |
+| HR Service | 162/162 passed | 0 failed, 0 skipped; master sau PR #19: `30720e176106cc3357ff028ddc9a6ebdce95a93b` |
+| Leave Service | 129/129 passed | 0 failed, 0 skipped; cùng revision `30720e176106cc3357ff028ddc9a6ebdce95a93b` |
+| Web — sau PR #19 | 103/103 passed | 20/20 test files; cùng revision `30720e176106cc3357ff028ddc9a6ebdce95a93b` |
+| Web — sau PR #21 | 107/107 passed | 20/20 test files; head PR #21 `8f69c5420119817faa0371f1675c96f7f5253d52` |
+| TypeScript và Vite production build | Thành công | Head PR #21; `npm ci`, `npm audit`, `tsc --noEmit` và `npm run build` đã chạy không lỗi |
 
-Các kết quả 162/162 HR, 129/129 Leave và 103/103 Web được người dùng cung cấp sau khi đồng bộ nhánh `feature/consolidate-employees-team-api`; TypeScript check và Vite production build cũng thành công. Đây là bằng chứng local cho feature branch, không phải regression trên `master`. Chưa lưu TRX/log riêng kèm SHA của chính các lượt chạy này. Không có CI/CD chạy tự động theo lựa chọn của dự án.
+HR/Leave regression và Web 103/103 được ghi nhận tại revision `30720e176106cc3357ff028ddc9a6ebdce95a93b` sau PR #19. PR #20/#21 chỉ thay đổi Web, không thay đổi source backend. Web regression mới nhất 107/107 cùng TypeScript check và production build được chạy trên head PR #21 `8f69c5420119817faa0371f1675c96f7f5253d52`, sau đó PR #21 merge thành master `de15fd4169ea8db3cc702f95f7922ca4ab9a1e8c`.
 
-Stored TRX trong repository là bằng chứng lịch sử và không thay thế cho log của các lượt chạy mới. Khi cần sign-off sau khi merge, chạy lại test trên `master`, ghi SHA, lưu TRX và log Web tương ứng. Không suy diễn test count của HEAD từ workflow Render diagrams.
+Đây là các lượt chạy local có revision riêng, không phải một lần chạy đủ ba suite trên cùng master HEAD. Chưa lưu TRX/log riêng của những lượt mới trong thư mục evidence. Không có CI/CD chạy tự động theo lựa chọn của dự án. Khi cần sign-off nghiêm ngặt trên một SHA duy nhất, chạy lại HR, Leave và Web trên master hiện tại, lưu TRX/log/build output và SHA tương ứng.
 
 ### 7.3. Seed và Approval benchmark ngày 20/11
 
@@ -361,7 +364,6 @@ Scenario hoàn tất khoảng 1,4 giây; tổng thời gian chạy k6 khoảng 3
 
 - Leave Balance GET và POST self-sync đều cập nhật `PolicyDays` authoritative từ HR; `Entitled = max(PolicyDays, Used + Pending)`. Request lưu `PolicyVersionId` và `PolicyDaysAtCreation` trong yearly allocation. Chưa có API/worker bulk reconciliation cho mọi nhân viên.
 - Backend HR policy year, Leave request validation và balance default year dùng UTC+07; frontend `leaveService.ts` dùng `Asia/Ho_Chi_Minh`. Cần rà soát các màn hình frontend còn lại ở ranh giới ngày/năm.
-- Employee lookup cần thống nhất active-state behavior giữa lookup by ID/batch và Team listing.
 - API `GET /api/v1/leave-requests/{id}` trả thông tin chi tiết đơn và `history` trong cùng response; permission/scope trên request được áp dụng trước khi trả lịch sử. Frontend gọi API này khi mở modal chi tiết; nút **Xem lịch sử** chỉ đóng/mở timeline.
 - Health endpoint chưa tách readiness/liveness và chưa kiểm tra database readiness.
 - HR HttpClient timeout 5 giây, chưa có circuit breaker/retry.
@@ -421,6 +423,12 @@ Tên thư mục trong repository là `src/leave-service/` (viết thường); l�
 
 Không đánh dấu Swagger hoặc demo là nghiệm thu xong chỉ dựa trên việc route đã có trong source code.
 
+
+### 7.8. Hợp đồng phân trang sau PR #20/#21
+
+PR #20 sửa trang Nhân viên phụ trách; PR #21 đồng bộ cách gửi `pageSize` cho toàn bộ danh sách. `usePagedBlock` mặc định gửi mỗi request cho đúng một trang đang hiển thị thay vì tải một block nhiều trang. Phạm vi gồm Employees, Manager Team, Leave Requests và Approvals. Test frontend đạt 107/107 trên head PR #21; TypeScript và Vite production build thành công.
+
+Đây là bằng chứng implementation và automated tests. Chưa có ảnh/log Network cuối cùng được lưu trong repository để xác nhận runtime sau khi dựng lại Web từ master `de15fd4169ea8db3cc702f95f7922ca4ab9a1e8c`. Trước khi đánh dấu nghiệm thu runtime, kiểm tra từng màn hình: thay dropdown 10/25/50 phải tạo request có `pageSize` tương ứng; chuyển trang phải tăng `page`; kiểm tra HTTP status và tổng số bản ghi response/header.
 
 ## 8. Quy trình tái xác minh sau merge
 
