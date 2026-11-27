@@ -98,10 +98,7 @@ Các mục menu, route và thao tác được hiển thị theo permission/scope
 ### HR
 
 1. Vào **Phòng ban** để tạo hoặc sửa phòng ban trước khi thêm nhân viên.
-2. Vào **Nhân viên** → **Thêm nhân viên**. Nhập họ tên, email, vai trò, phòng
-   ban, ngày vào làm và người quản lý trực tiếp nếu có. Mã nhân viên được hệ
-   thống tự sinh; không cần nhập mã. Có thể tìm kiếm, lọc, phân trang, sửa hồ sơ
-   hoặc vô hiệu hóa tài khoản.
+2. Vào **Nhân viên** → **Thêm nhân viên**. Nhập họ tên, email, vai trò hiển thị legacy, phòng ban, ngày vào làm và người quản lý trực tiếp nếu có. Mã nhân viên được hệ thống tự sinh; không cần nhập mã. Có thể tìm kiếm, lọc, phân trang, sửa hồ sơ hoặc vô hiệu hóa tài khoản. Trường vai trò trên form nhân viên không thay thế thao tác gán Role động trong `UserRoles`.
 3. Vào **Chính sách nghỉ phép** để quản lý ba loại nghỉ cố định:
    `ANNUAL` (nghỉ phép năm), `SICK` (nghỉ ốm), `UNPAID` (nghỉ không lương).
    Màn hình mặc định hiển thị các chính sách đang có hiệu lực tại ngày hiện tại
