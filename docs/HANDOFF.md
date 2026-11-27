@@ -9,10 +9,11 @@ Tài liệu dành cho người tiếp nhận source, dựng môi trường, ki�
 | Thuộc tính | Giá trị |
 |---|---|
 | Repository | [OlYVER1337/hr-leave-management](https://github.com/OlYVER1337/hr-leave-management) |
-| Master baseline | **d69156aa8990e2d92d21ad0dac1f9e0a7e1d2c5e** (PR #18 — Permission-driven React UI) |
-| Feature branch đang rà soát | `feature/consolidate-employees-team-api` — chưa merge; hợp nhất API Employees/direct reports |
-| Code commit của thay đổi hợp nhất API | **02c9e5b375973dcc3992107c18953fb7ae9ba633** |
-| Trạng thái tài liệu | Cập nhật trên feature branch; không thay đổi `master`. |
+| Master revision hiện tại | **de15fd4169ea8db3cc702f95f7922ca4ab9a1e8c** (sau khi merge PR #21 ngày 27/11/2026) |
+| Hợp nhất Employees/direct reports | [PR #19](https://github.com/OlYVER1337/hr-leave-management/pull/19), merge commit **30720e176106cc3357ff028ddc9a6ebdce95a93b** |
+| Sửa phân trang Manager | [PR #20](https://github.com/OlYVER1337/hr-leave-management/pull/20), merge commit **918b9193049915b4ded9aef70536386e813f3014** |
+| Đồng bộ pageSize toàn bộ danh sách | [PR #21](https://github.com/OlYVER1337/hr-leave-management/pull/21), merge commit **de15fd4169ea8db3cc702f95f7922ca4ab9a1e8c** |
+| PR permission-driven UI | [PR #18](https://github.com/OlYVER1337/hr-leave-management/pull/18), merge commit **d69156aa8990e2d92d21ad0dac1f9e0a7e1d2c5e** |
 | Sửa lỗi HR OpenAPI | [0a34e13](https://github.com/OlYVER1337/hr-leave-management/commit/0a34e131fb7550695492d42614a3d74e385beab0) và [01be3cf](https://github.com/OlYVER1337/hr-leave-management/commit/01be3cfa7a03efcf6ad63d3a16b4d6eafb706444). |
 | Merge Dynamic Authorization V1 | [PR #6](https://github.com/OlYVER1337/hr-leave-management/pull/6), merge commit **81b987043ce4663ad11800bb331ffdbc013bd1d2** |
 | Trạng thái production | Chưa có bằng chứng triển khai hoặc nghiệm thu production. |
@@ -21,9 +22,13 @@ Tài liệu dành cho người tiếp nhận source, dựng môi trường, ki�
 
 **Quy tắc đối chiếu:** Approval benchmark ngày 26/11 chạy trên source SHA **d34ca91** và image ID ghi tại Mục 8. Không lấy HEAD của branch tài liệu thay cho revision benchmark. Khi tài liệu khác với implementation, đối chiếu source code và EF Core migrations.
 
-**Ghi chú Workforce benchmark trên feature branch:** `scripts/load-test/workforce.js` chỉ đổi route `manager_team` trong `paginationContractRoutes` từ `/api/v1/me/team` sang `/api/v1/employees?directReportsOnly=true`; request preflight không gửi `page/pageSize` và mong đợi HTTP 400 để kiểm tra contract phân trang. Mảng `routes` của VU workload không thay đổi so với `master`, nên route mix và custom metrics của phần measured workload không đổi. Evidence Workforce cũ vẫn mô tả đúng workload đã đo, nhưng không cung cấp latency/throughput riêng cho endpoint Employees/directReports mới. Muốn benchmark endpoint mới, cần thêm request có phân trang vào workload đo và lưu raw/summary cùng Git SHA, image IDs mới. Lưu ý raw k6 built-in metrics có thể bao gồm request preflight/setup.
+**Ghi chú Workforce benchmark sau PR #19:** `scripts/load-test/workforce.js` đổi route `manager_team` trong `paginationContractRoutes` từ `/api/v1/me/team` sang `/api/v1/employees?directReportsOnly=true`; request preflight cố ý không gửi `page/pageSize` và mong đợi HTTP 400 để kiểm tra contract phân trang. Mảng `routes` thực sự chạy trong VU workload không thay đổi, vì vậy route mix và custom metrics của phần measured workload lịch sử vẫn giữ nguyên. Evidence cũ không cung cấp latency/throughput riêng cho endpoint Employees/directReports mới. Nếu cần đo endpoint mới, phải thêm request phân trang vào measured workload và lưu raw/summary cùng Git SHA, image IDs mới. Raw k6 built-in metrics có thể bao gồm request preflight/setup.
 
-**Bằng chứng nhánh hợp nhất Employees/direct reports ngày 27/11:** người dùng cung cấp kết quả HR 162/162 tests, Leave 129/129 tests, Web 103/103 tests; TypeScript check và Vite production build thành công. HR Bench đã build HR Service/Web; Manager gọi `GET /api/v1/employees?directReportsOnly=true&page=1&pageSize=20` nhận HTTP 200 và response có `managerId` trùng JWT `sub`. Người dùng đã xác nhận nghiệm thu tài khoản HR có scope `All`: tài khoản có thể thêm, xem, sửa, xóa nhân viên và phòng ban; đồng thời duyệt và từ chối đơn nghỉ phép. Đây là kết quả kiểm tra chức năng thủ công do người dùng xác nhận.
+**Bằng chứng tích hợp và regression đến 27/11/2026:** PR #19 hợp nhất API Employees/direct reports; Manager dùng `GET /api/v1/employees?directReportsOnly=true`, endpoint `/api/v1/me/team` đã gỡ khỏi controller/runtime/OpenAPI. Trên HR Bench, request Manager trả HTTP 200 và response có `managerId` trùng JWT `sub`. Người dùng xác nhận tài khoản HR scope `All` có thể thêm/xem/sửa/xóa nhân viên và phòng ban, đồng thời duyệt/từ chối đơn nghỉ phép.
+
+Backend regression: HR **162/162 passed**, Leave **129/129 passed**, đều 0 failed/0 skipped; hai suite được chạy trên revision `30720e176106cc3357ff028ddc9a6ebdce95a93b` với SQL Server/Redis của stack `hrbench`. Đây là revision trước PR #20/#21; hai PR sau chỉ thay đổi Web, không thay đổi backend.
+
+Frontend: Web **107/107 passed** (20/20 test files), `npm ci`, `npm audit`, TypeScript `tsc --noEmit` và Vite production build thành công trên nhánh PR #21, head `8f69c5420119817faa0371f1675c96f7f5253d52`. PR #20/#21 đều đã merge; master hiện tại là `de15fd4169ea8db3cc702f95f7922ca4ab9a1e8c`. HR Bench Web đã được build lại sau PR #21; người dùng xác nhận sau khi cập nhật. Chưa lưu TRX/log riêng và chưa có ảnh Network cuối cùng cho cả bốn màn hình trong repository.
 
 ## 2. Dựng hệ thống local lần đầu
 
@@ -264,6 +269,13 @@ Dùng tài khoản API mode đã cấu hình trong `.env`, đăng xuất/chuyể
 
 Điều này xác nhận HR OpenAPI JSON đã sinh thành công sau hai commit sửa DTO. Log mới nhất chưa kèm lệnh kiểm tra Swagger UI và Leave OpenAPI trên cổng `hrbench`; khi nghiệm thu đầy đủ profile này, chạy cả bốn URL UI/JSON ở đầu Mục 5. Kịch bản đăng nhập ba vai trò và duyệt đơn vẫn cần được thực hiện trực tiếp trên stack local.
 
+### 6.5. Hợp đồng phân trang giao diện sau PR #20/#21
+
+Frontend dùng server-side pagination cho các màn hình Danh sách nhân viên, Nhân viên phụ trách, Đơn nghỉ phép và Hộp thư phê duyệt. Hook `usePagedBlock` mặc định tải đúng một trang giao diện trên mỗi request; vì vậy lựa chọn 10/25/50 phải gửi `pageSize=10/25/50`. Giới hạn backend vẫn là tối đa 100 bản ghi/request. Cơ chế tải nhiều trang theo block chỉ sử dụng khi màn hình chủ động cấu hình.
+
+PR #20 sửa riêng Manager Team; PR #21 áp dụng mặc định thống nhất cho các danh sách còn lại và cập nhật test. Web regression sau thay đổi đạt **107/107 tests**, 20/20 test files; TypeScript và Vite production build thành công. Kết quả local được chạy trên head PR #21 `8f69c5420119817faa0371f1675c96f7f5253d52`, trước merge commit `de15fd4169ea8db3cc702f95f7922ca4ab9a1e8c`.
+
+Khi nghiệm thu lại trên HR Bench, mở DevTools → Network, xóa log cũ rồi lần lượt chọn 10, 25 và 50 ở từng màn hình. Xác nhận request mới nhất mang `pageSize` bằng đúng lựa chọn, `page` tăng đúng khi chuyển trang và response/header tổng số vẫn khớp. Ảnh/log Network chưa được lưu thành artifact trong repository; không coi kết quả build container đơn thuần là bằng chứng Network cuối cùng.
 ## 7. Chạy Approval benchmark
 
 Chỉ chạy trên stack cô lập hrbench. Không benchmark đồng thời với demo hoặc workload khác trên cùng database.
@@ -355,7 +367,9 @@ Bảng đầy đủ các lượt arrival-rate ngày 26/11 (cả lượt hợp l�
 - Redis là cache best-effort; SQL Server vẫn là nguồn dữ liệu nghiệp vụ chính.
 - Backend Dynamic RBAC V1 quản lý Roles, Permissions, UserRoles, scope rules và audit. Scope đang thực thi gồm Self, Team, All; Department chưa thành bộ lọc dữ liệu nghiệp vụ.
 - React đã dùng permission/scope trong JWT cho menu, route guard và action (PR #18 đã merge vào master). Role claim/`Employee.Role` legacy chỉ còn phục vụ tương thích/hiển thị và các chức năng dữ liệu nhân viên; không phải nguồn authorization.
-- Trên nhánh `feature/consolidate-employees-team-api`, trang `/my-team` dùng chung `GET /api/v1/employees?directReportsOnly=true`; API `GET /api/v1/me/team` cũ đã bị gỡ khỏi controller/runtime/OpenAPI. Manager direct-report API đã được kiểm tra trên HR Bench. Người dùng đã nghiệm thu tài khoản HR scope `All`: thêm/xem/sửa/xóa nhân viên và phòng ban, duyệt/từ chối đơn nghỉ phép.
+- PR #19 đã hợp nhất `/my-team` vào API dùng chung `GET /api/v1/employees?directReportsOnly=true`; endpoint `GET /api/v1/me/team` cũ đã gỡ khỏi controller/runtime/OpenAPI. Manager direct-report API đã được kiểm tra trên HR Bench; người dùng đã nghiệm thu tài khoản HR scope `All` cho CRUD nhân viên/phòng ban và duyệt/từ chối đơn nghỉ phép.
+- PR #20 sửa trang Nhân viên phụ trách gửi đúng `pageSize` theo dropdown.
+- PR #21 đổi mặc định `usePagedBlock` để mỗi request gửi đúng một trang UI; áp dụng cho Danh sách nhân viên, Nhân viên phụ trách, Đơn nghỉ phép và Hộp thư phê duyệt. Dropdown 10/25/50 tương ứng `pageSize=10/25/50`; khả năng tải gộp block chỉ còn khi màn hình cấu hình tường minh.
 - Chưa có UI quản trị UserRole assignment hoặc CRUD Role/Permission catalog.
 - Leave request lưu policy version và quota snapshot theo yearly allocation. Policy được chọn theo ngày tạo đơn ở business timezone UTC+07; request cũ giữ snapshot đã tạo.
 - Balance dùng PolicyDays, Used và Pending; Entitled được suy ra để tránh số dư âm khi quota giảm. Chưa có bulk reconciliation cho toàn bộ nhân viên.
