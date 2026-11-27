@@ -56,7 +56,7 @@ public sealed class ApiIntegrationTests
         employeeRepository.Verify(
             repository => repository.ListVisiblePageAsync(
                 It.IsAny<Guid>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<bool>(),
-                It.IsAny<string?>(), It.IsAny<HrService.Domain.Entities.Role?>()
+                It.IsAny<string?>(), It.IsAny<HrService.Domain.Entities.Role?>(),
                 It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<string>(),
                 It.IsAny<bool>(), It.IsAny<int>(), It.IsAny<int>(),
                 It.IsAny<CancellationToken>()),
@@ -186,7 +186,7 @@ public sealed class ApiIntegrationTests
         employeeRepository
             .Setup(repository => repository.ListVisiblePageAsync(
                 actorId, false, false, true, false,
-                It.IsAny<string?>() It.IsAny<HrService.Domain.Entities.Role?>(),
+                It.IsAny<string?>(), It.IsAny<HrService.Domain.Entities.Role?>(),
                 It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<string>(),
                 It.IsAny<bool>(), 1, 10, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Array.Empty<HrService.Application.Abstractions.EmployeeReadModel>(), 0));
@@ -201,7 +201,7 @@ public sealed class ApiIntegrationTests
         employeeRepository.Verify(
             repository => repository.ListVisiblePageAsync(
                 actorId, false, false, true, false,
-                It.IsAny<string?>() It.IsAny<HrService.Domain.Entities.Role?>(),
+                It.IsAny<string?>(), It.IsAny<HrService.Domain.Entities.Role?>(),
                 It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<string>(),
                 It.IsAny<bool>(), 1, 10, It.IsAny<CancellationToken>()),
             Times.Once);
@@ -232,7 +232,7 @@ public sealed class ApiIntegrationTests
         employeeRepository
             .Setup(repository => repository.ListVisiblePageAsync(
                 actorId, true, true, false, false,
-                It.IsAny<string?>() It.IsAny<HrService.Domain.Entities.Role?>(),
+                It.IsAny<string?>(), It.IsAny<HrService.Domain.Entities.Role?>(),
                 It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<string>(),
                 It.IsAny<bool>(), 1, 10, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Array.Empty<HrService.Application.Abstractions.EmployeeReadModel>(), 0));
@@ -246,7 +246,7 @@ public sealed class ApiIntegrationTests
         employeeRepository.Verify(
             repository => repository.ListVisiblePageAsync(
                 actorId, true, true, false, false,
-                It.IsAny<string?>() It.IsAny<HrService.Domain.Entities.Role?>(),
+                It.IsAny<string?>(), It.IsAny<HrService.Domain.Entities.Role?>(),
                 It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<string>(),
                 It.IsAny<bool>(), 1, 10, It.IsAny<CancellationToken>()),
             Times.Once);

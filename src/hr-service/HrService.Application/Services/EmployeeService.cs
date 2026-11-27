@@ -122,7 +122,7 @@ public sealed class EmployeeService(
     {
         var paged = await GetVisiblePagedAsync(
             actorId, authorization, page, pageSize, search, role, isActive,
-            departmentId, sortBy, sortDirection, directReportsOnly: false, cancellationToken);
+            departmentId, sortBy, sortDirection, false, cancellationToken);
         var summary = await GetVisibleSummaryAsync(actorId, authorization, cancellationToken);
 
         return new EmployeeOverviewResponse(paged.Items, paged.TotalCount, summary);
