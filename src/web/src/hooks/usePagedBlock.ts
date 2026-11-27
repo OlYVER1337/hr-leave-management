@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PagedResult } from '../services/hrService';
 
-// Mỗi request tải tối đa 2 trang UI nhưng không vượt giới hạn 100 bản ghi của API.
+// Mặc định mỗi request tải tối đa 2 trang giao diện nhưng không vượt giới hạn 100 bản ghi của API.
 const MAX_PAGES_PER_BLOCK = 2;
 const MAX_API_PAGE_SIZE = 100;
 const MAX_CACHED_BLOCKS = 4;
@@ -12,12 +12,14 @@ export function usePagedBlock<T>({
   queryKey,
   refreshToken,
   load,
+  maxPagesPerBlock = MAX_PAGES_PER_BLOCK,
 }: {
   page: number;
   pageSize: number;
   queryKey: string;
   refreshToken: number;
   load: (page: number, pageSize: number) => Promise<PagedResult<T>>;
+  maxPagesPerBlock?: number;
 }) {
   const [blocks, setBlocks] = useState<Record<string, PagedResult<T>>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -34,10 +36,14 @@ export function usePagedBlock<T>({
   const normalizedPageSize = Number.isFinite(pageSize)
     ? Math.min(MAX_API_PAGE_SIZE, Math.max(1, Math.floor(pageSize)))
     : 1;
+  // Cho phép từng màn hình chọn tải trước nhiều trang hoặc tải đúng một trang mỗi request.
+  const normalizedMaxPagesPerBlock = Number.isFinite(maxPagesPerBlock)
+    ? Math.max(1, Math.floor(maxPagesPerBlock))
+    : MAX_PAGES_PER_BLOCK;
   // A UI page size of 100 must use one page per block; otherwise the second
   // UI page would require 200 records and be silently truncated by the API.
   const pagesPerBlock = Math.min(
-    MAX_PAGES_PER_BLOCK,
+    normalizedMaxPagesPerBlock,
     Math.max(1, Math.floor(MAX_API_PAGE_SIZE / normalizedPageSize)),
   );
   const blockIndex = Math.floor((normalizedPage - 1) / pagesPerBlock);
@@ -47,7 +53,7 @@ export function usePagedBlock<T>({
   // Total count depends on the filters, not the selected UI page size.
   const countNamespace = queryKey;
   // The row cache does depend on page size because block boundaries change.
-  const cacheNamespace = `${refreshToken}|${queryKey}|${normalizedPageSize}|`;
+  const cacheNamespace = `${refreshToken}|${queryKey}|${normalizedPageSize}|${pagesPerBlock}|`;
   const blockKey = `${cacheNamespace}${blockIndex}`;
 
   const touchBlock = useCallback((key: string) => {
