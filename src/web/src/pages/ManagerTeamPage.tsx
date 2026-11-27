@@ -53,6 +53,8 @@ export function ManagerTeamPage() {
     queryKey,
     refreshToken: 0,
     load: loadBlock,
+    // Trang Manager gửi đúng số dòng đang chọn, không gộp hai trang vào một request.
+    maxPagesPerBlock: 1,
   });
   const pageCount = Math.max(1, Math.ceil(totalCount / pageSize));
   const currentPage = Math.min(page, pageCount);
