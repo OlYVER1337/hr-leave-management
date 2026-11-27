@@ -305,8 +305,10 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
 - HR sở hữu Role, Permission, UserRole assignment, Scope rules và audit log.
 - Scope đang thực thi là Self, Team, All. Department chưa có filter nghiệp vụ.
 - Leave Team reads/decisions xác minh current reporting line từ HR; không dùng `ApproverId` snapshot làm quyền hiện tại.
-- UserRole assignment APIs đã có; Role/Permission catalog CRUD và UI quản trị chưa có.
-- React vẫn dùng legacy HR/Manager/Employee roles cho navigation/route guard. Điều này không thay thế permission enforcement ở backend.
+- UserRole assignment APIs đã có; React UI quản trị UserRole assignment và Role/Permission catalog CRUD chưa có.
+- Permission-driven React UI đã merge vào `master` qua PR #18; menu, route và action đọc `authz_v=1` + `perm`, backend vẫn là enforcement cuối.
+- `Employee.Role` và Role claim legacy vẫn tồn tại cho tương thích/hiển thị, lọc/thống kê và một số nghiệp vụ legacy; không phải nguồn xác định quyền hiệu lực.
+- Nhánh `feature/consolidate-employees-team-api` hợp nhất `/my-team` vào `GET /api/v1/employees?directReportsOnly=true`; endpoint `GET /api/v1/me/team` cũ đã được gỡ khỏi controller/runtime/OpenAPI. Manager API đã được nghiệm thu HTTP 200 với `managerId` khớp JWT `sub`; tài khoản HR với scope All vẫn đang chờ xác nhận.
 
 ### 7.2. Regression test evidence
 
