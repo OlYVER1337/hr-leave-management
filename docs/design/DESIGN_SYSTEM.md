@@ -9,7 +9,7 @@ Sản phẩm hiển thị thương hiệu **Peopleflow HR Suite** trong Login v�
 ### Nguyên tắc thiết kế
 
 1. **Clarity first:** trạng thái đơn, hạn mức phép, người duyệt và hành động tiếp theo phải nhìn thấy ngay.
-2. **Role-aware:** điều hướng và thao tác chỉ hiển thị theo vai trò HR, Manager hoặc Employee; backend vẫn là lớp quyết định quyền cuối cùng.
+2. **Permission-aware:** menu, route và thao tác hiển thị theo permission/scope hiệu lực trong JWT; backend vẫn là lớp quyết định quyền cuối cùng. Role badge chỉ mô tả nhãn vai trò legacy, không phải cơ chế authorization.
 3. **Data before decoration:** dashboard ưu tiên số liệu và danh sách cần xử lý; biểu đồ chỉ bổ trợ.
 4. **Predictable actions:** thao tác tạo, sửa, duyệt, từ chối, hủy và vô hiệu hóa phải có phản hồi thành công/thất bại.
 5. **Consistent Vietnamese UI:** nội dung giao diện hiện tại dùng tiếng Việt; mã trạng thái và mã loại nghỉ chỉ hiển thị khi có ích cho người dùng.
