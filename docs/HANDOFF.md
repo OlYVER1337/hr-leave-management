@@ -38,7 +38,7 @@ Tài liệu dành cho người tiếp nhận source, dựng môi trường, ki�
 
 Web chạy bằng Node 20 container: `npm ci` thành công, `npm audit` báo **0 vulnerabilities**, Vitest đạt **107/107**, TypeScript `tsc --noEmit` không lỗi và Vite production build thành công (5,07 giây). Hai backend solution build thành công. Đây là một lượt regression đủ HR/Leave/Web trên cùng SHA, không phải ghép kết quả từ các revision cũ.
 
-TRX của HR và Leave được tạo trong `%TEMP%\\hr-regression-edd71414809d155261498836763ab44000e712e5\\hr` và `...\\leave`. Chúng hiện nằm trong thư mục TEMP của máy chạy test, chưa được commit vào repository; terminal output được dùng để ghi nhận số liệu ở đây.
+TRX của HR và Leave được tạo trong `%TEMP%\hr-regression-edd71414809d155261498836763ab44000e712e5\hr` và `...\leave`. Chúng hiện nằm trong thư mục TEMP của máy chạy test, chưa được commit vào repository; terminal output được dùng để ghi nhận số liệu ở đây.
 
 Người dùng cũng đã xác nhận nghiệm thu runtime cả bốn màn hình phân trang: Employees, Manager Team, Leave Requests và Approvals. Chi tiết nghiệm thu được ghi tại Mục 6.5. Chưa có ảnh/log Network được lưu thành artifact trong repository.
 
