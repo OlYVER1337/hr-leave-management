@@ -9,10 +9,11 @@ Tài liệu dành cho người tiếp nhận source, dựng môi trường, ki�
 | Thuộc tính | Giá trị |
 |---|---|
 | Repository | [OlYVER1337/hr-leave-management](https://github.com/OlYVER1337/hr-leave-management) |
-| Master revision hiện tại | **de15fd4169ea8db3cc702f95f7922ca4ab9a1e8c** (sau khi merge PR #21 ngày 27/11/2026) |
+| Master revision hiện tại | **edd71414809d155261498836763ab44000e712e5** (sau khi merge PR #22 ngày 27/11/2026) |
 | Hợp nhất Employees/direct reports | [PR #19](https://github.com/OlYVER1337/hr-leave-management/pull/19), merge commit **30720e176106cc3357ff028ddc9a6ebdce95a93b** |
 | Sửa phân trang Manager | [PR #20](https://github.com/OlYVER1337/hr-leave-management/pull/20), merge commit **918b9193049915b4ded9aef70536386e813f3014** |
 | Đồng bộ pageSize toàn bộ danh sách | [PR #21](https://github.com/OlYVER1337/hr-leave-management/pull/21), merge commit **de15fd4169ea8db3cc702f95f7922ca4ab9a1e8c** |
+| Đồng bộ tài liệu và regression evidence | [PR #22](https://github.com/OlYVER1337/hr-leave-management/pull/22), merge commit **edd71414809d155261498836763ab44000e712e5**; chỉ cập nhật tài liệu, không đổi source code |
 | PR permission-driven UI | [PR #18](https://github.com/OlYVER1337/hr-leave-management/pull/18), merge commit **d69156aa8990e2d92d21ad0dac1f9e0a7e1d2c5e** |
 | Sửa lỗi HR OpenAPI | [0a34e13](https://github.com/OlYVER1337/hr-leave-management/commit/0a34e131fb7550695492d42614a3d74e385beab0) và [01be3cf](https://github.com/OlYVER1337/hr-leave-management/commit/01be3cfa7a03efcf6ad63d3a16b4d6eafb706444). |
 | Merge Dynamic Authorization V1 | [PR #6](https://github.com/OlYVER1337/hr-leave-management/pull/6), merge commit **81b987043ce4663ad11800bb331ffdbc013bd1d2** |
@@ -26,9 +27,20 @@ Tài liệu dành cho người tiếp nhận source, dựng môi trường, ki�
 
 **Bằng chứng tích hợp và regression đến 27/11/2026:** PR #19 hợp nhất API Employees/direct reports; Manager dùng `GET /api/v1/employees?directReportsOnly=true`, endpoint `/api/v1/me/team` đã gỡ khỏi controller/runtime/OpenAPI. Trên HR Bench, request Manager trả HTTP 200 và response có `managerId` trùng JWT `sub`. Người dùng xác nhận tài khoản HR scope `All` có thể thêm/xem/sửa/xóa nhân viên và phòng ban, đồng thời duyệt/từ chối đơn nghỉ phép.
 
-Backend regression: HR **162/162 passed**, Leave **129/129 passed**, đều 0 failed/0 skipped; hai suite được chạy trên revision `30720e176106cc3357ff028ddc9a6ebdce95a93b` với SQL Server/Redis của stack `hrbench`. Đây là revision trước PR #20/#21; hai PR sau chỉ thay đổi Web, không thay đổi backend.
+**Regression đầy đủ trên cùng master revision — 27/11/2026:** người triển khai đã chạy cả ba bộ kiểm thử sau khi cập nhật `master` tới SHA `edd71414809d155261498836763ab44000e712e5`. Kết quả:
 
-Frontend: Web **107/107 passed** (20/20 test files), `npm ci`, `npm audit`, TypeScript `tsc --noEmit` và Vite production build thành công trên nhánh PR #21, head `8f69c5420119817faa0371f1675c96f7f5253d52`. PR #20/#21 đều đã merge; master hiện tại là `de15fd4169ea8db3cc702f95f7922ca4ab9a1e8c`. Chưa có xác nhận HR Bench Web đã được build lại từ master sau PR #21; cũng chưa lưu ảnh Network cuối cùng cho cả bốn màn hình. TRX/log riêng của các lượt regression mới chưa được lưu trong repository.
+| Bộ kiểm thử | Passed | Failed | Skipped | Thời gian test |
+|---|---:|---:|---:|---:|
+| HR Service (.NET 10.0.13) | 162 | 0 | 0 | 7,8 giây |
+| Leave Service (.NET 10.0.13) | 129 | 0 | 0 | 18,5 giây |
+| Web (Vitest, 20/20 files) | 107 | 0 | 0 | 9,35 giây |
+| **Tổng** | **398** | **0** | **0** | |
+
+Web chạy bằng Node 20 container: `npm ci` thành công, `npm audit` báo **0 vulnerabilities**, Vitest đạt **107/107**, TypeScript `tsc --noEmit` không lỗi và Vite production build thành công (5,07 giây). Hai backend solution build thành công. Đây là một lượt regression đủ HR/Leave/Web trên cùng SHA, không phải ghép kết quả từ các revision cũ.
+
+TRX của HR và Leave được tạo trong `%TEMP%\\hr-regression-edd71414809d155261498836763ab44000e712e5\\hr` và `...\\leave`. Chúng hiện nằm trong thư mục TEMP của máy chạy test, chưa được commit vào repository; terminal output được dùng để ghi nhận số liệu ở đây.
+
+Người dùng cũng đã xác nhận nghiệm thu runtime cả bốn màn hình phân trang: Employees, Manager Team, Leave Requests và Approvals. Chi tiết nghiệm thu được ghi tại Mục 6.5. Chưa có ảnh/log Network được lưu thành artifact trong repository.
 
 ## 2. Dựng hệ thống local lần đầu
 
@@ -273,9 +285,9 @@ Dùng tài khoản API mode đã cấu hình trong `.env`, đăng xuất/chuyể
 
 Frontend dùng server-side pagination cho các màn hình Danh sách nhân viên, Nhân viên phụ trách, Đơn nghỉ phép và Hộp thư phê duyệt. Hook `usePagedBlock` mặc định tải đúng một trang giao diện trên mỗi request; vì vậy lựa chọn 10/25/50 phải gửi `pageSize=10/25/50`. Giới hạn backend vẫn là tối đa 100 bản ghi/request. Cơ chế tải nhiều trang theo block chỉ sử dụng khi màn hình chủ động cấu hình.
 
-PR #20 sửa riêng Manager Team; PR #21 áp dụng mặc định thống nhất cho các danh sách còn lại và cập nhật test. Web regression sau thay đổi đạt **107/107 tests**, 20/20 test files; TypeScript và Vite production build thành công. Kết quả local được chạy trên head PR #21 `8f69c5420119817faa0371f1675c96f7f5253d52`, trước merge commit `de15fd4169ea8db3cc702f95f7922ca4ab9a1e8c`.
+PR #20 sửa riêng Manager Team; PR #21 áp dụng mặc định thống nhất cho các danh sách còn lại. Regression Web **107/107 tests** (20/20 files), TypeScript và Vite production build đều thành công trên master SHA `edd71414809d155261498836763ab44000e712e5`.
 
-Khi nghiệm thu lại trên HR Bench, mở DevTools → Network, xóa log cũ rồi lần lượt chọn 10, 25 và 50 ở từng màn hình. Xác nhận request mới nhất mang `pageSize` bằng đúng lựa chọn, `page` tăng đúng khi chuyển trang và response/header tổng số vẫn khớp. Ảnh/log Network chưa được lưu thành artifact trong repository; không coi kết quả build container đơn thuần là bằng chứng Network cuối cùng.
+**Nghiệm thu runtime:** người dùng đã xác nhận cả bốn màn hình Employees, Manager Team, Leave Requests và Approvals gửi phân trang đúng theo lựa chọn trên giao diện. Mục nghiệm thu này được xem là hoàn tất; không yêu cầu kiểm tra Network lặp lại. Ảnh/log Network không được lưu thành artifact trong repository, vì vậy bằng chứng runtime hiện là xác nhận nghiệm thu của người dùng, không phải file HAR/screenshot có thể tái kiểm tra.
 ## 7. Chạy Approval benchmark
 
 Chỉ chạy trên stack cô lập hrbench. Không benchmark đồng thời với demo hoặc workload khác trên cùng database.
