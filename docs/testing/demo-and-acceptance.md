@@ -261,7 +261,7 @@ Các đường dẫn ở cột bằng chứng trỏ tới source, test hoặc t�
 | Xong | Hạng mục | Kỳ vọng khi nghiệm thu | Bằng chứng/tham chiếu |
 |---|---|---|---|
 | [x] | Dựng môi trường | Compose chạy Web, HR, Leave, SQL Server, Redis; healthcheck đạt | [README chạy hệ thống](../README.md), kiểm tra `hrbench` 03/11 |
-| [x] | Dynamic RBAC và data scope | HR/Leave API kiểm tra permission + Self/Team/All; React vẫn dùng Role legacy cho menu/route guard; refresh token bị thu hồi khi deactivate | HR/Leave authorization tests, `PermissionAuthorization`, `LeavePermissionAuthorization`, `App.tsx`; access JWT còn hiệu lực đến expiry |
+| [x] | Dynamic RBAC và data scope | HR/Leave API và React menu/route/action kiểm tra permission + Self/Team/All; Role legacy chỉ còn hiển thị/tương thích; refresh token bị thu hồi khi deactivate | HR/Leave authorization tests, `PermissionAuthorization`, `LeavePermissionAuthorization`, `authorization.ts`, `App.tsx`, `AppShell.tsx`; access JWT còn hiệu lực đến expiry |
 | [x] | Quản trị nhân sự | HR tạo/sửa nhân viên, phòng ban và quản lý trực tiếp | `/employees`, `/departments`; HR tests |
 | [x] | Chính sách nghỉ cơ bản | HR quản lý loại chuẩn, hạn mức năm và ngày lễ | `/policies`; [Redis report](../performance/redis-performance.md) |
 | [ ] | Phiên bản policy | Request chọn phiên bản theo EffectiveFrom; phiên bản cũ không bị ghi đè; chỉ năm tương lai được thay đổi | HR `LeaveCatalogServiceTests`, Leave `LeaveRequestServiceTests`; test mới chưa chạy trên HEAD hiện tại |
