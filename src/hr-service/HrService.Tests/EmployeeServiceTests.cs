@@ -155,18 +155,24 @@ public sealed class EmployeeServiceTests
             Times.Never);
     }
 
-    // API Team yêu cầu đúng permission employees.read với scope Team.
+    // Danh sách nhân viên và direct reports dùng chung endpoint, được bảo vệ bởi policy đọc nhân viên.
     [Fact]
-    public void GetTeamEndpoint_RequiresEmployeesReadTeamScope()
+    public void GetAllEmployeesEndpoint_UsesEmployeesReadPolicyAndSupportsDirectReportsFilter()
     {
-        var method = typeof(CurrentEmployeeController).GetMethod(nameof(CurrentEmployeeController.GetTeam));
+        var method = typeof(EmployeesController).GetMethod(nameof(EmployeesController.GetAll));
         Assert.NotNull(method);
 
         var authorization = method!.GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
             .Cast<AuthorizeAttribute>();
 
         Assert.Contains(authorization, attribute =>
-            attribute.Policy == PermissionPolicies.EmployeesReadTeam && attribute.Roles is null);
+            attribute.Policy == PermissionPolicies.EmployeesRead && attribute.Roles is null);
+
+        var directReportsFilter = method.GetParameters()
+            .SingleOrDefault(parameter => parameter.Name == "directReportsOnly");
+
+        Assert.NotNull(directReportsFilter);
+        Assert.Equal(typeof(bool), directReportsFilter!.ParameterType);
     }
 
     // Không cho lookup nhân viên nằm ngoài phạm vi của người gọi.
