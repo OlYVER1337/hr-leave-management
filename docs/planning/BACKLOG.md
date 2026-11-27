@@ -52,7 +52,7 @@ Dynamic Authorization V1 đã được merge vào `master` qua PR #6, merge comm
 3. Approval arrival-rate đã có raw/summary, commit SHA và immutable image IDs. Phần còn thiếu metadata là Workforce paged-v2: ghi PAGE_SIZE, seed version, exact SHA, image IDs và timestamps; thu resource metrics đồng bộ nếu cần profiling.
 4. Kiểm tra thêm business timezone tại boundary 31/12–01/01 khi có thể mô phỏng thời điểm phù hợp.
 5. Cân nhắc bulk balance reconciliation, readiness và HR client resilience theo nhu cầu; API chi tiết kèm history đã hoàn tất và merge ở PR #15.
-6. Xác nhận regression/build và nghiệm thu Permission-driven UI trên feature branch; sau đó mới merge. Role assignment UI vẫn là hạng mục riêng.
+6. Permission-driven React UI đã merge qua PR #18. Hoàn tất nghiệm thu nhánh hợp nhất Employees/direct reports bằng tài khoản HR (scope All), sau đó tạo PR vào `master`. Role assignment UI vẫn là hạng mục riêng.
 7. Role/Permission catalog CRUD, Department scope và các phần mở rộng.
 
 Không triển khai outbox, event bus hoặc distributed read model chỉ để xử lý một gap chưa đo. Trước mắt HR HTTP API vẫn là nguồn chính thức; chỉ nâng kiến trúc khi có yêu cầu hoặc bằng chứng benchmark.
