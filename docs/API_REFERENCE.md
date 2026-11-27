@@ -94,8 +94,10 @@ Giới hạn: API hiện chỉ quản lý assignment cho danh mục Role đượ
 | POST /api/v1/leave-types | leave-types.create:All | Tạo/khôi phục loại nghỉ chuẩn |
 | PUT /api/v1/leave-types/{id} | leave-types.update:All | Cập nhật trạng thái active của loại nghỉ chuẩn |
 | GET /api/v1/leave-policies[/{id}] | Authenticated | Đọc các phiên bản; GET list hỗ trợ year, asOfDate và authoritative=true |
-| POST /api/v1/leave-policies | leave-policies.create:All | Tạo phiên bản policy đầu tiên cho loại nghỉ chuẩn trừ balance |
-| PUT /api/v1/leave-policies/{id} | leave-policies.update:All | Thêm phiên bản policy mới; không sửa phiên bản cũ |
+| POST /api/v1/leave-policies | leave-policies.create:All | Tạo một phiên bản policy cho loại nghỉ chuẩn trừ balance; có thể là phiên bản đầu tiên hoặc phiên bản tiếp theo trong năm |
+| PUT /api/v1/leave-policies/{id} | leave-policies.update:All | Tạo phiên bản mới cho cùng loại nghỉ và năm của policy `{id}`; không ghi đè phiên bản được tham chiếu |
+| PUT /api/v1/leave-policies/{id}/edit | leave-policies.update:All | Chỉnh trực tiếp phiên bản tương lai chưa có hiệu lực; giữ nguyên loại nghỉ, năm và ngày hiệu lực |
+| DELETE /api/v1/leave-policies/{id} | leave-policies.update:All | Xóa phiên bản tương lai khi chưa có allocation tham chiếu; nếu đã effective hoặc còn tham chiếu thì từ chối |
 | GET /api/v1/holidays[/{id}] | Authenticated | Đọc ngày lễ |
 | POST /api/v1/holidays | holidays.create:All | Thêm ngày lễ |
 | PUT /api/v1/holidays/{id} | holidays.update:All | Cập nhật ngày lễ |
